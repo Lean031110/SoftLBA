@@ -479,6 +479,7 @@ model Customer {
   address     String?
   notes       String?
   preferences String?
+  isActive    Boolean  @default(true)
   totalOrders Int      @default(0)
   totalSpent  Float    @default(0)
   createdAt   DateTime @default(now())
@@ -486,6 +487,7 @@ model Customer {
 
   @@index([name])
   @@index([phone])
+  @@index([isActive])
 }
 
 model Promotion {

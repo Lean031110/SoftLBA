@@ -1,6 +1,6 @@
 // GET /api/admin/clientes/[id] - Detalle
 // PATCH /api/admin/clientes/[id] - Actualizar
-// DELETE /api/admin/clientes/[id] - Eliminar
+// DELETE /api/admin/clientes/[id] - Desactivar (soft delete, sin borrar registro)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -35,6 +35,7 @@ const PatchSchema = z.object({
   address: z.string().max(300).optional().or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
   preferences: z.string().max(500).optional().or(z.literal('')),
+  isActive: z.boolean().optional(),
 })
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -66,6 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (d.address !== undefined) data.address = d.address || null
     if (d.notes !== undefined) data.notes = d.notes || null
     if (d.preferences !== undefined) data.preferences = d.preferences || null
+    if (d.isActive !== undefined) data.isActive = d.isActive
 
     const updated = await db.customer.update({ where: { id }, data })
 
@@ -99,14 +101,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ ok: false, error: 'No encontrado' }, { status: 404 })
     }
 
-    await db.customer.delete({ where: { id } })
+    // Soft delete: marcar como inactivo, NO borrar el registro
+    const updated = await db.customer.update({
+      where: { id },
+      data: { isActive: false },
+    })
 
     await audit({
       userId: user.id,
-      action: 'DELETE',
+      action: 'DEACTIVATE',
       entity: 'customer',
       entityId: id,
-      before: existing,
+      before: { name: existing.name, isActive: true },
+      after: { name: updated.name, isActive: false },
     })
 
     return NextResponse.json({ ok: true })

@@ -105,14 +105,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       return NextResponse.json({ ok: false, error: 'No encontrada' }, { status: 404 })
     }
 
-    await db.promotion.delete({ where: { id } })
+    // Soft delete: desactivar en lugar de borrar el registro (trazabilidad)
+    const updated = await db.promotion.update({
+      where: { id },
+      data: { isActive: false },
+    })
 
     await audit({
       userId: user.id,
-      action: 'DELETE',
+      action: 'DEACTIVATE',
       entity: 'promotion',
       entityId: id,
-      before: existing,
+      before: { name: existing.name, isActive: existing.isActive },
+      after: { name: updated.name, isActive: false },
     })
 
     return NextResponse.json({ ok: true })

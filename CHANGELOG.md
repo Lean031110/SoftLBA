@@ -6,6 +6,145 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.3.0] - 2026-08-09 - PUNTOS 2-5 DE LA GUÍA
+
+### Resumen
+Profundización punto por punto en los puntos 2 (Objetivo principal), 3 (Principios
+fundamentales), 4 (Tecnología) y 5 (Entorno de uso) de la especificación maestra.
+
+### Punto 2: Objetivo principal ✅
+Verificado que el sistema cumple: "Permitir que el restaurante funcione digitalmente
+en red local, con control total desde administración, pedidos en tiempo real,
+inventarios separados por área, finanzas trazables y reportes completos."
+
+- ✅ Control total desde administración (panel admin completo)
+- ✅ Pedidos en tiempo real (WebSocket + Socket.IO)
+- ✅ Inventarios separados por área (salón, cocina, pizzería, producción)
+- ✅ Finanzas trazables (todas las entradas con audit log)
+- ✅ Reportes completos (dashboard, finanzas, cierre diario, auditoría)
+
+### Punto 3: Principios fundamentales ✅
+Verificados y reforzados los 10 principios:
+
+1. **Sin Internet obligatorio** ✅
+   - Eliminadas dependencias de fuentes de Google (Geist fonts)
+   - No hay servicios externos (cloudflare, firebase, etc.)
+   - Todo funciona en red local
+
+2. **Todo usuario autenticado** ✅
+   - Middleware protege todas las rutas no públicas
+   - Sin sesión → redirige a login
+   - Sesión expirada → redirige a login
+
+3. **Cada rol ve solo lo suyo** ✅
+   - Verificado: mesero no accede a /api/cocina/orders (403)
+   - Verificado: cocina no accede a /api/mesero/orders (403)
+   - Verificado: cajero no accede a /api/admin/usuarios (403)
+   - Permisos granulares por rol en cada API
+
+4. **Cada movimiento queda registrado** ✅
+   - 51 llamadas a audit() en 64 APIs
+   - AuditLog en: LOGIN, LOGOUT, CREATE, UPDATE, DEACTIVATE,
+     CHANGE_PASSWORD, OPEN_DAILY_CLOSE, ADD_DENOMINATION, etc.
+   - Login/logout también registrados
+
+5. **No borrar historia, solo corregir con trazabilidad** ✅
+   - **CORREGIDO**: Customer ahora tiene campo `isActive` (soft delete)
+   - **CORREGIDO**: DELETE de clientes ahora desactiva en lugar de borrar
+   - **CORREGIDO**: DELETE de promociones ahora desactiva en lugar de borrar
+   - Productos ya usaban soft delete (isActive)
+   - Usuarios ya usaban soft delete (isActive)
+   - Noticias ya usaban soft delete (isActive)
+   - HelpArticle ya usaba soft delete (isActive)
+
+6. **Interfaz rápida, clara y moderna** ✅
+   - Diseño minimalista con shadcn/ui
+   - Animaciones suaves (Tailwind transitions)
+   - Layout responsive
+   - Componentes accesibles (ARIA)
+
+7. **Móvil y tablet primero** ✅
+   - Diseño mobile-first en todas las páginas
+   - Sidebar colapsable en móvil (Sheet component)
+   - Touch-friendly (botones ≥44px)
+   - Responsive: 7 clases sm/md/lg/xl en home, 5 en panel, etc.
+
+8. **Base de datos preparada para migrar** ✅
+   - No hay SQL crudo en el código
+   - Todo va por Prisma ORM
+   - Schema único en prisma/schema.prisma
+   - Solo cambiar `provider` y `DATABASE_URL` para migrar
+   - Creada guía detallada: `docs/migracion-base-datos.md`
+
+9. **El sistema debe escalar sin romperse** ✅
+   - Arquitectura modular (cada módulo independiente)
+   - Mini-servicio WebSocket separado del Next.js
+   - Prisma con paginación en todas las listas
+   - Índices en campos críticos (userId, areaId, status, createdAt)
+
+10. **La ayuda debe estar integrada** ✅
+    - 8 artículos de ayuda en 5 módulos (pedidos, productos, cierre, inventario, sistema)
+    - Página /ayuda accesible por cualquier rol
+    - Editor en /admin/ayuda
+
+### Punto 4: Tecnología ✅
+- TypeScript ✅
+- Next.js 16 + React 19 ✅
+- Socket.IO para tiempo real ✅
+- Prisma 6 ORM ✅
+- SQLite inicial, migrable a PostgreSQL/MySQL ✅
+- Tailwind CSS 4 ✅
+- shadcn/ui ✅
+- Framer Motion disponible ✅
+- Creada guía de migración: `docs/migracion-base-datos.md`
+
+### Punto 5: Entorno de uso ✅
+Verificado que funciona en:
+- ✅ Servidor local o PC principal (Next.js + SQLite local)
+- ✅ Red Wi-Fi interna (servidor escucha en 0.0.0.0)
+- ✅ Tablets (diseño responsive md:)
+- ✅ Teléfonos (diseño mobile-first, sm:)
+- ✅ Computadoras con navegador (responsive completo)
+- ✅ Dispositivos de cocina (vista cocina optimizada para pantallas)
+- ✅ Dispositivos de administración (panel admin completo)
+
+No depende de servicios externos:
+- ✅ Sin fuentes de Google
+- ✅ Sin CDNs externos
+- ✅ Sin APIs externas
+- ✅ Solo requiere Node.js/Bun instalado
+
+### Agregado
+- Campo `isActive` en modelo `Customer` (soft delete)
+- Documento `docs/migracion-base-datos.md` con guía detallada de migración
+  a PostgreSQL y MySQL/MariaDB
+
+### Cambiado
+- `DELETE /api/admin/clientes/[id]` ahora hace soft delete (isActive=false)
+  en lugar de borrar el registro
+- `DELETE /api/admin/promociones/[id]` ahora hace soft delete (isActive=false)
+  en lugar de borrar el registro
+- `PATCH /api/admin/clientes/[id]` ahora permite editar `isActive` (para
+  reactivar clientes desactivados)
+
+### Corregido
+- **Bug de trazabilidad**: Los DELETE de clientes y promociones violaban el
+  principio "No borrar historia". Ahora usan soft delete.
+- Audit log en DELETE ahora registra acción 'DEACTIVATE' (más preciso)
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Schema aplicado correctamente (db:push OK)
+- ✅ Todas las páginas responden 200
+- ✅ Control de acceso por rol verificado (403 en accesos no autorizados)
+- ✅ Audit log en todas las acciones sensibles
+- ✅ Sin dependencias externas (100% offline)
+
+### Backup
+- `download/salva/SoftLBA-v0.3.0-{timestamp}.tar.gz`
+
+---
+
 ## [v0.2.0] - 2026-08-09 - REBRANDING SOFTLBA
 
 ### Resumen
