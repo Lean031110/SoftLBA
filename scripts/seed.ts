@@ -145,6 +145,34 @@ async function main() {
       isPublic: false,
       priority: 3,
     },
+    {
+      title: 'Cambio de menú',
+      content: 'A partir del lunes estrenamos nuevos platos en nuestra carta. ¡No te lo pierdas!',
+      type: 'INFO' as const,
+      isPublic: true,
+      priority: 7,
+    },
+    {
+      title: 'Producto agotado',
+      content: 'Temporalmente sin stock de Cerveza Nacional. Disculpe las molestias.',
+      type: 'URGENT' as const,
+      isPublic: true,
+      priority: 8,
+    },
+    {
+      title: 'Cambio de turno',
+      content: 'Recordar a los meseros entregar el corte de caja antes de salir de turno.',
+      type: 'WARNING' as const,
+      isPublic: false,
+      priority: 4,
+    },
+    {
+      title: 'Cambio de precio',
+      content: 'Ajuste de precios en bebidas alcohólicas. Nuevo precio desde mañana.',
+      type: 'INFO' as const,
+      isPublic: true,
+      priority: 6,
+    },
   ]
   for (const n of newsData) {
     const existing = await prisma.news.findFirst({ where: { title: n.title } })

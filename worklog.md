@@ -486,3 +486,53 @@ Stage Summary:
 - Control de acceso por rol verificado (403 en accesos no autorizados)
 - Audit log en todas las acciones sensibles
 - Backup v0.3.0 a crear en /download/salva/
+
+---
+Task ID: v0.4.0
+Agent: main (Super Z)
+Task: Profundizar puntos 6-10 de la guía (estructura, usuarios, noticias, restaurante, productos)
+
+Work Log:
+- PUNTO 6 (Estructura): Verificado. Todas las áreas existen y funcionan: home pública, login, panel admin completo (15+ módulos), mesero, cocina, pizzería, inventarios por área, finanzas.
+- PUNTO 7 (Usuarios): 
+  - Verificado: admin crea usuarios con generación automática de username y contraseña
+  - Verificado: primer acceso con cambio obligatorio de contraseña
+  - AÑADIDO: Panel "Información de acceso" en página de edición de usuario con:
+    - Último acceso, última IP, fecha de creación
+    - Sesiones activas con detalles (IP, user agent, expiración)
+    - Historial de accesos (logins/logouts de los últimos 30 días)
+  - API GET /api/admin/usuarios/[id] ahora devuelve: lastLoginIp, profile, sessions, accessHistory
+- PUNTO 8 (Noticias): AÑADIDAS 4 noticias más al seed para cubrir todos los casos de la guía:
+  - "Cambio de menú" (INFO, pública)
+  - "Producto agotado" (URGENT, pública) 
+  - "Cambio de turno" (WARNING, privada)
+  - "Cambio de precio" (INFO, pública)
+  - Total ahora: 7 noticias (5 públicas + 2 privadas)
+- PUNTO 9 (Restaurante): Verificado. La configuración se reutiliza en home, login, comprobantes, sidebar, footer. APIs /api/public/config y /api/admin/config funcionando.
+- PUNTO 10 (Productos y recetas):
+  - Verificado: tipos DIRECTO, FINAL, SUBPRODUCTO funcionando
+  - AÑADIDO: API completa para gestionar subproductos: GET/POST/DELETE /api/admin/productos/[id]/subproducts
+  - AÑADIDO: Componente SubproductManager con UI completa:
+    - Lista subproductos asociados con cantidad, unidad, costo
+    - Calcula costo total automático
+    - Permite añadir y quitar subproductos
+    - Solo visible para productos de tipo FINAL
+    - Audit log en cada acción (ADD_SUBPRODUCT, UPDATE_SUBPRODUCT, REMOVE_SUBPRODUCT)
+  - Verificado: recetas con ingredientes, cantidades, unidades, costo, rendimiento
+  - Verificado: panel del mesero solo muestra productos finales activos y disponibles
+- MEJORA SCRIPT BACKUP: Ahora excluye node_modules, .next, builds, skills, agent-ctx, tests, logs, .env.local, bun.lock. Solo incluye código fuente.
+- TEST END-TO-END con Agent Browser:
+  - Subproductos: sección visible en producto FINAL (Pizza Margarita con Carne de Hamburguesa x2 = $160)
+  - Historial de accesos: muestra últimos ingresos/salidas con IP y fecha
+  - Noticias en home: 5 públicas visibles correctamente
+
+Stage Summary:
+- 5 puntos de la guía completados (6, 7, 8, 9, 10)
+- API nueva: /api/admin/productos/[id]/subproducts (3 métodos)
+- Componente nuevo: SubproductManager
+- Sección nueva: "Información de acceso" en página de usuario
+- 4 noticias adicionales en seed
+- Script backup mejorado (solo código fuente)
+- 12 páginas responden 200 OK
+- Lint: 0 errores
+- Backup v0.4.0 a crear en /download/salva/ (solo código, sin node_modules ni builds)

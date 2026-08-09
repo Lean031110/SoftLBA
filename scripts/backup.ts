@@ -1,6 +1,7 @@
 // ============================================================
 // Script de backup - SoftLBA
-// Crea un archivo .tar.gz con TODO el código del proyecto
+// Crea un archivo .tar.gz con SOLO el código fuente del proyecto
+// (sin node_modules, sin .next, sin builds, sin logs, sin skills)
 // y lo guarda en /home/z/my-project/download/salva/
 // ============================================================
 
@@ -30,7 +31,7 @@ console.log(`\n📦 Creando backup SoftLBA v${version} (${ts})...`)
 console.log(`   Destino: ${projectTarPath}`)
 console.log('')
 
-// 1. Copiar base de datos
+// 1. Copiar base de datos (opcional, solo datos)
 console.log('  → Copiando base de datos...')
 if (existsSync(DB_PATH)) {
   copyFileSync(DB_PATH, dbBackupPath)
@@ -39,25 +40,42 @@ if (existsSync(DB_PATH)) {
   console.log(`  ⚠ No se encontró la base de datos en ${DB_PATH}`)
 }
 
-// 2. Crear tar.gz con TODO el código del proyecto
-console.log('  → Comprimiendo TODO el código del proyecto...')
+// 2. Crear tar.gz con SOLO el código fuente
+console.log('  → Comprimiendo SOLO código fuente (sin node_modules, sin builds)...')
+
+const excludes = [
+  'node_modules',
+  '.next',
+  '.git',
+  'backups',
+  'download',
+  '.zscripts',
+  'skills',
+  'agent-ctx',
+  'tests',
+  'tool-results',
+  'upload',
+  'dev.log',
+  'server.log',
+  '*.log',
+  '.DS_Store',
+  '.env.local',
+  '.env.production',
+  'bun.lock',
+  '*.db',
+  '*.db-journal',
+  '*.db-wal',
+  '*.db-shm',
+]
+
 try {
-  // Crear el tar en /tmp primero, luego mover
+  // Crear el tar en /tmp primero, luego mover (evita conflicto)
   const tmpTar = `/tmp/SoftLBA-tmp-${ts}.tar.gz`
-  execSync(`tar -czf "${tmpTar}" \
-    --exclude='node_modules' \
-    --exclude='.next' \
-    --exclude='.git' \
-    --exclude='backups' \
-    --exclude='download' \
-    --exclude='dev.log' \
-    --exclude='server.log' \
-    --exclude='*.log' \
-    --exclude='.zscripts' \
-    -C /home/z/my-project .`, { stdio: 'inherit' })
+  const excludeArgs = excludes.map(e => `--exclude='${e}'`).join(' ')
+  execSync(`tar -czf "${tmpTar}" ${excludeArgs} -C /home/z/my-project .`, { stdio: 'inherit' })
   // Mover al destino final
   execSync(`mv "${tmpTar}" "${projectTarPath}"`)
-  console.log(`  ✓ Proyecto comprimido`)
+  console.log(`  ✓ Código fuente comprimido`)
 } catch (e) {
   console.error('  ✗ Error al comprimir:', e)
   process.exit(1)
@@ -82,6 +100,17 @@ try {
   console.log(files)
 } catch (e) {
   console.log('  (sin backups previos)')
+}
+
+// 5. Verificar contenido del backup
+console.log('📊 Estadísticas del backup:')
+try {
+  const totalFiles = execSync(`tar -tzf "${projectTarPath}" | wc -l`, { encoding: 'utf-8' }).trim()
+  console.log(`   Total archivos: ${totalFiles}`)
+  const srcFiles = execSync(`tar -tzf "${projectTarPath}" | grep -E '\\.(ts|tsx|js|jsx|prisma|md|json|css|svg|png)$' | wc -l`, { encoding: 'utf-8' }).trim()
+  console.log(`   Archivos de código: ${srcFiles}`)
+} catch (e) {
+  // ignore
 }
 
 console.log('✅ Backup completado correctamente')

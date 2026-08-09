@@ -35,12 +35,40 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         bio: true,
         avatarUrl: true,
         lastLoginAt: true,
+        lastLoginIp: true,
         createdAt: true,
         updatedAt: true,
+        profile: true,
+        sessions: {
+          where: { expiresAt: { gt: new Date() } },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          select: { id: true, ipAddress: true, userAgent: true, createdAt: true, expiresAt: true },
+        },
       },
     })
     if (!found) return NextResponse.json({ ok: false, error: 'No encontrado' }, { status: 404 })
-    return NextResponse.json({ ok: true, item: found })
+
+    // Obtener historial de accesos (login/logout) de los últimos 30 días
+    const accessHistory = await db.auditLog.findMany({
+      where: {
+        userId: id,
+        action: { in: ['LOGIN', 'LOGOUT'] },
+        createdAt: { gt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        action: true,
+        ipAddress: true,
+        userAgent: true,
+        result: true,
+        createdAt: true,
+      },
+    })
+
+    return NextResponse.json({ ok: true, item: found, accessHistory })
   } catch (e: any) {
     console.error('GET /api/admin/usuarios/[id]', e)
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })

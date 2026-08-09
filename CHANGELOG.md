@@ -6,6 +6,96 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.4.0] - 2026-08-09 - PUNTOS 6-10 DE LA GUÍA
+
+### Resumen
+Profundización en los puntos 6 (Estructura general), 7 (Módulo de usuarios),
+8 (Página principal con noticias), 9 (Información del restaurante) y
+10 (Productos y recetas) de la especificación maestra.
+
+### Punto 6: Estructura general del sistema ✅
+Verificado que existe y funciona:
+- ✅ 6.1 Página principal pública `/` con logo, nombre, info, noticias, productos, botón login
+- ✅ 6.2 Login con autenticación, redirección por rol, primer acceso con perfil obligatorio
+- ✅ 6.3 Panel de administración con acceso total (15+ módulos)
+- ✅ 6.4 Área de meseros (solo su sesión, sus pedidos, crear pedidos, cobrar, notificaciones)
+- ✅ 6.5 Área de cocina (recibe pedidos, tarjetas expandibles, marca estados)
+- ✅ 6.6 Área de pizzería/producción (similar a cocina, con su inventario)
+- ✅ 6.7 Inventario por áreas: salón, cocina, pizzería, producción
+- ✅ 6.8 Finanzas: ventas, gastos, salarios, compras, mermas, cierre, libro mayor
+
+### Punto 7: Módulo de usuarios ✅
+- ✅ 7.1 Creación: admin crea usuario con nombre, apellidos, rol. Sistema genera username único y contraseña aleatoria
+- ✅ 7.2 Primer inicio de sesión: cambio obligatorio de contraseña + perfil completo (nombre, apellidos, teléfono, móvil, correo, dirección, carnet, bio)
+- ✅ 7.3 Perfil: Toda la información guardada y visible para el admin en cualquier momento
+  - **AÑADIDO**: Panel "Información de acceso" en página de edición de usuario con:
+    - Último acceso (fecha y hora)
+    - Última IP
+    - Fecha de creación
+    - Sesiones activas (con IP, user agent, fecha de inicio y expiración)
+    - Historial de accesos de los últimos 30 días (logins y logouts)
+- ✅ 7.4 Reglas: username único, historial de acceso, estado activo/inactivo, rol editable
+
+### Punto 8: Página principal con noticias ✅
+- **AÑADIDAS** 4 noticias más al seed para cubrir todos los casos de la guía:
+  - "Cambio de menú" (INFO, pública) - nuevos platos
+  - "Producto agotado" (URGENT, pública) - sin stock de cerveza
+  - "Cambio de turno" (WARNING, privada) - recordatorio a meseros
+  - "Cambio de precio" (INFO, pública) - ajuste en bebidas
+- Tipos de noticia soportados: INFO, WARNING, PROMO, URGENT
+- Noticias públicas vs privadas (isPublic): funcionando correctamente
+- Prioridades funcionando (orden por prioridad desc + fecha)
+
+### Punto 9: Información del restaurante ✅
+Verificado que la configuración se reutiliza en:
+- ✅ Home (`page.tsx` - muestra nombre, eslogan, dirección, teléfono, email, horario)
+- ✅ Login (muestra nombre del restaurante)
+- ✅ Comprobante de pago (todos los datos del restaurante)
+- ✅ Encabezados del panel (sidebar con logo + nombre)
+- ✅ API pública `/api/public/config` (accesible sin auth)
+- ✅ API admin `/api/admin/config` (editar config)
+
+### Punto 10: Productos y recetas ✅
+- ✅ 10.1 Tipos de productos: DIRECTO, FINAL, SUBPRODUCTO (todos implementados)
+- ✅ 10.2 Relación entre productos: **AÑADIDA API y UI completa**
+  - Nuevo endpoint: `GET/POST/DELETE /api/admin/productos/[id]/subproducts`
+  - Nuevo componente: `SubproductManager` en página de edición de producto
+  - Solo aparece para productos de tipo FINAL
+  - Muestra lista de subproductos asociados con cantidad, unidad y costo
+  - Calcula costo total automático
+  - Permite añadir cualquier producto como subproducto (con cantidad)
+  - Permite quitar subproductos con confirmación
+  - Audit log en cada acción (ADD_SUBPRODUCT, UPDATE_SUBPRODUCT, REMOVE_SUBPRODUCT)
+- ✅ 10.3 Recetas: con ingredientes, cantidades, unidades, costo, rendimiento, producto final
+- ✅ 10.4 Productos activos e inactivos: panel del mesero solo muestra productos finales activos y disponibles
+
+### Agregado
+- Endpoint `/api/admin/productos/[id]/subproducts` (GET/POST/DELETE) para gestionar subproductos
+- Componente `SubproductManager` con UI completa para asociar subproductos a productos finales
+- Panel de "Información de acceso" en página de edición de usuario con:
+  - Resumen (último acceso, IP, creado, sesiones activas)
+  - Lista de sesiones activas con detalles
+  - Historial de accesos (logins/logouts de 30 días)
+- 4 noticias adicionales en seed (cambio de menú, producto agotado, cambio de turno, cambio de precio)
+- Script de backup mejorado: ahora excluye node_modules, .next, builds, skills, agent-ctx, tests, logs, .env.local, bun.lock
+
+### Cambiado
+- `GET /api/admin/usuarios/[id]` ahora devuelve también `lastLoginIp`, `profile`, `sessions` (activas) y `accessHistory` (30 días)
+- Script de backup: solo incluye código fuente, sin dependencias ni builds
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Todas las páginas responden 200
+- ✅ API de subproductos probada end-to-end (crear, listar, eliminar)
+- ✅ Historial de accesos verificado en página de usuario (muestra logins/logouts con IP)
+- ✅ Noticias: 5 públicas + 2 privadas en home (verificado con Agent Browser)
+- ✅ Subproductos: section visible en productos finales, oculta en otros tipos
+
+### Backup
+- `download/salva/SoftLBA-v0.4.0-{timestamp}.tar.gz` (solo código fuente)
+
+---
+
 ## [v0.3.0] - 2026-08-09 - PUNTOS 2-5 DE LA GUÍA
 
 ### Resumen

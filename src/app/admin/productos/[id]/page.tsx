@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { toast } from 'sonner'
 import { ArrowLeft, Loader2, Save, AlertTriangle } from 'lucide-react'
+import { SubproductManager } from '@/components/admin/subproduct-manager'
 
 type Form = {
   code: string
@@ -251,6 +252,11 @@ export default function EditarProductoPage() {
           </CardContent>
         </form>
       </Card>
+
+      {/* Gestión de subproductos (solo para productos finales) */}
+      {form.type === 'FINAL' && (
+        <SubproductManager productId={id} />
+      )}
     </div>
   )
 }

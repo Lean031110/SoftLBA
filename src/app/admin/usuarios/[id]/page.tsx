@@ -16,9 +16,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, Save, AlertTriangle, KeyRound, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Loader2, Save, AlertTriangle, KeyRound, Copy, Check, History, MapPin, Clock, Globe } from 'lucide-react'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, type UserRole } from '@/lib/permissions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 type Form = {
   firstName: string
@@ -33,6 +34,23 @@ type Form = {
   isActive: boolean
 }
 
+type AccessHistoryEntry = {
+  id: string
+  action: string
+  ipAddress: string | null
+  userAgent: string | null
+  result: string
+  createdAt: string
+}
+
+type UserInfo = {
+  lastLoginAt: string | null
+  lastLoginIp: string | null
+  createdAt: string
+  updatedAt: string
+  sessions: { id: string; ipAddress: string | null; userAgent: string | null; createdAt: string; expiresAt: string }[]
+}
+
 export default function EditarUsuarioPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
@@ -42,6 +60,8 @@ export default function EditarUsuarioPage() {
   const [username, setUsername] = useState('')
   const [mustChangePass, setMustChangePass] = useState(false)
   const [form, setForm] = useState<Form | null>(null)
+  const [userInfo, setUserInfo] = useState<UserInfo | null>(null)
+  const [accessHistory, setAccessHistory] = useState<AccessHistoryEntry[]>([])
   const [resetDialog, setResetDialog] = useState<{ open: boolean; password?: string; copied: boolean }>({ open: false, copied: false })
 
   useEffect(() => {
@@ -64,6 +84,14 @@ export default function EditarUsuarioPage() {
             bio: i.bio || '',
             isActive: i.isActive,
           })
+          setUserInfo({
+            lastLoginAt: i.lastLoginAt,
+            lastLoginIp: i.lastLoginIp,
+            createdAt: i.createdAt,
+            updatedAt: i.updatedAt,
+            sessions: i.sessions || [],
+          })
+          setAccessHistory(d.accessHistory || [])
         } else {
           setError(d.error || 'No encontrado')
         }
@@ -258,6 +286,115 @@ export default function EditarUsuarioPage() {
           </CardContent>
         </form>
       </Card>
+
+      {/* Información de acceso e historial */}
+      {userInfo && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <History className="h-4 w-4" />
+              Información de acceso
+            </CardTitle>
+            <CardDescription>Historial de sesiones y accesos del usuario</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Resumen de acceso */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-stone-500 flex items-center gap-1">
+                  <Clock className="h-3 w-3" /> Último acceso
+                </p>
+                <p className="text-sm font-medium mt-1">
+                  {userInfo.lastLoginAt
+                    ? new Date(userInfo.lastLoginAt).toLocaleString('es-CU')
+                    : 'Nunca'}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-stone-500 flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> Última IP
+                </p>
+                <p className="text-sm font-medium mt-1 font-mono">
+                  {userInfo.lastLoginIp || '—'}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-stone-500">Creado</p>
+                <p className="text-sm font-medium mt-1">
+                  {new Date(userInfo.createdAt).toLocaleDateString('es-CU')}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-xs text-stone-500">Sesiones activas</p>
+                <p className="text-sm font-medium mt-1">
+                  {userInfo.sessions.length} sesión{userInfo.sessions.length !== 1 ? 'es' : ''}
+                </p>
+              </div>
+            </div>
+
+            {/* Sesiones activas */}
+            {userInfo.sessions.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold mb-2 flex items-center gap-1">
+                  <Globe className="h-4 w-4" /> Sesiones activas
+                </p>
+                <div className="space-y-2">
+                  {userInfo.sessions.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between rounded-lg border p-2 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono truncate">{s.ipAddress || 'IP desconocida'}</p>
+                        <p className="text-stone-500 truncate">{s.userAgent || 'Desconocido'}</p>
+                      </div>
+                      <div className="text-right shrink-0 ml-2">
+                        <p>Inicia: {new Date(s.createdAt).toLocaleString('es-CU')}</p>
+                        <p className="text-stone-500">Expira: {new Date(s.expiresAt).toLocaleString('es-CU')}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Historial de accesos */}
+            <div>
+              <p className="text-sm font-semibold mb-2 flex items-center gap-1">
+                <History className="h-4 w-4" /> Historial (últimos 30 días)
+              </p>
+              {accessHistory.length === 0 ? (
+                <p className="text-xs text-stone-500 text-center py-4">Sin actividad registrada</p>
+              ) : (
+                <ScrollArea className="max-h-60">
+                  <div className="space-y-1">
+                    {accessHistory.map((h) => (
+                      <div key={h.id} className="flex items-center justify-between gap-2 text-xs border-b pb-1 last:border-0 last:pb-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Badge
+                            variant="secondary"
+                            className={
+                              h.action === 'LOGIN'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200 text-[10px]'
+                                : 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300 text-[10px]'
+                            }
+                          >
+                            {h.action === 'LOGIN' ? 'Ingreso' : 'Salida'}
+                          </Badge>
+                          <span className="font-mono text-stone-500 truncate">{h.ipAddress || '—'}</span>
+                          {h.result !== 'SUCCESS' && (
+                            <Badge variant="destructive" className="text-[10px]">{h.result}</Badge>
+                          )}
+                        </div>
+                        <span className="text-stone-500 shrink-0">
+                          {new Date(h.createdAt).toLocaleString('es-CU')}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={resetDialog.open} onOpenChange={(open) => !open && setResetDialog({ open: false, copied: false })}>
         <DialogContent>
