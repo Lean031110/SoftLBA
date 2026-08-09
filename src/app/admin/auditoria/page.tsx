@@ -50,7 +50,7 @@ const ACTION_COLORS: Record<string, string> = {
   DEACTIVATE: 'bg-amber-100 text-amber-800',
   LOGIN: 'bg-purple-100 text-purple-800',
   LOGOUT: 'bg-stone-100 text-stone-800',
-  RESET_PASSWORD: 'bg-orange-100 text-orange-800',
+  RESET_PASSWORD: 'bg-blue-100 text-blue-800',
 }
 
 function tryParse(s: string | null): any {

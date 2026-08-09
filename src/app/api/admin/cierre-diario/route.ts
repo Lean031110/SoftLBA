@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (!['ADMIN', 'CAJERO'].includes(user.role)) {
+    if (!['ADMIN', 'CAJERO', 'MESERO_PRO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (!['ADMIN', 'CAJERO'].includes(user.role)) {
+    if (!['ADMIN', 'CAJERO', 'MESERO_PRO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
 

@@ -333,8 +333,8 @@ export default function NuevoPedidoPage() {
                           disabled={outOfStock}
                           className={`text-left border rounded-lg p-3 transition-colors ${
                             inCart
-                              ? 'border-orange-500 bg-orange-50 dark:bg-orange-950'
-                              : 'border-stone-200 dark:border-stone-800 hover:border-orange-300'
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
+                              : 'border-stone-200 dark:border-stone-800 hover:border-blue-300'
                           } ${outOfStock ? 'opacity-50 cursor-not-allowed' : 'hover:bg-stone-50 dark:hover:bg-stone-900'}`}
                         >
                           <div className="flex items-start justify-between gap-1">
@@ -347,11 +347,11 @@ export default function NuevoPedidoPage() {
                           </div>
                           <p className="text-[10px] text-stone-500 mt-1">{p.code} · {p.type}</p>
                           <div className="flex items-center justify-between mt-2">
-                            <span className="text-sm font-bold text-orange-700 dark:text-orange-300">
+                            <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
                               {formatCurrency(p.price)}
                             </span>
                             {p.areaStock !== null && (
-                              <span className={`text-[10px] ${outOfStock ? 'text-red-600' : 'text-stone-500'}`}>
+                              <span className={`text-[10px] ${outOfStock ? 'text-blue-600' : 'text-stone-500'}`}>
                                 Stock: {p.areaStock}
                               </span>
                             )}
@@ -394,24 +394,31 @@ export default function NuevoPedidoPage() {
                   Agrega productos al pedido
                 </div>
               ) : (
-                <ScrollArea className="max-h-72">
-                  <div className="space-y-2 pr-2">
+                <ScrollArea className="max-h-[60vh]">
+                  <div className="space-y-3 pr-2">
                     {cart.map((it) => (
-                      <div key={it.product.id} className="border rounded-lg p-2 space-y-1.5">
+                      <div key={it.product.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-white dark:bg-slate-900 space-y-2 shadow-sm">
+                        {/* Header: nombre + botón quitar */}
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium flex-1">{it.product.name}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold truncate">{it.product.name}</p>
+                            <p className="text-[10px] text-slate-500">
+                              {it.product.code} · {formatCurrency(it.product.price)} c/u
+                            </p>
+                          </div>
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-6 w-6 shrink-0"
+                            className="h-7 w-7 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                             onClick={() => removeItem(it.product.id)}
                             aria-label="Quitar"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center gap-1">
+                        {/* Cantidad + subtotal */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
                             <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(it.product.id, -1)}>
                               <Minus className="h-3 w-3" />
                             </Button>
@@ -419,7 +426,7 @@ export default function NuevoPedidoPage() {
                               type="number"
                               value={it.quantity}
                               onChange={(e) => setQuantity(it.product.id, Number(e.target.value))}
-                              className="h-7 w-14 text-center px-1"
+                              className="h-7 w-14 text-center px-1 font-medium"
                               min={0}
                               step={it.product.unit === 'ml' || it.product.unit === 'kg' ? 0.5 : 1}
                             />
@@ -427,15 +434,19 @@ export default function NuevoPedidoPage() {
                               <Plus className="h-3 w-3" />
                             </Button>
                           </div>
-                          <span className="text-xs text-stone-500 ml-auto">
-                            {formatCurrency(it.product.price * it.quantity)}
-                          </span>
+                          <div className="text-right">
+                            <p className="text-[10px] text-slate-500">Subtotal</p>
+                            <p className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                              {formatCurrency(it.product.price * it.quantity)}
+                            </p>
+                          </div>
                         </div>
+                        {/* Notas del item */}
                         <Input
                           value={it.notes}
                           onChange={(e) => updateItemNotes(it.product.id, e.target.value)}
                           placeholder="Notas (ej: sin cebolla)"
-                          className="h-7 text-xs"
+                          className="h-8 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                           maxLength={300}
                         />
                       </div>
@@ -487,7 +498,7 @@ export default function NuevoPedidoPage() {
                 )}
                 <div className="flex justify-between text-base font-bold pt-1">
                   <span>Total</span>
-                  <span className="text-orange-700 dark:text-orange-300">{formatCurrency(total)}</span>
+                  <span className="text-blue-700 dark:text-blue-300">{formatCurrency(total)}</span>
                 </div>
               </div>
 

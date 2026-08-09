@@ -280,7 +280,7 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                         <div key={it.id} className="flex items-start justify-between gap-2 text-sm">
                           <div className="min-w-0 flex-1">
                             <p className="font-medium">
-                              <span className="text-orange-700 dark:text-orange-300 mr-1">{it.quantity}×</span>
+                              <span className="text-blue-700 dark:text-blue-300 mr-1">{it.quantity}×</span>
                               {it.product.name}
                             </p>
                             {it.notes && (

@@ -152,7 +152,7 @@ export default function HomePage() {
       {news.length > 0 && (
         <section className="container mx-auto px-4 py-4">
           <h3 className="text-xl font-bold mb-3 flex items-center gap-2">
-            <Megaphone className="h-5 w-5 text-orange-600" />
+            <Megaphone className="h-5 w-5 text-blue-600" />
             Avisos y noticias
           </h3>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -242,7 +242,7 @@ export default function HomePage() {
             </p>
           )}
           <p className="text-[10px] mt-3 text-slate-500">
-            Sistema local · Sin dependencia de Internet · v0.2.0
+            Sistema local · Sin dependencia de Internet · v0.6.0
           </p>
         </div>
       </footer>

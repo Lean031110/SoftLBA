@@ -1,4 +1,5 @@
 // POST /api/admin/cierre-diario/[id]/close - Cerrar/bloquear
+// Al cerrar: crea entradas en FinanceEntry con el resumen del día (ventas por método, mermas)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const { id } = await params
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (!['ADMIN', 'CAJERO'].includes(user.role)) {
+    if (!['ADMIN', 'CAJERO', 'MESERO_PRO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
 
@@ -26,7 +27,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     const d = parsed.data
 
-    const close = await db.dailyClose.findUnique({ where: { id } })
+    const close = await db.dailyClose.findUnique({
+      where: { id },
+      include: { areas: true },
+    })
     if (!close) {
       return NextResponse.json({ ok: false, error: 'No encontrado' }, { status: 404 })
     }
@@ -35,20 +39,115 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (close.status === 'CERRADO' || close.status === 'BLOQUEADO') {
         return NextResponse.json({ ok: false, error: 'Ya está cerrado' }, { status: 400 })
       }
-      const updated = await db.dailyClose.update({
-        where: { id },
-        data: {
-          status: 'CERRADO',
-          closedAt: new Date(),
-          observations: d.observations || close.observations,
-        },
+
+      // Recalcular totales finales antes de cerrar
+      const start = new Date(close.date)
+      start.setHours(0, 0, 0, 0)
+      const end = new Date(close.date)
+      end.setHours(23, 59, 59, 999)
+
+      const payments = await db.payment.findMany({
+        where: { createdAt: { gte: start, lte: end } },
       })
+
+      // Calcular ventas por método
+      const methodTotals: Record<string, number> = {}
+      let totalCash = 0
+      let totalTransfer = 0
+      let totalOther = 0
+      let totalSales = 0
+
+      for (const p of payments) {
+        methodTotals[p.method] = (methodTotals[p.method] || 0) + p.amount
+        totalSales += p.amount
+        if (p.method === 'EFECTIVO_CUP' || p.method === 'EFECTIVO_USD') totalCash += p.amount
+        else if (p.method.startsWith('TRANSFERENCIA') || p.method === 'ZELLE' || p.method === 'BANCARIA_USD') totalTransfer += p.amount
+        else totalOther += p.amount
+      }
+
+      // Mermas del día
+      const mermas = await db.financeEntry.findMany({
+        where: { type: 'MERMA', createdAt: { gte: start, lte: end } },
+        select: { amount: true },
+      })
+      const totalWaste = mermas.reduce((s, m) => s + m.amount, 0)
+
+      // Cerrar y crear entradas en FinanceEntry en una transacción
+      const updated = await db.$transaction(async (tx) => {
+        // Actualizar el cierre con los totales finales
+        const closeUpdated = await tx.dailyClose.update({
+          where: { id },
+          data: {
+            status: 'CERRADO',
+            closedAt: new Date(),
+            observations: d.observations || close.observations,
+            totalSales,
+            totalCash,
+            totalTransfer,
+            totalOther,
+            totalWaste,
+            totalExpected: totalCash,
+            difference: close.totalReal - totalCash,
+          },
+        })
+
+        // Borrar entradas anteriores del mismo cierre (si se reabre y vuelve a cerrar)
+        await tx.financeEntry.deleteMany({
+          where: { dailyCloseId: id },
+        })
+
+        // Crear entradas en FinanceEntry por cada método de pago con ventas
+        const methodLabels: Record<string, string> = {
+          EFECTIVO_CUP: 'Ventas en Efectivo CUP',
+          EFECTIVO_USD: 'Ventas en Efectivo USD',
+          TRANSFERENCIA_CUP: 'Ventas por Transferencia CUP',
+          TRANSFERENCIA_USD: 'Ventas por Transferencia USD',
+          ZELLE: 'Ventas por Zelle',
+          BANCARIA_USD: 'Ventas Bancarias USD',
+          COMBINADO: 'Ventas con Pago Combinado',
+        }
+
+        for (const [method, amount] of Object.entries(methodTotals)) {
+          if (amount <= 0) continue
+          await tx.financeEntry.create({
+            data: {
+              type: 'VENTA',
+              category: method,
+              description: `${methodLabels[method] || method} - Cierre del ${close.date.toLocaleDateString('es-CU')}`,
+              amount,
+              currency: method.includes('USD') ? 'USD' : 'CUP',
+              reference: id,
+              userId: user.id,
+              dailyCloseId: id,
+            },
+          })
+        }
+
+        // Si hubo mermas, crear entrada resumen de mermas
+        if (totalWaste > 0) {
+          await tx.financeEntry.create({
+            data: {
+              type: 'MERMA',
+              category: 'RESUMEN_MERMAS',
+              description: `Total de mermas del día - Cierre del ${close.date.toLocaleDateString('es-CU')}`,
+              amount: totalWaste,
+              currency: 'CUP',
+              reference: id,
+              userId: user.id,
+              dailyCloseId: id,
+            },
+          })
+        }
+
+        return closeUpdated
+      })
+
       await audit({
         userId: user.id,
         action: 'CLOSE_DAILY',
         entity: 'daily-close',
         entityId: id,
-        after: { status: 'CERRADO' },
+        after: { status: 'CERRADO', totalSales, totalCash, totalTransfer, totalWaste },
       })
       return NextResponse.json({ ok: true, item: updated })
     } else if (d.action === 'lock') {

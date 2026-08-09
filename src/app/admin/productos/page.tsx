@@ -220,7 +220,7 @@ export default function ProductosListPage() {
                 {items.map((p) => (
                   <TableRow key={p.id}>
                     <TableCell>
-                      <Link href={`/admin/productos/${p.id}`} className="font-mono text-xs text-orange-700 hover:underline">
+                      <Link href={`/admin/productos/${p.id}`} className="font-mono text-xs text-blue-700 hover:underline">
                         {p.code}
                       </Link>
                     </TableCell>

@@ -572,3 +572,66 @@ Stage Summary:
 - 12 páginas responden 200 OK
 - Lint limpio
 - Backup v0.5.0 a crear (solo código fuente)
+
+---
+Task ID: v0.6.0
+Agent: main (Super Z)
+Task: Fix bugs visuales + rol MESERO_PRO + comandas con añadir/cancelar items + finanzas al cierre
+
+Work Log:
+- FIX VISUAL: Bug del nuevo pedido (todo se mezclaba)
+  - Reestructuré el layout del carrito en /mesero/nuevo-pedido
+  - Cada item ahora tiene su propia tarjeta con borde y sombra
+  - Header: nombre + código + precio por unidad + botón quitar (rojo)
+  - Cantidad + subtotal claramente separados
+  - Notas del item con fondo gris para distinguirlas
+  - ScrollArea más alta (60vh) para mejor visibilidad
+- FIX COLOR: Reemplacé TODOS los colores orange por blue/sky en 15 archivos
+  - panel-layout, page, login, perfil, comprobante, kitchen-dashboard
+  - admin/page, admin/usuarios, admin/productos, admin/noticias, admin/finanzas
+  - admin/auditoria, admin/ayuda, permissions, mesero/pedidos/[id]
+  - amber se mantiene para warnings (correcto)
+- FIX VERSIÓN: Actualicé v0.2.0 a v0.6.0 en footer de home y panel
+- FIX AYUDA: Botón "Atrás" ahora vuelve al panel del rol (no a home pública)
+  - Reescribí /ayuda para usar PanelLayout
+  - Botón atrás usa router.push(ROLE_HOME[role])
+  - Eliminé el footer propio (ahora usa el del panel)
+  - Color cambiado de orange a blue
+- FEATURE: Rol MESERO_PRO
+  - Añadido al enum UserRole en schema.prisma
+  - Actualizado permissions/index.ts con rol, etiqueta, color, rutas
+  - Actualizado middleware para que MESERO_PRO acceda a /admin/cierre-diario
+  - Actualizado panel-layout NAV_ITEMS para incluir MESERO_PRO
+  - Añadido usuario demo: meseropro / meseropro123
+  - Actualizado seed con nuevo usuario
+  - Actualizado login con credencial demo
+  - Quitado CAJERO de finanzas (solo ADMIN)
+  - Actualizado dashboard para permitir MESERO_PRO
+  - Actualizados todos los endpoints de cierre-diario para incluir MESERO_PRO
+  - Actualizados todos los endpoints de mesero para incluir MESERO_PRO
+- FEATURE: Comandas - añadir/cancelar productos
+  - Nuevo endpoint POST /api/mesero/orders/[id]/items (añadir item a pedido existente)
+  - Nuevo endpoint PATCH /api/mesero/orders/[id]/items/[itemId] (editar cantidad/notas)
+  - Nuevo endpoint DELETE /api/mesero/orders/[id]/items/[itemId] (cancelar item - soft delete)
+  - Reglas: solo se puede editar/cancelar items en estado PENDIENTE
+  - Lo cancelado se guarda como CANCELADO (no se borra, trazabilidad)
+  - Recálculo automático de totales del pedido
+  - Actualizado cancel de pedido: verifica que ningún item esté en preparación
+- FEATURE: Finanzas al cerrar caja
+  - Al cerrar cierre diario, crea entradas en FinanceEntry con:
+    - Venta por cada método de pago (EFECTIVO_CUP, TRANSFERENCIA_USD, etc.)
+    - Resumen de mermas del día
+  - Cada entrada tiene dailyCloseId para trazabilidad
+  - Si se reabre y vuelve a cerrar, borra las entradas anteriores y crea nuevas
+  - Recalcula totales finales del cierre
+
+Stage Summary:
+- Bug visual del nuevo pedido corregido (layout limpio)
+- Todos los colores naranja reemplazados por azul
+- Versión actualizada a v0.6.0
+- Botón atrás en ayuda vuelve al panel correcto
+- Rol MESERO_PRO implementado end-to-end (puede hacer cierres, no finanzas)
+- Comandas: añadir/cancelar productos con trazabilidad
+- Cierre de caja genera entradas en finanzas general
+- Lint: 0 errores
+- Backup v0.6.0 a crear (solo código fuente)

@@ -178,7 +178,7 @@ export default function AyudaListPage() {
                   <TableRow key={h.id}>
                     <TableCell><Badge variant="outline" className="font-mono text-xs">{h.module}</Badge></TableCell>
                     <TableCell>
-                      <Link href={`/admin/ayuda/${h.id}`} className="font-medium text-orange-700 hover:underline">
+                      <Link href={`/admin/ayuda/${h.id}`} className="font-medium text-blue-700 hover:underline">
                         {h.title}
                       </Link>
                       <div className="text-xs text-stone-500 truncate max-w-md">{h.content.slice(0, 80)}{h.content.length > 80 && '...'}</div>
@@ -198,7 +198,7 @@ export default function AyudaListPage() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                         <Button size="icon" variant="ghost" onClick={() => setDeleting(h)} aria-label="Eliminar">
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-4 w-4 text-blue-600" />
                         </Button>
                       </div>
                     </TableCell>

@@ -208,7 +208,7 @@ export default function NoticiasListPage() {
                 {items.map((n) => (
                   <TableRow key={n.id}>
                     <TableCell>
-                      <Link href={`/admin/noticias/${n.id}`} className="font-medium text-orange-700 hover:underline">
+                      <Link href={`/admin/noticias/${n.id}`} className="font-medium text-blue-700 hover:underline">
                         {n.title}
                       </Link>
                       <div className="text-xs text-stone-500 truncate max-w-md">{n.content.slice(0, 80)}{n.content.length > 80 && '...'}</div>
@@ -240,7 +240,7 @@ export default function NoticiasListPage() {
                           <Power className="h-4 w-4" />
                         </Button>
                         <Button size="icon" variant="ghost" onClick={() => setDeleting(n)} aria-label="Eliminar">
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                          <Trash2 className="h-4 w-4 text-blue-600" />
                         </Button>
                       </div>
                     </TableCell>

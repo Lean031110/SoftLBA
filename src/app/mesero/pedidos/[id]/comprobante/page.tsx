@@ -135,7 +135,7 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
           {/* Header del restaurante */}
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center gap-2">
-              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white">
+              <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white">
                 <Utensils className="h-5 w-5" />
               </div>
               <h2 className="text-lg font-bold">{restaurantName}</h2>

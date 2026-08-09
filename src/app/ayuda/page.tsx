@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { PanelLayout } from '@/components/layout/panel-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { toast } from 'sonner'
-import { HelpCircle, Search, ArrowLeft, Pencil } from 'lucide-react'
+import { HelpCircle, Search, Pencil, ArrowLeft } from 'lucide-react'
+import { ROLE_HOME, type UserRole } from '@/lib/permissions'
 
 type HelpItem = {
   id: string
@@ -20,8 +23,9 @@ type HelpItem = {
 }
 
 export default function AyudaPublicaPage() {
+  const router = useRouter()
   const [items, setItems] = useState<HelpItem[]>([])
-  const [role, setRole] = useState<string>('')
+  const [role, setRole] = useState<UserRole | ''>('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
@@ -57,18 +61,30 @@ export default function AyudaPublicaPage() {
     byModule[it.module].push(it)
   }
 
+  function handleBack() {
+    // Volver al panel según el rol
+    if (role && role in ROLE_HOME) {
+      router.push(ROLE_HOME[role as UserRole])
+    } else {
+      router.push('/login')
+    }
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-stone-50 dark:bg-stone-950">
-      <header className="border-b bg-white dark:bg-stone-900 sticky top-0 z-10">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <PanelLayout>
+      <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link href="/"><ArrowLeft className="h-4 w-4" /></Link>
+            <Button variant="ghost" size="icon" onClick={handleBack}>
+              <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h1 className="text-lg font-bold flex items-center gap-2">
-              <HelpCircle className="h-5 w-5 text-orange-600" />
-              Centro de ayuda
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                <HelpCircle className="h-6 w-6 text-blue-600" />
+                Centro de ayuda
+              </h1>
+              <p className="text-sm text-slate-500">Encuentra respuestas a tus preguntas</p>
+            </div>
           </div>
           {role === 'ADMIN' && (
             <Button variant="outline" size="sm" asChild>
@@ -76,13 +92,11 @@ export default function AyudaPublicaPage() {
             </Button>
           )}
         </div>
-      </header>
 
-      <main className="flex-1 container mx-auto px-4 py-6 max-w-4xl">
-        <Card className="mb-6">
+        <Card>
           <CardContent className="p-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-stone-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -103,8 +117,8 @@ export default function AyudaPublicaPage() {
           </Alert>
         ) : Object.keys(byModule).length === 0 ? (
           <Card>
-            <CardContent className="p-10 text-center text-stone-500">
-              <HelpCircle className="h-12 w-12 mx-auto mb-3 text-stone-300" />
+            <CardContent className="p-10 text-center text-slate-500">
+              <HelpCircle className="h-12 w-12 mx-auto mb-3 text-slate-300" />
               <p className="font-medium">No hay artículos que coincidan</p>
               <p className="text-xs mt-1">Intenta con otro término o contacta al administrador</p>
             </CardContent>
@@ -115,7 +129,7 @@ export default function AyudaPublicaPage() {
               <Card key={mod}>
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 rounded-full bg-orange-500" />
+                    <span className="inline-block h-2 w-2 rounded-full bg-blue-500" />
                     {mod}
                   </CardTitle>
                 </CardHeader>
@@ -127,7 +141,7 @@ export default function AyudaPublicaPage() {
                           {a.title}
                         </AccordionTrigger>
                         <AccordionContent>
-                          <pre className="whitespace-pre-wrap font-sans text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
+                          <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
                             {a.content}
                           </pre>
                         </AccordionContent>
@@ -139,11 +153,11 @@ export default function AyudaPublicaPage() {
             ))}
           </div>
         )}
-      </main>
 
-      <footer className="mt-auto border-t bg-white dark:bg-stone-900 py-3 px-4 text-center text-xs text-stone-500">
-        <p>¿Necesitas más ayuda? Contacta al administrador del sistema.</p>
-      </footer>
-    </div>
+        <div className="text-center text-xs text-slate-500 py-4">
+          <p>¿Necesitas más ayuda? Contacta al administrador del sistema.</p>
+        </div>
+      </div>
+    </PanelLayout>
   )
 }

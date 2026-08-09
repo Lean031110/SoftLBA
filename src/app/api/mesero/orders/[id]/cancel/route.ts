@@ -1,4 +1,6 @@
-// POST /api/mesero/orders/[id]/cancel - Cancelar pedido (solo si CREADO o ENVIADO)
+// POST /api/mesero/orders/[id]/cancel - Cancelar pedido
+// Reglas: se puede cancelar si ningún item está en preparación o más avanzado
+//         lo cancelado se guarda como cancelado (trazabilidad)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -16,7 +18,7 @@ export async function POST(
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (!['ADMIN', 'MESERO'].includes(user.role)) {
+    if (!['ADMIN', 'MESERO', 'MESERO_PRO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
     const { id } = await params
@@ -31,9 +33,23 @@ export async function POST(
     if (user.role !== 'ADMIN' && order.userId !== user.id) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
-    if (!['CREADO', 'ENVIADO'].includes(order.status)) {
+    if (['CANCELADO', 'COBRADO', 'ARCHIVADO'].includes(order.status)) {
       return NextResponse.json(
-        { ok: false, error: 'No se puede cancelar un pedido en este estado' },
+        { ok: false, error: `No se puede cancelar un pedido ${order.status.toLowerCase()}` },
+        { status: 400 },
+      )
+    }
+
+    // Verificar que NINGÚN item esté en preparación o más avanzado
+    const activeItems = order.items.filter(
+      (it) => it.status !== 'CANCELADO' && it.status !== 'PENDIENTE',
+    )
+    if (activeItems.length > 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `No se puede cancelar el pedido porque ${activeItems.length} item(s) ya están en preparación o listos. Cancela los items pendientes individualmente.`,
+        },
         { status: 400 },
       )
     }
@@ -61,7 +77,9 @@ export async function POST(
       })
 
       // Devolver stock de productos DIRECTO al área correspondiente
+      // Solo para items que no estaban cancelados ya
       for (const it of order.items) {
+        if (it.status === 'CANCELADO') continue
         const product = await tx.product.findUnique({ where: { id: it.productId } })
         if (!product || product.type !== 'DIRECTO') continue
 

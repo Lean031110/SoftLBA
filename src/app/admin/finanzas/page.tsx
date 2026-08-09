@@ -154,7 +154,7 @@ export default function FinanzasDashboardPage() {
               title="Balance"
               value={data.totals.balance}
               icon={<Scale className="h-5 w-5" />}
-              accent="bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+              accent="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
             />
           </div>
 
@@ -209,7 +209,7 @@ export default function FinanzasDashboardPage() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <Badge variant="secondary">{e.type}</Badge>
-                        <span className={`font-semibold ${['INGRESO', 'VENTA'].includes(e.type) ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <span className={`font-semibold ${['INGRESO', 'VENTA'].includes(e.type) ? 'text-emerald-600' : 'text-blue-600'}`}>
                           {['INGRESO', 'VENTA'].includes(e.type) ? '+' : '-'}${e.amount.toFixed(2)}
                         </span>
                       </div>
@@ -236,7 +236,7 @@ function StatCard({
           <p className="text-xs text-stone-500 uppercase tracking-wider">{title}</p>
           <div className={`rounded-lg p-1.5 ${accent}`}>{icon}</div>
         </div>
-        <p className={`mt-2 text-2xl font-bold ${isNeg ? 'text-red-600' : ''}`}>
+        <p className={`mt-2 text-2xl font-bold ${isNeg ? 'text-blue-600' : ''}`}>
           ${Math.abs(value).toFixed(2)}
           {isNeg && <span className="text-sm ml-1">(-)</span>}
         </p>

@@ -6,6 +6,72 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.6.0] - 2026-08-09 - FIX VISUAL + ROL MESERO_PRO + COMANDAS
+
+### Resumen
+Corrige el bug visual del nuevo pedido, reemplaza todos los colores naranja por
+azul, añade el rol MESERO_PRO (cierres sin finanzas), permite añadir/cancelar
+productos en comandas existentes, y hace que el cierre de caja genere entradas
+automáticas en finanzas general.
+
+### Corregido
+- **Bug visual del nuevo pedido**: El carrito se veía mezclado, con productos
+  superpuestos y notas confundidas. Ahora cada item tiene su propia tarjeta con
+  borde, sombra, y secciones claramente separadas (header, cantidad+subtotal, notas).
+- **Colores naranja restantes**: Reemplazados por azul en 15 archivos:
+  - panel-layout, page, login, perfil, comprobante, kitchen-dashboard
+  - admin/page, usuarios, productos, noticias, finanzas, auditoria, ayuda
+  - permissions, mesero/pedidos/[id]
+  - amber se mantiene para warnings (correcto)
+- **Versión desactualizada**: v0.2.0 → v0.6.0 en footer de home y panel
+- **Botón "Atrás" en ayuda**: Iba a `/` (home pública). Ahora vuelve al panel
+  del rol correspondiente (ej: mesero va a `/mesero`).
+
+### Agregado
+- **Rol MESERO_PRO** (mesero pro):
+  - Puede: crear pedidos, cobrar, hacer cierres diarios
+  - No puede: acceder a finanzas, usuarios, productos, configuración, auditoría
+  - Usuario demo: `meseropro / meseropro123`
+  - Color badge: teal
+- **Gestión de items en comandas existentes**:
+  - `POST /api/mesero/orders/[id]/items` - Añadir item a pedido existente
+  - `PATCH /api/mesero/orders/[id]/items/[itemId]` - Editar cantidad/notas
+  - `DELETE /api/mesero/orders/[id]/items/[itemId]` - Cancelar item (soft delete)
+  - Reglas: solo items en estado PENDIENTE se pueden editar/cancelar
+  - Lo cancelado se guarda como CANCELADO (no se borra, trazabilidad)
+  - Recálculo automático de totales
+- **Cancelación de pedido mejorada**:
+  - Verifica que NINGÚN item esté en preparación antes de cancelar
+  - Si hay items en preparación, devuelve error con instrucciones
+- **Finanzas automáticas al cerrar caja**:
+  - Al cerrar el cierre diario, crea entradas en FinanceEntry por:
+    - Cada método de pago con ventas (EFECTIVO_CUP, TRANSFERENCIA_USD, etc.)
+    - Resumen de mermas del día
+  - Cada entrada tiene `dailyCloseId` para trazabilidad
+  - Si se reabre y vuelve a cerrar, borra las entradas anteriores y crea nuevas
+  - Recalcula totales finales del cierre antes de cerrar
+
+### Cambiado
+- CAJERO ya no tiene acceso a finanzas (solo ADMIN)
+- MESERO_PRO puede acceder a /admin/cierre-diario (páginas y APIs)
+- Middleware: búsqueda de prefijo más específico (ordenado por longitud)
+- Página /ayuda reescrita para usar PanelLayout y volver al panel correcto
+- Seed: añadido usuario meseropro
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ meseropro: /api/mesero/orders (200), /api/admin/cierre-diario (200)
+- ✅ meseropro: /api/admin/finanzas (403), /api/admin/dashboard (403)
+- ✅ admin: acceso total (200 en todo)
+- ✅ Layout del nuevo pedido limpio y claro (probado con Agent Browser)
+- ✅ Botón atrás en ayuda vuelve al panel del rol
+- ✅ Todas las páginas responden 200
+
+### Backup
+- `download/salva/SoftLBA-v0.6.0-{timestamp}.tar.gz` (solo código fuente)
+
+---
+
 ## [v0.5.0] - 2026-08-09 - FIX LOGIN + TOGGLE USUARIOS DEMO
 
 ### Resumen

@@ -7,7 +7,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { z } from 'zod'
 
-const ROLES = ['ADMIN', 'MESERO', 'COCINA', 'PIZZERIA', 'CAJERO'] as const
+const ROLES = ['ADMIN', 'MESERO', 'MESERO_PRO', 'COCINA', 'PIZZERIA', 'CAJERO'] as const
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {

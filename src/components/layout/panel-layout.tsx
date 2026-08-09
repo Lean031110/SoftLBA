@@ -70,16 +70,16 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/noticias', label: 'Noticias', icon: Newspaper, roles: ['ADMIN'] },
   { href: '/admin/clientes', label: 'Clientes', icon: Users, roles: ['ADMIN'] },
   { href: '/admin/promociones', label: 'Promociones', icon: Receipt, roles: ['ADMIN'] },
-  { href: '/admin/finanzas', label: 'Finanzas', icon: Wallet, roles: ['ADMIN', 'CAJERO'] },
-  { href: '/admin/cierre-diario', label: 'Cierre Diario', icon: Receipt, roles: ['ADMIN', 'CAJERO'] },
+  { href: '/admin/finanzas', label: 'Finanzas', icon: Wallet, roles: ['ADMIN'] },
+  { href: '/admin/cierre-diario', label: 'Cierre Diario', icon: Receipt, roles: ['ADMIN', 'CAJERO', 'MESERO_PRO'] },
   { href: '/admin/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['ADMIN'] },
   { href: '/admin/respaldos', label: 'Respaldos', icon: Database, roles: ['ADMIN'] },
   { href: '/admin/configuracion', label: 'Configuración', icon: Settings, roles: ['ADMIN'] },
   // Operativas
-  { href: '/mesero', label: 'Mesero', icon: Utensils, roles: ['ADMIN', 'MESERO'] },
+  { href: '/mesero', label: 'Mesero', icon: Utensils, roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
   { href: '/cocina', label: 'Cocina', icon: ChefHat, roles: ['ADMIN', 'COCINA'] },
   { href: '/pizzeria', label: 'Pizzería', icon: Pizza, roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
-  { href: '/ayuda', label: 'Ayuda', icon: HelpCircle, roles: ['ADMIN', 'MESERO', 'COCINA', 'PIZZERIA', 'CAJERO'] },
+  { href: '/ayuda', label: 'Ayuda', icon: HelpCircle, roles: ['ADMIN', 'MESERO', 'MESERO_PRO', 'COCINA', 'PIZZERIA', 'CAJERO'] },
 ]
 
 function getInitials(user: CurrentUser | null): string {
@@ -111,7 +111,7 @@ function SidebarNav({ user, onNavigate }: { user: CurrentUser | null; onNavigate
             className={cn(
               'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
               isActive
-                ? 'bg-orange-500 text-white shadow-sm'
+                ? 'bg-blue-500 text-white shadow-sm'
                 : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800'
             )}
           >
@@ -150,7 +150,7 @@ function UserMenu({ user }: { user: CurrentUser | null }) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="flex items-center gap-2 px-2">
           <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200 text-xs font-semibold">
+            <AvatarFallback className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 text-xs font-semibold">
               {getInitials(user)}
             </AvatarFallback>
           </Avatar>
@@ -285,7 +285,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
               className="h-3.5 w-3.5"
             />
             <span className="font-semibold text-blue-700 dark:text-blue-300">SoftLBA</span>
-            {' · v0.2.0 · Sistema local para restaurante · '}
+            {' · v0.6.0 · Sistema local para restaurante · '}
             <span className="text-slate-400">Sin dependencia de Internet</span>
           </p>
         </footer>

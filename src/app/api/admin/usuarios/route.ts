@@ -6,7 +6,7 @@ import { getCurrentUser, hashPassword, generateRandomPassword } from '@/lib/auth
 import { audit } from '@/lib/audit'
 import { z } from 'zod'
 
-const ROLES = ['ADMIN', 'MESERO', 'COCINA', 'PIZZERIA', 'CAJERO'] as const
+const ROLES = ['ADMIN', 'MESERO', 'MESERO_PRO', 'COCINA', 'PIZZERIA', 'CAJERO'] as const
 
 function slugify(s: string): string {
   return s

@@ -253,7 +253,7 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
             <Printer className="h-4 w-4 mr-2" /> Comprobante
           </Button>
           {canCancel && (
-            <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-red-600 border-red-300 hover:bg-red-50">
+            <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-blue-600 border-red-300 hover:bg-red-50">
               <XCircle className="h-4 w-4 mr-2" /> Cancelar
             </Button>
           )}
@@ -379,7 +379,7 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
                 )}
                 <div className="flex justify-between text-base font-bold pt-1">
                   <span>Total</span>
-                  <span className="text-orange-700 dark:text-orange-300">{formatCurrency(order.total)}</span>
+                  <span className="text-blue-700 dark:text-blue-300">{formatCurrency(order.total)}</span>
                 </div>
               </div>
               <Separator />

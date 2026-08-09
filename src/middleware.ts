@@ -16,15 +16,15 @@ const AUTH_COMMON_ROUTES = ['/primer-acceso', '/perfil', '/ayuda', '/api/notific
 
 // Mapeo de prefijo de ruta -> roles permitidos
 const ROUTE_ROLE_MAP: { prefix: string; roles: string[] }[] = [
-  { prefix: '/admin', roles: ['ADMIN', 'CAJERO'] },
-  { prefix: '/mesero', roles: ['ADMIN', 'MESERO'] },
+  { prefix: '/admin', roles: ['ADMIN', 'CAJERO', 'MESERO_PRO'] },
+  { prefix: '/mesero', roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
   { prefix: '/cocina', roles: ['ADMIN', 'COCINA'] },
   { prefix: '/pizzeria', roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
-  { prefix: '/api/admin/cierre-diario', roles: ['ADMIN', 'CAJERO'] },
-  { prefix: '/api/admin/finanzas', roles: ['ADMIN', 'CAJERO'] },
+  { prefix: '/api/admin/cierre-diario', roles: ['ADMIN', 'CAJERO', 'MESERO_PRO'] },
+  { prefix: '/api/admin/finanzas', roles: ['ADMIN'] },
   { prefix: '/api/admin/respaldos', roles: ['ADMIN'] },
   { prefix: '/api/admin', roles: ['ADMIN'] },
-  { prefix: '/api/mesero', roles: ['ADMIN', 'MESERO'] },
+  { prefix: '/api/mesero', roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
   { prefix: '/api/cocina', roles: ['ADMIN', 'COCINA'] },
   { prefix: '/api/pizzeria', roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
   { prefix: '/api/cajero', roles: ['ADMIN', 'CAJERO'] },
@@ -72,19 +72,22 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  for (const { prefix, roles } of ROUTE_ROLE_MAP) {
-    if (pathname === prefix || pathname.startsWith(prefix + '/')) {
-      if (!roles.includes(session.role)) {
-        if (pathname.startsWith('/api/')) {
-          return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
-        }
-        const url = req.nextUrl.clone()
-        url.pathname = '/login'
-        url.searchParams.set('redirect', '/')
-        url.searchParams.set('error', 'sin_permiso')
-        return NextResponse.redirect(url)
+  // Buscar el prefijo más específico que coincida (ordenado por longitud descendente)
+  const matchingRoutes = ROUTE_ROLE_MAP
+    .filter(({ prefix }) => pathname === prefix || pathname.startsWith(prefix + '/'))
+    .sort((a, b) => b.prefix.length - a.prefix.length)
+
+  if (matchingRoutes.length > 0) {
+    const { roles } = matchingRoutes[0]
+    if (!roles.includes(session.role)) {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
       }
-      break
+      const url = req.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('redirect', '/')
+      url.searchParams.set('error', 'sin_permiso')
+      return NextResponse.redirect(url)
     }
   }
 

@@ -194,7 +194,7 @@ export default function PerfilPage() {
         <CardContent className="p-6">
           <div className="flex items-center gap-4 flex-wrap">
             <Avatar className="h-20 w-20">
-              <AvatarFallback className="bg-gradient-to-br from-orange-500 to-red-600 text-white text-xl font-bold">
+              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-700 text-white text-xl font-bold">
                 {getInitials(profile)}
               </AvatarFallback>
             </Avatar>

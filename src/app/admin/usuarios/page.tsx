@@ -216,7 +216,7 @@ export default function UsuariosListPage() {
                 {items.map((u) => (
                   <TableRow key={u.id}>
                     <TableCell>
-                      <Link href={`/admin/usuarios/${u.id}`} className="font-medium text-orange-700 hover:underline">
+                      <Link href={`/admin/usuarios/${u.id}`} className="font-medium text-blue-700 hover:underline">
                         @{u.username}
                       </Link>
                       {u.mustChangePass && (

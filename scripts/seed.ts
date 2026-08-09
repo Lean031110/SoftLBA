@@ -121,6 +121,23 @@ async function main() {
     },
   })
 
+  // 6b. Usuario mesero-pro demo (puede hacer cierres pero no finanzas)
+  console.log('  → Usuario mesero-pro demo')
+  const meseroProPass = await bcrypt.hash('meseropro123', 10)
+  await prisma.user.upsert({
+    where: { username: 'meseropro' },
+    update: {},
+    create: {
+      username: 'meseropro',
+      passwordHash: meseroProPass,
+      role: 'MESERO_PRO',
+      mustChangePass: false,
+      firstName: 'Ana',
+      lastName: 'Martínez',
+      isActive: true,
+    },
+  })
+
   // 7. Noticias
   console.log('  → Noticias iniciales')
   const newsData = [
@@ -326,10 +343,11 @@ async function main() {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('USUARIOS CREADOS:')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  console.log('👤 Admin    : admin / admin123')
-  console.log('👤 Mesero   : mesero / mesero123')
-  console.log('👤 Cocina   : cocina / cocina123')
-  console.log('👤 Cajero   : cajero / cajero123')
+  console.log('👤 Admin       : admin / admin123')
+  console.log('👤 Mesero      : mesero / mesero123')
+  console.log('👤 Mesero Pro  : meseropro / meseropro123')
+  console.log('👤 Cocina      : cocina / cocina123')
+  console.log('👤 Cajero      : cajero / cajero123')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
 }
 

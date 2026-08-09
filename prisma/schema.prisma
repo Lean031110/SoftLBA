@@ -586,6 +586,7 @@ model Backup {
 enum UserRole {
   ADMIN
   MESERO
+  MESERO_PRO
   COCINA
   PIZZERIA
   CAJERO

@@ -143,7 +143,7 @@ export default function AdminDashboardPage() {
           title="Productos"
           value={data.stats.activeProducts.toString()}
           icon={<Package className="h-5 w-5" />}
-          accent="bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300"
+          accent="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
           sub={`${data.stats.totalProducts} totales`}
         />
       </div>

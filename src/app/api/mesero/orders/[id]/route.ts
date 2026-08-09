@@ -13,7 +13,7 @@ export async function GET(
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (!['ADMIN', 'MESERO'].includes(user.role)) {
+    if (!['ADMIN', 'MESERO', 'MESERO_PRO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
     const { id } = await params
@@ -74,7 +74,7 @@ export async function PATCH(
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (!['ADMIN', 'MESERO'].includes(user.role)) {
+    if (!['ADMIN', 'MESERO', 'MESERO_PRO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
     const { id } = await params

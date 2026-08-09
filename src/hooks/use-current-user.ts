@@ -9,7 +9,7 @@ export type CurrentUser = {
   id: string
   username: string
   email?: string | null
-  role: 'ADMIN' | 'MESERO' | 'COCINA' | 'PIZZERIA' | 'CAJERO'
+  role: 'ADMIN' | 'MESERO' | 'MESERO_PRO' | 'COCINA' | 'PIZZERIA' | 'CAJERO'
   firstName?: string | null
   lastName?: string | null
   avatarUrl?: string | null

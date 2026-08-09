@@ -196,8 +196,9 @@ function DemoUsersSection({ show, onToggle }: { show: boolean; onToggle: () => v
         <div className="mt-2 text-xs text-slate-400 space-y-1 bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 border border-slate-200 dark:border-slate-800">
           <p><strong>admin</strong> / admin123 · acceso total</p>
           <p><strong>mesero</strong> / mesero123 · pedidos</p>
+          <p><strong>meseropro</strong> / meseropro123 · pedidos + cierres</p>
           <p><strong>cocina</strong> / cocina123 · cocina</p>
-          <p><strong>cajero</strong> / cajero123 · finanzas</p>
+          <p><strong>cajero</strong> / cajero123 · cierres</p>
         </div>
       )}
     </div>
