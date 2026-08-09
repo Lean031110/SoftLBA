@@ -6,6 +6,111 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.1.1] - 2026-08-09 - CORRECCIONES Y FUNCIONES FALTANTES
+
+### Resumen
+Versión de corrección que completa las funciones faltantes detectadas al comparar
+con la especificación maestra. Se corrigen bugs críticos de permisos, se añaden
+el cambio obligatorio de contraseña en primer acceso, el perfil de usuario, las
+notificaciones persistentes con campana en el header, y se valida todo mediante
+una simulación completa de día de trabajo end-to-end.
+
+### Agregado
+- **Cambio obligatorio de contraseña en primer acceso** (especificación 7.2):
+  - Nuevo endpoint `POST /api/auth/change-password` con validación de contraseña actual
+  - Nueva página `/primer-acceso` que fuerza el cambio de contraseña temporal
+  - Login redirige automáticamente a `/primer-acceso` cuando `mustChangePass=true`
+  - Validación: mínimo 6 caracteres, no puede ser igual a la actual
+  - Audit log del cambio
+- **Perfil de usuario completo** (especificación 7.3):
+  - Nuevo endpoint `GET/PATCH /api/auth/profile`
+  - Nueva página `/perfil` con todos los campos: nombre, apellidos, teléfono fijo,
+    móvil, correo, dirección, carnet, biografía
+  - Validación de email único
+  - Avatar con iniciales del usuario
+  - Botón "Cambiar contraseña" dentro del perfil
+  - Enlace "Mi perfil" en el menú de usuario del header
+- **Sistema de notificaciones persistente** (especificación 13):
+  - Nuevo endpoint `GET/POST /api/notifications`
+  - Nuevo endpoint `POST /api/notifications/read` (marcar leídas individual o todas)
+  - Campana de notificaciones en el header (`NotificationBell`)
+    - Badge con contador de no leídas
+    - Popover con lista de notificaciones (30 más recientes)
+    - Botón "Marcar todo leído"
+    - Indicador de conexión WebSocket (punto verde)
+    - Auto-refresh cada 30 segundos
+  - Sonido y vibración cuando llega una notificación en tiempo real
+  - Toast automático con sonner para cada evento
+  - Click en notificación navega al pedido relacionado (si aplica)
+- **Endpoint de recálculo de cierre diario**:
+  - `POST /api/admin/cierre-diario/[id]/recalc`
+  - Recalcula totales (ventas, efectivo, transferencias, mermas, descuentos)
+    basándose en los pagos del día
+  - Útil cuando se abrió el cierre temprano y llegaron más pedidos después
+- **Rutas autenticadas comunes** en middleware:
+  - `/primer-acceso`, `/perfil`, `/ayuda`, `/api/notifications`
+  - Accesibles por cualquier rol autenticado
+
+### Corregido
+- **Bug crítico de middleware**: El cajero no podía acceder a
+  `/api/admin/cierre-diario/*` ni `/api/admin/finanzas/*` porque la ruta
+  `/api/admin/*` estaba protegida solo para ADMIN. Ahora hay reglas específicas
+  que permiten al CAJERO acceder a cierre-diario y finanzas.
+- **Bug crítico de cálculo de cierre**: El `totalExpected` se calculaba solo al
+  abrir el cierre. Si llegaban más pedidos después, no se actualizaba. Ahora se
+  puede recalcular con el endpoint `/recalc`.
+- **Bug de redirección post-login**: Cuando un usuario tenía `mustChangePass=true`,
+  no se le redirigía a cambiar contraseña. Ahora sí.
+- **Lint**: Eliminado import no usado en script de simulación.
+
+### Cambiado
+- Middleware: añadidas reglas más finas para rutas API de finanzas y cierre
+  diario que ahora permiten acceso a CAJERO además de ADMIN.
+- Login: si `mustChangePass=true`, redirige a `/primer-acceso` en lugar del home.
+- PanelLayout: el botón de notificaciones simple se reemplazó por el componente
+  `NotificationBell` con lista, badge, sonido y auto-refresh.
+
+### Seguridad
+- Validación de contraseña actual obligatoria para cambiar a una nueva
+- Email único verificado al actualizar perfil
+- Audit log en cambios de contraseña y actualizaciones de perfil
+- Tokens de sesión firmados con HMAC SHA-256 (Web Crypto API, compatible Edge)
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Todas las páginas responden 200 (incluidas las nuevas /perfil, /primer-acceso)
+- ✅ Simulación completa de día de trabajo ejecutada exitosamente:
+  - Login como admin, mesero, cocina, cajero (4 roles)
+  - Configuración del restaurante cargada correctamente
+  - Creación de productos desde admin
+  - Mesero ve 13 productos disponibles y 10 mesas
+  - Mesero crea 2 pedidos (uno con 3 items y notas, otro con descuento 10%)
+  - Cocina ve los 2 pedidos pendientes
+  - Cocina cambia estados: ENVIADO → EN_PREPARACION → LISTO
+  - Mesero ve sus pedidos actualizados en tiempo real
+  - Mesero cobra con efectivo CUP y con pago combinado (efectivo + transferencia)
+  - Dashboard admin muestra 6 pedidos y $1726 en ventas del día
+  - Resumen financiero: $1876 ingresos, $0 egresos, balance $1876
+  - Cajero abre cierre, recalcula (esperado sube de $3350 a $4310), registra
+    denominaciones (4 tipos), diferencia calculada correctamente
+  - Auditoría: 10 registros visibles con acciones detalladas
+  - Respaldo manual creado (532 KB)
+  - Notificaciones funcionando
+  - Perfil de mesero actualizado con datos personales
+- ✅ Pruebas con Agent Browser exitosas:
+  - Home pública muestra noticias y carta
+  - Login funciona para los 4 roles
+  - Dashboard admin carga con todas las secciones
+  - Campana de notificaciones abre el popover
+  - Menú de usuario muestra "Mi perfil" y "Cerrar sesión"
+  - Página /perfil carga con todos los campos
+  - Mesero crea pedido: agrega productos, ve subtotal, envía a cocina
+  - Cocina ve pedidos en tarjetas, cambia estados con un click
+  - Mesero cobra pedido con modal de pago
+  - Comprobante generado con todos los datos del restaurante
+
+---
+
 ## [v0.1.0] - 2026-08-09 - BASE INICIAL SÓLIDA
 
 ### Resumen

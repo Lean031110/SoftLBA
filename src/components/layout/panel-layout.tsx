@@ -44,10 +44,12 @@ import {
   Pizza,
   BookOpen,
   Database,
+  UserCircle,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { useCurrentUser, type CurrentUser } from '@/hooks/use-current-user'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, type UserRole } from '@/lib/permissions'
+import { NotificationBell } from '@/components/layout/notification-bell'
 
 type NavItem = {
   href: string
@@ -170,6 +172,10 @@ function UserMenu({ user }: { user: CurrentUser | null }) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push('/perfil')}>
+          <UserCircle className="h-4 w-4 mr-2" />
+          Mi perfil
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.push('/logout')}>
           <LogOut className="h-4 w-4 mr-2" />
           Cerrar sesión
@@ -242,9 +248,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" aria-label="Notificaciones">
-              <Bell className="h-4 w-4" />
-            </Button>
+            <NotificationBell userId={user?.id} role={user?.role} />
             <ThemeToggle />
             <UserMenu user={user} />
           </div>

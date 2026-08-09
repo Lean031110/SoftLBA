@@ -11,12 +11,18 @@ const SESSION_COOKIE = 'rc_session'
 // Rutas públicas (no requieren auth)
 const PUBLIC_ROUTES = ['/', '/login', '/logout', '/api/auth', '/api/public']
 
+// Rutas autenticadas pero accesibles por cualquier rol
+const AUTH_COMMON_ROUTES = ['/primer-acceso', '/perfil', '/ayuda', '/api/notifications']
+
 // Mapeo de prefijo de ruta -> roles permitidos
 const ROUTE_ROLE_MAP: { prefix: string; roles: string[] }[] = [
   { prefix: '/admin', roles: ['ADMIN', 'CAJERO'] },
   { prefix: '/mesero', roles: ['ADMIN', 'MESERO'] },
   { prefix: '/cocina', roles: ['ADMIN', 'COCINA'] },
   { prefix: '/pizzeria', roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
+  { prefix: '/api/admin/cierre-diario', roles: ['ADMIN', 'CAJERO'] },
+  { prefix: '/api/admin/finanzas', roles: ['ADMIN', 'CAJERO'] },
+  { prefix: '/api/admin/respaldos', roles: ['ADMIN'] },
   { prefix: '/api/admin', roles: ['ADMIN'] },
   { prefix: '/api/mesero', roles: ['ADMIN', 'MESERO'] },
   { prefix: '/api/cocina', roles: ['ADMIN', 'COCINA'] },
@@ -61,6 +67,11 @@ export async function middleware(req: NextRequest) {
   }
 
   // Verificar permiso por rol
+  // Si es ruta común autenticada, permitir (cualquier rol autenticado)
+  if (AUTH_COMMON_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))) {
+    return NextResponse.next()
+  }
+
   for (const { prefix, roles } of ROUTE_ROLE_MAP) {
     if (pathname === prefix || pathname.startsWith(prefix + '/')) {
       if (!roles.includes(session.role)) {

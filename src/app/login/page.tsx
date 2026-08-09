@@ -53,6 +53,12 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
+      // Si debe cambiar contraseña, ir a primer-acceso
+      if (data.user.mustChangePass) {
+        router.push('/primer-acceso')
+        router.refresh()
+        return
+      }
       // Redirigir según rol o al destino
       if (redirect) {
         router.push(redirect)
