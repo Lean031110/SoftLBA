@@ -6,6 +6,58 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.5.0] - 2026-08-09 - FIX LOGIN + TOGGLE USUARIOS DEMO
+
+### Resumen
+Corrige el bug crítico del login (se quedaba renderizando sin cargar nada) y
+añade un toggle en la configuración del admin para mostrar/ocultar los usuarios
+demo en la página de login.
+
+### Corregido
+- **Bug crítico del login**: La página `/login` se quedaba renderizando solo el
+  logo y el título "SoftLBA", pero el formulario de acceso (usuario, contraseña,
+  botón Entrar) nunca aparecía. Causa: `useSearchParams()` requiere un boundary
+  `<Suspense>` en Next.js 16, y sin él la página no renderiza el contenido
+  dinámico.
+  - **Solución**: Envolver el componente `LoginForm` en `<Suspense>` con un
+    fallback (spinner azul) mientras carga los search params.
+
+### Agregado
+- **Toggle "Mostrar usuarios demo en el login"** en Configuración > General:
+  - Nuevo campo `showDemoUsers` en modelo `RestaurantConfig` (Boolean, default true)
+  - Switch en la página `/admin/configuracion` (pestaña General)
+  - API pública `/api/public/config` ahora devuelve `showDemoUsers`
+  - API admin `PATCH /api/admin/config` acepta `showDemoUsers: boolean`
+  - Cuando está activo: el login muestra un botón colapsable "Ver usuarios demo"
+    que al pulsarlo despliega las credenciales (admin/mesero/cocina/cajero)
+  - Cuando está inactivo: el botón no aparece, mayor seguridad en producción
+- **Botón colapsable "Ver usuarios demo"** en la página de login:
+  - Por defecto colapsado (no muestra las credenciales)
+  - Al pulsar, despliega las 4 credenciales demo con su rol
+  - Solo aparece si `showDemoUsers=true` en la configuración
+- Configuración por defecto en API pública si no hay registro en BD
+
+### Cambiado
+- Página `/login` reestructurada:
+  - Componente `LoginForm` separado dentro de `<Suspense>`
+  - Componente `DemoUsersSection` que consulta `showDemoUsers` y se renderiza condicionalmente
+  - Las credenciales demo ahora están colapsadas por defecto (botón para mostrar)
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Schema aplicado (db:push OK con campo showDemoUsers)
+- ✅ Login carga correctamente: formulario visible, botón Entrar funcional
+- ✅ Login como admin redirige a /admin correctamente
+- ✅ Toggle en configuración funciona (probado end-to-end)
+- ✅ Cuando showDemoUsers=false: botón "Ver usuarios demo" no aparece en login
+- ✅ Cuando showDemoUsers=true: botón aparece y es colapsable
+- ✅ Todas las páginas responden 200
+
+### Backup
+- `download/salva/SoftLBA-v0.5.0-{timestamp}.tar.gz` (solo código fuente)
+
+---
+
 ## [v0.4.0] - 2026-08-09 - PUNTOS 6-10 DE LA GUÍA
 
 ### Resumen

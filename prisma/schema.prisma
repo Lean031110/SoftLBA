@@ -112,6 +112,7 @@ model RestaurantConfig {
   receiptHeader   String?
   receiptFooter   String?
   taxRate         Float    @default(0)
+  showDemoUsers   Boolean  @default(true)
   updatedAt       DateTime @updatedAt
 }
 

@@ -536,3 +536,39 @@ Stage Summary:
 - 12 páginas responden 200 OK
 - Lint: 0 errores
 - Backup v0.4.0 a crear en /download/salva/ (solo código, sin node_modules ni builds)
+
+---
+Task ID: v0.5.0
+Agent: main (Super Z)
+Task: Fix bug login (no carga) + toggle usuarios demo en configuración
+
+Work Log:
+- BUG CRÍTICO: La página /login se quedaba renderizando solo el logo y título "SoftLBA", el formulario de acceso nunca aparecía. 
+- CAUSA: useSearchParams() en Next.js 16 requiere un boundary <Suspense> para que el contenido dinámico renderice. Sin él, la página se queda en estado de carga perpetuo.
+- SOLUCIÓN: Reestructuré login/page.tsx:
+  - Componente LoginForm separado (contiene toda la lógica y UI)
+  - Componente DemoUsersSection (muestra/oculta credenciales demo)
+  - Página principal envuelve LoginForm en <Suspense fallback={spinner}>
+- TOGGLE USUARIOS DEMO:
+  - Añadido campo showDemoUsers Boolean @default(true) en modelo RestaurantConfig
+  - Actualizada API pública /api/public/config para devolver showDemoUsers
+  - Actualizada API admin /api/admin/config PATCH para aceptar showDemoUsers
+  - Añadido Switch en /admin/configuracion (pestaña General) con icono Eye y descripción
+  - En el login, el botón "Ver usuarios demo" solo aparece si showDemoUsers=true
+  - El botón es colapsable: por defecto oculto, al pulsar despliega las 4 credenciales
+- VERIFICACIÓN con Agent Browser:
+  - Login carga correctamente: formulario visible, botón Entrar funcional
+  - Login como admin redirige a /admin correctamente
+  - Botón "Ver usuarios demo" aparece cuando showDemoUsers=true
+  - Botón desaparece cuando showDemoUsers=false (probado)
+  - Toggle en /admin/configuracion visible y funcional
+  - 12 páginas principales responden 200 OK
+  - Lint: 0 errores
+
+Stage Summary:
+- Bug crítico del login corregido (Suspense boundary)
+- Toggle de usuarios demo implementado end-to-end (schema, API, UI admin, UI login)
+- Mayor seguridad: admin puede ocultar credenciales demo en producción
+- 12 páginas responden 200 OK
+- Lint limpio
+- Backup v0.5.0 a crear (solo código fuente)

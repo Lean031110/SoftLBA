@@ -51,6 +51,7 @@ const PatchSchema = z.object({
   receiptHeader: z.string().max(500).optional().or(z.literal('')),
   receiptFooter: z.string().max(500).optional().or(z.literal('')),
   taxRate: z.coerce.number().min(0).max(100).optional(),
+  showDemoUsers: z.boolean().optional(),
 })
 
 export async function PATCH(req: NextRequest) {

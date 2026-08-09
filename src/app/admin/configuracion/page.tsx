@@ -10,7 +10,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
-import { Save, Settings, Loader2, AlertTriangle, Store, Phone, FileText, Image as ImageIcon } from 'lucide-react'
+import { Save, Settings, Loader2, AlertTriangle, Store, Phone, FileText, Image as ImageIcon, Eye } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 
 type Config = {
   name: string
@@ -32,6 +33,7 @@ type Config = {
   receiptHeader: string
   receiptFooter: string
   taxRate: string
+  showDemoUsers: boolean
 }
 
 const INITIAL: Config = {
@@ -54,6 +56,7 @@ const INITIAL: Config = {
   receiptHeader: '',
   receiptFooter: '',
   taxRate: '0',
+  showDemoUsers: true,
 }
 
 export default function ConfiguracionPage() {
@@ -88,6 +91,7 @@ export default function ConfiguracionPage() {
             receiptHeader: i.receiptHeader || '',
             receiptFooter: i.receiptFooter || '',
             taxRate: String(i.taxRate ?? 0),
+            showDemoUsers: i.showDemoUsers !== false ? true : false,
           })
         } else {
           setError(d.error || 'Error al cargar')
@@ -210,6 +214,24 @@ export default function ConfiguracionPage() {
                     <Label htmlFor="taxRate">Tasa de impuesto (%)</Label>
                     <Input id="taxRate" type="number" step="0.01" min="0" max="100" value={form.taxRate} onChange={(e) => set('taxRate', e.target.value)} />
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg border p-4 bg-slate-50 dark:bg-slate-900/50">
+                  <div className="flex items-start gap-3">
+                    <Eye className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                    <div>
+                      <Label htmlFor="showDemoUsers" className="font-medium cursor-pointer">Mostrar usuarios demo en el login</Label>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Si está activo, la página de login mostrará un botón para ver las credenciales demo
+                        (admin, mesero, cocina, cajero). Desactívalo en producción para mayor seguridad.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="showDemoUsers"
+                    checked={form.showDemoUsers}
+                    onCheckedChange={(v) => set('showDemoUsers', v)}
+                  />
                 </div>
               </CardContent>
             </Card>

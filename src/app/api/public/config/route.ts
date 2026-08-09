@@ -18,7 +18,21 @@ export async function GET() {
           currency: config.currency,
           currencySymbol: config.currencySymbol,
           welcomeText: config.welcomeText,
+          showDemoUsers: config.showDemoUsers,
         }
-      : null,
+      : {
+          // Configuración por defecto si no existe
+          name: 'Restaurante',
+          slogan: null,
+          address: null,
+          phone: null,
+          email: null,
+          hours: null,
+          logo: null,
+          currency: 'CUP',
+          currencySymbol: '$',
+          welcomeText: null,
+          showDemoUsers: true,
+        },
   })
 }
