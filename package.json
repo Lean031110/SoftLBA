@@ -1,6 +1,6 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.1",
+  "name": "softlba",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -13,6 +13,8 @@
     "db:reset": "prisma migrate reset",
     "db:seed": "bun run scripts/seed.ts",
     "backup": "bun run scripts/backup.ts",
+    "logo": "bun run scripts/generate-logo.ts",
+    "simulate": "bun run scripts/simulate-day.ts",
     "realtime": "bun run mini-services/realtime-service/index.ts"
   },
   "dependencies": {

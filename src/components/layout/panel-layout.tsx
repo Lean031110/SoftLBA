@@ -47,6 +47,7 @@ import {
   UserCircle,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
+import Image from 'next/image'
 import { useCurrentUser, type CurrentUser } from '@/hooks/use-current-user'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, type UserRole } from '@/lib/permissions'
 import { NotificationBell } from '@/components/layout/notification-bell'
@@ -201,16 +202,21 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
   if (!loading && !user) return null
 
   return (
-    <div className="flex min-h-screen w-full bg-stone-50 dark:bg-stone-950">
+    <div className="flex min-h-screen w-full bg-slate-50 dark:bg-slate-950">
       {/* Sidebar desktop */}
-      <aside className="hidden md:flex w-60 flex-col border-r border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shrink-0">
-        <div className="flex items-center gap-2 px-4 h-16 border-b border-stone-200 dark:border-stone-800">
-          <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white">
-            <Utensils className="h-5 w-5" />
-          </div>
+      <aside className="hidden md:flex w-60 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+        <div className="flex items-center gap-2 px-4 h-16 border-b border-slate-200 dark:border-slate-800">
+          <Image
+            src="/softlba-logo.svg"
+            alt="SoftLBA"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-lg"
+            priority
+          />
           <div className="min-w-0">
-            <p className="text-sm font-bold truncate">{restaurantName}</p>
-            <p className="text-[10px] text-stone-500">Panel de control</p>
+            <p className="text-sm font-bold truncate text-blue-700 dark:text-blue-300">SoftLBA</p>
+            <p className="text-[10px] text-slate-500 truncate">{restaurantName}</p>
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
@@ -221,7 +227,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="flex items-center justify-between h-16 px-4 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 sticky top-0 z-30">
+        <header className="flex items-center justify-between h-16 px-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 sticky top-0 z-30">
           <div className="flex items-center gap-2">
             {/* Mobile menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -233,8 +239,17 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
               <SheetContent side="left" className="w-64 p-0">
                 <SheetHeader className="px-4 py-3 border-b">
                   <SheetTitle className="flex items-center gap-2">
-                    <Utensils className="h-5 w-5" />
-                    {restaurantName}
+                    <Image
+                      src="/softlba-logo.svg"
+                      alt="SoftLBA"
+                      width={28}
+                      height={28}
+                      className="h-7 w-7 rounded-md"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-blue-700 dark:text-blue-300">SoftLBA</span>
+                      <span className="text-[10px] text-slate-500 font-normal">{restaurantName}</span>
+                    </div>
                   </SheetTitle>
                 </SheetHeader>
                 <SidebarNav user={user} onNavigate={() => setMobileOpen(false)} />
@@ -260,10 +275,18 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         {/* Footer */}
-        <footer className="mt-auto border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 py-3 px-4 text-center text-xs text-stone-500">
-          <p>
-            El Sabor Cubano · v0.1.0 · Sistema local para restaurante ·{' '}
-            <span className="text-stone-400">Sin dependencia de Internet</span>
+        <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-3 px-4 text-center text-xs text-slate-500">
+          <p className="flex items-center justify-center gap-1.5">
+            <Image
+              src="/softlba-logo.svg"
+              alt="SoftLBA"
+              width={14}
+              height={14}
+              className="h-3.5 w-3.5"
+            />
+            <span className="font-semibold text-blue-700 dark:text-blue-300">SoftLBA</span>
+            {' · v0.2.0 · Sistema local para restaurante · '}
+            <span className="text-slate-400">Sin dependencia de Internet</span>
           </p>
         </footer>
       </div>

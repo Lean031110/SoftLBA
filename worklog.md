@@ -400,3 +400,49 @@ Stage Summary:
 - Lint: 0 errores ✅
 - Todas las páginas: 200 ✅
 - Sistema 100% funcional y probado
+
+---
+Task ID: v0.2.0
+Agent: main (Super Z)
+Task: Rebranding a SoftLBA, logo profesional, color azul, fix preview, script backup en download/salva/
+
+Work Log:
+- FIX PREVIEW: El servidor Next.js se caía porque los procesos no sobrevivían al cierre del shell. Solución: usar `setsid bash -c '...' & disown` o el script oficial `.zscripts/dev.sh`. Servidor y realtime ahora corren estables.
+- LOGO PROFESIONAL: Usé el skill image-generation con z-ai-web-dev-sdk para generar 2 logos:
+  - softlba-logo.png (1024x1024, "S" estilizada en gradiente azul)
+  - softlba-favicon.png (1024x1024, icono minimalista)
+  - softlba-logo.svg (logo vectorial con gradiente azul #3b82f6 a #1e40af, fondo redondeado)
+- COLOR AZUL: Actualicé globals.css con variables oklch para azul:
+  - Light: --primary=#2563eb, --accent=#3b82f6
+  - Dark: --primary=#3b82f6 (más claro)
+  - --ring, --sidebar-primary, --chart-1 todos azules
+  - Migré clases Tailwind: stone→slate, orange→blue en panel-layout, login, logout, primer-acceso, home
+- REBRANDING COMPLETO:
+  - package.json: name "softlba", version "0.2.0"
+  - layout.tsx: title "SoftLBA - Sistema de Restaurante", favicon SVG, apple-touch-icon
+  - panel-layout.tsx: logo SVG en sidebar desktop, en Sheet mobile, y en footer. Nombre "SoftLBA" en azul, nombre del restaurante como subtítulo
+  - login.tsx: logo grande centrado + "SoftLBA" + nombre restaurante · "Iniciar sesión"
+  - logout.tsx: logo + spinner azul
+  - primer-acceso.tsx: logo + "SoftLBA" + "Primer acceso · Cambia tu contraseña"
+  - home page.tsx: header con logo + "SoftLBA" + nombre restaurante. Footer con logo + SoftLBA + nombre restaurante
+- SCRIPT BACKUP MEJORADO: scripts/backup.ts:
+  - Guarda en /home/z/my-project/download/salva/
+  - Formato: SoftLBA-v{version}-{timestamp}.tar.gz
+  - Crea tar en /tmp primero, luego mueve a destino (evita conflicto)
+  - Excluye: node_modules, .next, .git, backups, download, logs, .zscripts
+  - Backup v0.2.0: 40 MB, 1849 archivos
+- COMANDOS PACKAGE.JSON:
+  - bun run logo: regenerar logos
+  - bun run simulate: simular día completo
+  - bun run backup [version]: crear backup
+
+Stage Summary:
+- ✅ Servidor y realtime corriendo estables (fix preview)
+- ✅ Logo profesional SoftLBA en SVG, PNG y favicon
+- ✅ Color azul aplicado en todas las variables CSS y clases Tailwind
+- ✅ Rebranding completo en todas las páginas
+- ✅ Script de backup funcional, guarda en /download/salva/
+- ✅ Backup v0.2.0 creado (40 MB)
+- ✅ Lint limpio (0 errores)
+- ✅ Todas las páginas responden 200
+- ✅ Pruebas Agent Browser exitosas

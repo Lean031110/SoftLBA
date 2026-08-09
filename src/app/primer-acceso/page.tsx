@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -65,7 +66,6 @@ export default function PrimerAccesoPage() {
         setLoading(false)
         return
       }
-      // Redirigir al home según rol
       const home = userRole ? ROLE_HOME[userRole] || '/' : '/'
       router.push(home)
       router.refresh()
@@ -76,14 +76,21 @@ export default function PrimerAccesoPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 dark:from-stone-900 dark:to-stone-800 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
-          <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-300 shadow-md">
-            <KeyRound className="h-7 w-7" />
+          <div className="inline-flex items-center justify-center mb-3">
+            <Image
+              src="/softlba-logo.svg"
+              alt="SoftLBA"
+              width={64}
+              height={64}
+              className="h-16 w-16 rounded-2xl shadow-lg"
+              priority
+            />
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-stone-800 dark:text-stone-100">Primer acceso</h1>
-          <p className="text-sm text-stone-600 dark:text-stone-400">Cambia tu contraseña para continuar</p>
+          <h1 className="text-2xl font-bold text-blue-700 dark:text-blue-300">SoftLBA</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">Primer acceso · Cambia tu contraseña</p>
         </div>
 
         <Card>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -81,23 +82,28 @@ export default function HomePage() {
   }, {})
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-stone-50 to-amber-50 dark:from-stone-950 dark:to-stone-900">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50/30 to-slate-50 dark:from-slate-950 dark:to-slate-900">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-stone-900/80 backdrop-blur-md border-b border-stone-200 dark:border-stone-800 sticky top-0 z-30">
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 flex items-center justify-center text-white shadow-md">
-              <Utensils className="h-5 w-5" />
-            </div>
+            <Image
+              src="/softlba-logo.svg"
+              alt="SoftLBA"
+              width={40}
+              height={40}
+              className="h-10 w-10 rounded-xl shadow-sm"
+              priority
+            />
             <div>
-              <h1 className="text-lg font-bold leading-tight">{config?.name || 'Restaurante'}</h1>
-              {config?.slogan && (
-                <p className="text-[10px] text-stone-500 hidden sm:block">{config.slogan}</p>
+              <h1 className="text-lg font-bold leading-tight text-blue-700 dark:text-blue-300">SoftLBA</h1>
+              {config?.name && (
+                <p className="text-[10px] text-slate-500 hidden sm:block">{config.name}</p>
               )}
             </div>
           </div>
           <Link href="/login">
-            <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white">
+            <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
               <LogIn className="h-4 w-4 mr-1" />
               Iniciar sesión
             </Button>
@@ -108,18 +114,18 @@ export default function HomePage() {
       {/* Hero */}
       <section className="container mx-auto px-4 py-8 md:py-12">
         <div className="text-center max-w-3xl mx-auto">
-          <h2 className="text-3xl md:text-5xl font-bold text-stone-900 dark:text-stone-100">
-            {config?.name || 'El Sabor Cubano'}
+          <h2 className="text-3xl md:text-5xl font-bold text-slate-900 dark:text-slate-100">
+            {config?.name || 'SoftLBA'}
           </h2>
           {config?.slogan && (
-            <p className="mt-2 text-lg md:text-xl text-orange-600 dark:text-orange-400 font-medium">
+            <p className="mt-2 text-lg md:text-xl text-blue-600 dark:text-blue-400 font-medium">
               {config.slogan}
             </p>
           )}
           {config?.welcomeText && (
-            <p className="mt-4 text-stone-600 dark:text-stone-400">{config.welcomeText}</p>
+            <p className="mt-4 text-slate-600 dark:text-slate-400">{config.welcomeText}</p>
           )}
-          <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm text-stone-600 dark:text-stone-400">
+          <div className="mt-6 flex flex-wrap justify-center gap-4 text-sm text-slate-600 dark:text-slate-400">
             {config?.address && (
               <span className="flex items-center gap-1">
                 <MapPin className="h-4 w-4" />
@@ -169,22 +175,22 @@ export default function HomePage() {
       {/* Productos disponibles */}
       <section className="container mx-auto px-4 py-8 flex-1">
         <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-          <Pizza className="h-5 w-5 text-orange-600" />
+          <Pizza className="h-5 w-5 text-blue-600" />
           Nuestra carta
         </h3>
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="h-32 rounded-lg bg-stone-100 dark:bg-stone-800 animate-pulse" />
+              <div key={i} className="h-32 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
             ))}
           </div>
         ) : products.length === 0 ? (
-          <p className="text-center text-stone-500 py-12">No hay productos disponibles en este momento.</p>
+          <p className="text-center text-slate-500 py-12">No hay productos disponibles en este momento.</p>
         ) : (
           <div className="space-y-6">
             {Object.entries(grouped).map(([cat, items]) => (
               <div key={cat}>
-                <h4 className="text-sm font-semibold text-stone-500 uppercase tracking-wider mb-2">{cat}</h4>
+                <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-2">{cat}</h4>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {items.map((p) => (
                     <Card key={p.id} className="overflow-hidden hover:shadow-md transition-shadow">
@@ -193,14 +199,14 @@ export default function HomePage() {
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold truncate">{p.name}</p>
                             {p.description && (
-                              <p className="text-xs text-stone-500 mt-1 line-clamp-2">{p.description}</p>
+                              <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
                             )}
                             <Badge variant="secondary" className="mt-2 text-[10px]">
                               {p.type === 'DIRECTO' ? 'Directo' : 'Elaborado'}
                             </Badge>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="font-bold text-orange-600 dark:text-orange-400">
+                            <p className="font-bold text-blue-600 dark:text-blue-400">
                               {config?.currencySymbol || '$'}{p.price.toFixed(2)}
                             </p>
                           </div>
@@ -216,17 +222,27 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-stone-900 text-stone-300 py-6 mt-auto">
+      <footer className="bg-slate-900 text-slate-300 py-6 mt-auto">
         <div className="container mx-auto px-4 text-center text-sm">
-          <p className="font-semibold">{config?.name || 'Restaurante'}</p>
-          {config?.address && <p className="text-xs mt-1 text-stone-400">{config.address}</p>}
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Image
+              src="/softlba-logo.svg"
+              alt="SoftLBA"
+              width={20}
+              height={20}
+              className="h-5 w-5 rounded"
+            />
+            <p className="font-semibold text-blue-400">SoftLBA</p>
+          </div>
+          <p className="text-xs">{config?.name || 'Restaurante'}</p>
+          {config?.address && <p className="text-xs mt-1 text-slate-400">{config.address}</p>}
           {config?.email && (
-            <p className="text-xs mt-1 flex items-center justify-center gap-1 text-stone-400">
+            <p className="text-xs mt-1 flex items-center justify-center gap-1 text-slate-400">
               <Mail className="h-3 w-3" /> {config.email}
             </p>
           )}
-          <p className="text-[10px] mt-3 text-stone-500">
-            Sistema local · Sin dependencia de Internet · v0.1.0
+          <p className="text-[10px] mt-3 text-slate-500">
+            Sistema local · Sin dependencia de Internet · v0.2.0
           </p>
         </div>
       </footer>

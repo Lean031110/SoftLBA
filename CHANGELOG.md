@@ -1,8 +1,80 @@
-# CHANGELOG - Sistema de Restaurante Cuba
+# CHANGELOG - SoftLBA
 
 Todo los cambios notables del proyecto se documentan en este archivo.
 El formato se basa en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/),
 y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/).
+
+---
+
+## [v0.2.0] - 2026-08-09 - REBRANDING SOFTLBA
+
+### Resumen
+Rebranding completo del proyecto a **SoftLBA**. Nuevo logo profesional, paleta de
+color azul como acento principal, fixes del preview, y script de backup que
+guarda todo el código en `/home/z/my-project/download/salva/`.
+
+### Agregado
+- **Logo profesional SoftLBA** generado con IA (image-generation skill):
+  - `public/softlba-logo.png` (1024x1024, logo principal con "S" estilizada)
+  - `public/softlba-favicon.png` (1024x1024, favicon minimalista)
+  - `public/softlba-logo.svg` (logo vectorial SVG con gradiente azul)
+- **Script de backup mejorado** `scripts/backup.ts`:
+  - Guarda en `/home/z/my-project/download/salva/`
+  - Formato: `SoftLBA-v{version}-{timestamp}.tar.gz`
+  - Incluye TODO el código del proyecto (1849 archivos)
+  - Excluye node_modules, .next, .git, backups, logs
+  - Reporta tamaño en MB y lista backups previos
+- **Script generador de logo** `scripts/generate-logo.ts`
+- **Comandos en package.json**:
+  - `bun run logo` - regenerar logos
+  - `bun run simulate` - simular día completo
+  - `bun run backup [version]` - crear backup
+
+### Cambiado
+- **Nombre del proyecto**: `nextjs_tailwind_shadcn_ts` → `softlba`
+- **Versión del package.json**: `0.2.1` → `0.2.0`
+- **Color de acento principal**: naranja (#f97316) → azul (#2563eb en light, #3b82f6 en dark)
+- **Variables CSS de tema** actualizadas en `globals.css`:
+  - `--primary` ahora usa azul oklch
+  - `--accent`, `--ring`, `--sidebar-primary`, `--chart-1` todos azules
+- **Logo en todas las páginas**:
+  - Home pública: header con logo SoftLBA + nombre del restaurante como subtítulo
+  - Login: logo grande centrado + "SoftLBA" como título
+  - Logout: logo + spinner azul
+  - Primer acceso: logo + título SoftLBA
+  - Panel (sidebar): logo SoftLBA + nombre del restaurante debajo
+  - Mobile menu (Sheet): logo SoftLBA + nombre del restaurante
+  - Footer de panel: logo SoftLBA + versión
+  - Footer de home: logo SoftLBA + nombre restaurante
+- **Metadata del layout**: 
+  - Title: `SoftLBA - Sistema de Restaurante`
+  - Description actualizada con SoftLBA
+  - Keywords incluyen SoftLBA
+  - Favicon: `/softlba-logo.svg`
+  - Apple touch icon: `/softlba-logo.png`
+- **Clases Tailwind** migradas de `stone` a `slate` y de `orange` a `blue`
+
+### Corregido
+- **Bug de preview**: el servidor Next.js y el servicio realtime se caían tras
+  periodos de inactividad. Ahora se usan procesos `setsid` + `nohup` con
+  `disown` para que sobrevivan al cierre del shell. El script oficial
+  `.zscripts/dev.sh` también funciona correctamente.
+- **Lint**: sin errores tras el rebranding.
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Todas las páginas responden 200 (públicas, admin, mesero, cocina, pizzería)
+- ✅ APIs principales responden 200
+- ✅ Logos accesibles: SVG (1095 bytes), PNG (66 KB), favicon (47 KB)
+- ✅ Backup v0.2.0 creado en `/download/salva/SoftLBA-v0.2.0-*.tar.gz` (40 MB)
+- ✅ Pruebas con Agent Browser:
+  - Home pública muestra logo SoftLBA + nombre del restaurante
+  - Login con logo y título SoftLBA + color azul
+  - Dashboard admin con sidebar mostrando logo SoftLBA + nombre restaurante
+  - Footer muestra "SoftLBA · v0.2.0 · Sistema local para restaurante"
+
+### Backup
+- `download/salva/SoftLBA-v0.2.0-2026-08-09T13-08-24.tar.gz` (40 MB, 1849 archivos)
 
 ---
 

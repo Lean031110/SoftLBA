@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -74,15 +75,22 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-amber-50 to-orange-100 dark:from-stone-900 dark:to-stone-800 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-6">
-          <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-red-600 text-white text-3xl shadow-lg">
-            🍽️
+          <div className="inline-flex items-center justify-center mb-3">
+            <Image
+              src="/softlba-logo.svg"
+              alt="SoftLBA"
+              width={80}
+              height={80}
+              className="h-20 w-20 rounded-2xl shadow-lg"
+              priority
+            />
           </div>
-          <h1 className="mt-3 text-2xl font-bold text-stone-800 dark:text-stone-100">{restaurantName}</h1>
-          <p className="text-sm text-stone-600 dark:text-stone-400">Iniciar sesión</p>
+          <h1 className="text-2xl font-bold text-blue-700 dark:text-blue-300">SoftLBA</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-400">{restaurantName} · Iniciar sesión</p>
         </div>
 
         <Card>

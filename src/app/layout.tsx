@@ -5,17 +5,19 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
-  title: "El Sabor Cubano - Sistema de Restaurante",
-  description: "Sistema integral de gestión para restaurante en red local",
-  keywords: ["restaurante", "Cuba", "POS", "pedidos", "cocina", "inventario"],
-  authors: [{ name: "El Sabor Cubano" }],
+  title: "SoftLBA - Sistema de Restaurante",
+  description: "SoftLBA - Sistema integral de gestión para restaurante en red local",
+  keywords: ["SoftLBA", "restaurante", "Cuba", "POS", "pedidos", "cocina", "inventario"],
+  authors: [{ name: "SoftLBA" }],
   icons: {
-    icon: "/logo.svg",
+    icon: "/softlba-logo.svg",
+    shortcut: "/softlba-favicon.png",
+    apple: "/softlba-logo.png",
   },
   openGraph: {
-    title: "El Sabor Cubano",
+    title: "SoftLBA",
     description: "Sistema integral de gestión para restaurante en red local",
-    siteName: "El Sabor Cubano",
+    siteName: "SoftLBA",
     type: "website",
   },
 };
@@ -27,6 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <link rel="icon" type="image/svg+xml" href="/softlba-logo.svg" />
+        <link rel="apple-touch-icon" href="/softlba-logo.png" />
+      </head>
       <body className="antialiased bg-background text-foreground min-h-screen flex flex-col">
         <ThemeProvider
           attribute="class"
