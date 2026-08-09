@@ -216,31 +216,35 @@ async function main() {
 
   // 9. Productos de ejemplo
   console.log('  → Productos de ejemplo')
+  const salonAreaForProducts = await prisma.area.findUnique({ where: { code: 'SALON' } })
+  const pizzeriaAreaForProducts = await prisma.area.findUnique({ where: { code: 'PIZZERIA' } })
+
   const products = [
-    // Directos
-    { code: 'REF-COL', name: 'Refresco Col 350ml', type: 'DIRECTO', unit: 'unidad', cost: 50, price: 80, category: 'Bebidas' },
-    { code: 'REF-NAR', name: 'Refresco Naranja 350ml', type: 'DIRECTO', unit: 'unidad', cost: 50, price: 80, category: 'Bebidas' },
-    { code: 'AGUA-500', name: 'Agua Mineral 500ml', type: 'DIRECTO', unit: 'unidad', cost: 30, price: 60, category: 'Bebidas' },
-    { code: 'CERV-NAC', name: 'Cerveza Nacional 330ml', type: 'DIRECTO', unit: 'unidad', cost: 80, price: 150, category: 'Bebidas' },
-    { code: 'CAFE-EXP', name: 'Café Espresso', type: 'DIRECTO', unit: 'unidad', cost: 15, price: 50, category: 'Cafetería' },
-    // Subproductos
-    { code: 'MASA-PIZ', name: 'Masa de Pizza', type: 'SUBPRODUCTO', unit: 'unidad', cost: 60, price: 0, category: 'Insumos' },
-    { code: 'SALSA-TOM', name: 'Salsa de Tomate', type: 'SUBPRODUCTO', unit: 'ml', cost: 2, price: 0, category: 'Insumos' },
-    { code: 'CARNE-HAM', name: 'Carne de Hamburguesa', type: 'SUBPRODUCTO', unit: 'unidad', cost: 80, price: 0, category: 'Insumos' },
-    // Finales
-    { code: 'PIZ-MAR', name: 'Pizza Margarita', type: 'FINAL', unit: 'unidad', cost: 120, price: 280, category: 'Pizzas' },
-    { code: 'PIZ-ESP', name: 'Pizza Especial', type: 'FINAL', unit: 'unidad', cost: 180, price: 380, category: 'Pizzas' },
-    { code: 'HAM-CLS', name: 'Hamburguesa Clásica', type: 'FINAL', unit: 'unidad', cost: 110, price: 250, category: 'Hamburguesas' },
-    { code: 'SAN-POLO', name: 'Sándwich de Pollo', type: 'FINAL', unit: 'unidad', cost: 90, price: 200, category: 'Sándwich' },
-    { code: 'ENS-MIX', name: 'Ensalada Mixta', type: 'FINAL', unit: 'unidad', cost: 60, price: 150, category: 'Ensaladas' },
-    { code: 'ARROZ-IMP', name: 'Arroz Imperial', type: 'FINAL', unit: 'porción', cost: 80, price: 180, category: 'Platos' },
-    { code: 'ROPA-VIE', name: 'Ropa Vieja', type: 'FINAL', unit: 'porción', cost: 130, price: 280, category: 'Platos' },
+    // Directos - Bebidas y cafetería (SALON/cocina)
+    { code: 'REF-COL', name: 'Refresco Col 350ml', type: 'DIRECTO', unit: 'unidad', cost: 50, price: 80, category: 'Bebidas', areaId: salonAreaForProducts?.id },
+    { code: 'REF-NAR', name: 'Refresco Naranja 350ml', type: 'DIRECTO', unit: 'unidad', cost: 50, price: 80, category: 'Bebidas', areaId: salonAreaForProducts?.id },
+    { code: 'AGUA-500', name: 'Agua Mineral 500ml', type: 'DIRECTO', unit: 'unidad', cost: 30, price: 60, category: 'Bebidas', areaId: salonAreaForProducts?.id },
+    { code: 'CERV-NAC', name: 'Cerveza Nacional 330ml', type: 'DIRECTO', unit: 'unidad', cost: 80, price: 150, category: 'Bebidas', areaId: salonAreaForProducts?.id },
+    { code: 'CAFE-EXP', name: 'Café Espresso', type: 'DIRECTO', unit: 'unidad', cost: 15, price: 50, category: 'Cafetería', areaId: salonAreaForProducts?.id },
+    // Subproductos - Insumos (sin área específica, son para todas las áreas)
+    { code: 'MASA-PIZ', name: 'Masa de Pizza', type: 'SUBPRODUCTO', unit: 'unidad', cost: 60, price: 0, category: 'Insumos', areaId: pizzeriaAreaForProducts?.id },
+    { code: 'SALSA-TOM', name: 'Salsa de Tomate', type: 'SUBPRODUCTO', unit: 'ml', cost: 2, price: 0, category: 'Insumos', areaId: pizzeriaAreaForProducts?.id },
+    { code: 'CARNE-HAM', name: 'Carne de Hamburguesa', type: 'SUBPRODUCTO', unit: 'unidad', cost: 80, price: 0, category: 'Insumos', areaId: salonAreaForProducts?.id },
+    // Finales - Pizzas (PIZZERIA)
+    { code: 'PIZ-MAR', name: 'Pizza Margarita', type: 'FINAL', unit: 'unidad', cost: 120, price: 280, category: 'Pizzas', areaId: pizzeriaAreaForProducts?.id },
+    { code: 'PIZ-ESP', name: 'Pizza Especial', type: 'FINAL', unit: 'unidad', cost: 180, price: 380, category: 'Pizzas', areaId: pizzeriaAreaForProducts?.id },
+    // Finales - Hamburguesas y platos (SALON/cocina)
+    { code: 'HAM-CLS', name: 'Hamburguesa Clásica', type: 'FINAL', unit: 'unidad', cost: 110, price: 250, category: 'Hamburguesas', areaId: salonAreaForProducts?.id },
+    { code: 'SAN-POLO', name: 'Sándwich de Pollo', type: 'FINAL', unit: 'unidad', cost: 90, price: 200, category: 'Sándwich', areaId: salonAreaForProducts?.id },
+    { code: 'ENS-MIX', name: 'Ensalada Mixta', type: 'FINAL', unit: 'unidad', cost: 60, price: 150, category: 'Ensaladas', areaId: salonAreaForProducts?.id },
+    { code: 'ARROZ-IMP', name: 'Arroz Imperial', type: 'FINAL', unit: 'porción', cost: 80, price: 180, category: 'Platos', areaId: salonAreaForProducts?.id },
+    { code: 'ROPA-VIE', name: 'Ropa Vieja', type: 'FINAL', unit: 'porción', cost: 130, price: 280, category: 'Platos', areaId: salonAreaForProducts?.id },
   ]
 
   for (const p of products) {
     await prisma.product.upsert({
       where: { code: p.code },
-      update: {},
+      update: { areaId: p.areaId },
       create: p,
     })
   }

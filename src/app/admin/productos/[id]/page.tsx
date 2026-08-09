@@ -32,6 +32,7 @@ type Form = {
   isAvailable: boolean
   imageUrl: string
   notes: string
+  areaId: string
 }
 
 export default function EditarProductoPage() {
@@ -41,6 +42,14 @@ export default function EditarProductoPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<Form | null>(null)
+  const [areas, setAreas] = useState<{ id: string; name: string; code: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/admin/areas')
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setAreas(d.items || d.areas || []) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch(`/api/admin/productos/${id}`)
@@ -62,6 +71,7 @@ export default function EditarProductoPage() {
             isAvailable: i.isAvailable,
             imageUrl: i.imageUrl || '',
             notes: i.notes || '',
+            areaId: i.areaId || '',
           })
         } else {
           setError(d.error || 'No encontrado')
@@ -216,6 +226,25 @@ export default function EditarProductoPage() {
             <div className="space-y-2">
               <Label htmlFor="imageUrl">URL de imagen</Label>
               <Input id="imageUrl" value={form.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} maxLength={500} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="areaId">Área asignada</Label>
+              <Select value={form.areaId} onValueChange={(v) => set('areaId', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin área específica (visible en todas)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin área específica (visible en todas)</SelectItem>
+                  {areas.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Si asignas un área, el producto solo aparecerá en el menú del mesero cuando seleccione esa área.
+                Si lo dejas sin área, aparecerá en todas las áreas.
+              </p>
             </div>
 
             <div className="space-y-2">

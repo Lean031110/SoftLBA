@@ -40,6 +40,7 @@ const PatchSchema = z.object({
   isAvailable: z.boolean().optional(),
   imageUrl: z.string().max(500).optional().or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
+  areaId: z.string().optional().or(z.literal('')),
 })
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -68,7 +69,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const data: any = {}
     for (const [k, v] of Object.entries(d)) {
-      if (v !== undefined) data[k] = v === '' && ['description', 'category', 'imageUrl', 'notes'].includes(k) ? null : v
+      if (v !== undefined) {
+        if (v === '' && ['description', 'category', 'imageUrl', 'notes', 'areaId'].includes(k)) {
+          data[k] = null
+        } else {
+          data[k] = v
+        }
+      }
     }
 
     const updated = await db.product.update({ where: { id }, data })

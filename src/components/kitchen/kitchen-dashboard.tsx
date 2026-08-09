@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/collapsible'
 import { toast } from 'sonner'
 import {
-  ChefHat, Clock, ChevronDown, ChevronUp, Play, CheckCircle2, Utensils, AlertTriangle, Volume2, VolumeX,
+  ChefHat, Clock, ChevronDown, ChevronUp, Play, CheckCircle2, Utensils, AlertTriangle, Volume2, VolumeX, Pizza,
 } from 'lucide-react'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -67,6 +67,18 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [soundOn, setSoundOn] = useState(true)
   const lastIdsRef = useRef<string>('')
+
+  // Color de acento según el área
+  const accentColor = apiBase.includes('pizzeria')
+    ? 'text-orange-600 dark:text-orange-400'
+    : 'text-blue-600 dark:text-blue-400'
+  const accentBg = apiBase.includes('pizzeria')
+    ? 'bg-orange-50 dark:bg-orange-950/30'
+    : 'bg-blue-50 dark:bg-blue-950/30'
+  const accentBorder = apiBase.includes('pizzeria')
+    ? 'border-orange-200 dark:border-orange-800'
+    : 'border-blue-200 dark:border-blue-800'
+  const isPizzeria = apiBase.includes('pizzeria')
 
   const { play } = useBeep()
 
@@ -169,13 +181,13 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className={`flex flex-wrap items-center justify-between gap-3 p-4 rounded-lg border ${accentBorder} ${accentBg}`}>
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ChefHat className="h-6 w-6" />
+          <h1 className={`text-2xl font-bold flex items-center gap-2 ${accentColor}`}>
+            {isPizzeria ? <Pizza className="h-6 w-6" /> : <ChefHat className="h-6 w-6" />}
             {areaName}
           </h1>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-slate-500">
             Pedidos en cola · Actualización automática cada 5s
           </p>
         </div>

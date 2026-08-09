@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -30,6 +30,7 @@ type Form = {
   isAvailable: boolean
   imageUrl: string
   notes: string
+  areaId: string
 }
 
 const INITIAL: Form = {
@@ -46,6 +47,7 @@ const INITIAL: Form = {
   isAvailable: true,
   imageUrl: '',
   notes: '',
+  areaId: '',
 }
 
 export default function NuevoProductoPage() {
@@ -53,6 +55,14 @@ export default function NuevoProductoPage() {
   const [form, setForm] = useState<Form>(INITIAL)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [areas, setAreas] = useState<{ id: string; name: string; code: string }[]>([])
+
+  useEffect(() => {
+    fetch('/api/admin/areas')
+      .then((r) => r.json())
+      .then((d) => { if (d.ok) setAreas(d.items || d.areas || []) })
+      .catch(() => {})
+  }, [])
 
   function set<K extends keyof Form>(key: K, value: Form[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -180,6 +190,25 @@ export default function NuevoProductoPage() {
             <div className="space-y-2">
               <Label htmlFor="imageUrl">URL de imagen (opcional)</Label>
               <Input id="imageUrl" value={form.imageUrl} onChange={(e) => set('imageUrl', e.target.value)} maxLength={500} placeholder="/images/pizza.jpg" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="areaId">Área asignada (opcional)</Label>
+              <Select value={form.areaId} onValueChange={(v) => set('areaId', v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sin área específica (visible en todas)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sin área específica (visible en todas)</SelectItem>
+                  {areas.map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-slate-500">
+                Si asignas un área, el producto solo aparecerá en el menú del mesero cuando seleccione esa área.
+                Si lo dejas sin área, aparecerá en todas las áreas.
+              </p>
             </div>
 
             <div className="space-y-2">

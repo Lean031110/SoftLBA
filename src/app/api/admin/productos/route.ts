@@ -64,6 +64,7 @@ const CreateSchema = z.object({
   isAvailable: z.boolean().default(true),
   imageUrl: z.string().max(500).optional().or(z.literal('')),
   notes: z.string().max(500).optional().or(z.literal('')),
+  areaId: z.string().optional().or(z.literal('')),
 })
 
 export async function POST(req: NextRequest) {
@@ -102,6 +103,7 @@ export async function POST(req: NextRequest) {
         isAvailable: d.isAvailable,
         imageUrl: d.imageUrl || null,
         notes: d.notes || null,
+        areaId: d.areaId || null,
       },
     })
 

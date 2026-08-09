@@ -1,4 +1,5 @@
 // GET /api/mesero/products - Productos finales y directos activos/disponibles
+// Si se especifica areaId, filtra productos de esa área o sin área asignada (null = global)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -33,6 +34,33 @@ export async function GET(req: NextRequest) {
       where.category = category
     }
 
+    // Si se especifica área, filtrar productos de esa área o sin área asignada (null = global)
+    if (areaId) {
+      where.OR = [
+        { areaId: areaId },
+        { areaId: null },
+      ]
+      // Si también hay búsqueda q, combinar con AND
+      if (q) {
+        where.AND = [
+          {
+            OR: [
+              { code: { contains: q } },
+              { name: { contains: q } },
+              { description: { contains: q } },
+            ],
+          },
+          {
+            OR: [
+              { areaId: areaId },
+              { areaId: null },
+            ],
+          },
+        ]
+        delete where.OR
+      }
+    }
+
     const products = await db.product.findMany({
       where,
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
@@ -48,6 +76,7 @@ export async function GET(req: NextRequest) {
         cost: true,
         imageUrl: true,
         notes: true,
+        areaId: true,
       },
     })
 

@@ -144,6 +144,7 @@ model Area {
   dailyCloses DailyCloseArea[]
   stockMovements StockMovement[]
   physicalStocks PhysicalStock[]
+  products   Product[]
 }
 
 // ============================================================
@@ -165,10 +166,12 @@ model Product {
   isAvailable   Boolean      @default(true)
   imageUrl      String?
   notes         String?
+  areaId        String?      // Área a la que pertenece (null = todos los áreas pueden venderlo)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
   // Relaciones
+  area          Area?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
   recipe        Recipe?
   recipeItems   RecipeIngredient[]
   orderItems    OrderItem[]

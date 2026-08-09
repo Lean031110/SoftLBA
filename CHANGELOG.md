@@ -6,6 +6,89 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.7.0] - 2026-08-09 - PUNTOS 11-15 + SEPARACIÓN POR ÁREA
+
+### Resumen
+Implementa la separación visual y funcional de áreas (cocina vs pizzería), filtra
+productos por área en el menú del mesero, y verifica los puntos 11-15 de la guía
+(inventario, flujo de pedidos, notificaciones, cobros, comprobante).
+
+### Agregado
+- **Campo `areaId` en modelo Product**:
+  - Permite asignar productos a áreas específicas
+  - Productos sin área (null) aparecen en todas las áreas
+  - Relación `Area?` con `onDelete: SetNull`
+- **Filtrado de productos por área en el menú del mesero**:
+  - `GET /api/mesero/products?areaId=...` ahora filtra productos de esa área o sin área
+  - Las pizzas solo aparecen cuando el mesero selecciona PIZZERIA
+  - Las bebidas y platos solo aparecen cuando selecciona SALON
+- **Selector de área en admin/productos (nuevo y editar)**:
+  - Campo "Área asignada" con descripción explicativa
+  - Opción "Sin área específica (visible en todas)"
+- **Colores diferenciados por área en kitchen-dashboard**:
+  - Cocina: azul (ChefHat icon)
+  - Pizzería: naranja (Pizza icon)
+  - Header con fondo de color según área
+- **Seed actualizado**:
+  - Pizzas asignadas a PIZZERIA
+  - Bebidas, cafetería, platos asignados a SALON
+  - Subproductos asignados según su uso (masa y salsa a pizzería, carne a salon)
+
+### Verificación de puntos 11-15
+
+**Punto 11: Inventario general y por áreas** ✅
+- Inventario general: `/admin/inventario-general` con movimientos, traslados
+- Inventario por áreas: `/admin/inventario` con selector de área
+- Stock físico: comparación teórico vs físico
+- Áreas separadas: salón, cocina, pizzería, producción
+
+**Punto 12: Flujo de pedidos** ✅
+- Mesero crea pedido seleccionando área
+- Cocina solo ve pedidos del SALON (comedor)
+- Pizzería solo ve pedidos de PIZZERIA
+- Estados: CREADO → ENVIADO → EN_PREPARACION → LISTO → SERVIDO → COBRADO
+- Añadir/cancelar items en pedidos existentes (si no están en preparación)
+- Cancelar pedido completo (si ningún item está en preparación)
+
+**Punto 13: Notificaciones en tiempo real** ✅
+- WebSocket Socket.IO en puerto 3003
+- Eventos: order:new, order:status, order:ready, payment:done, stock:low
+- Sonido y vibración en notificaciones
+- Campana de notificaciones en header con badge
+
+**Punto 14: Cobros y métodos de pago** ✅
+- Métodos: EFECTIVO_CUP, EFECTIVO_USD, TRANSFERENCIA_CUP, TRANSFERENCIA_USD, ZELLE, BANCARIA_USD, COMBINADO
+- Pagos combinados (varios métodos en un pedido)
+- Cada pago registra: monto, moneda, método, referencia, fecha, usuario
+- Descuentos porcentuales auditados
+
+**Punto 15: Comprobante de pago** ✅
+- Generación con un botón
+- Contiene: logo, nombre restaurante, dirección, contacto, número pedido, mesero, items, cantidades, subtotal, descuento, total, método pago, fecha
+- Botón imprimir (window.print)
+- Diseño limpio tipo recibo térmico
+
+### Cambiado
+- API `GET /api/mesero/products`: ahora filtra por áreaId (productos de esa área o sin área)
+- Componente `KitchenDashboard`: colores diferenciados por área (azul/naranja)
+- Páginas de cocina y pizzería: visualmente diferentes con iconos y colores propios
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Schema aplicado (db:push OK con campo areaId)
+- ✅ Filtrado de productos por área probado:
+  - SALON: 14 productos (bebidas, platos, etc.) - NO incluye pizzas
+  - PIZZERIA: 6 productos (solo pizzas + productos sin área)
+- ✅ Cocina muestra pedidos del SALON
+- ✅ Pizzería muestra pedidos de PIZZERIA
+- ✅ Formularios de producto permiten asignar área
+- ✅ Páginas de cocina y pizzería visualmente diferentes
+
+### Backup
+- `download/salva/SoftLBA-v0.7.0-{timestamp}.tar.gz` (solo código fuente)
+
+---
+
 ## [v0.6.0] - 2026-08-09 - FIX VISUAL + ROL MESERO_PRO + COMANDAS
 
 ### Resumen
