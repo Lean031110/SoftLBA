@@ -1,0 +1,85 @@
+// ============================================================
+// Middleware - Protege rutas según autenticación y rol
+// ============================================================
+
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { verifySessionToken } from '@/lib/auth/token'
+
+const SESSION_COOKIE = 'rc_session'
+
+// Rutas públicas (no requieren auth)
+const PUBLIC_ROUTES = ['/', '/login', '/logout', '/api/auth', '/api/public']
+
+// Mapeo de prefijo de ruta -> roles permitidos
+const ROUTE_ROLE_MAP: { prefix: string; roles: string[] }[] = [
+  { prefix: '/admin', roles: ['ADMIN', 'CAJERO'] },
+  { prefix: '/mesero', roles: ['ADMIN', 'MESERO'] },
+  { prefix: '/cocina', roles: ['ADMIN', 'COCINA'] },
+  { prefix: '/pizzeria', roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
+  { prefix: '/api/admin', roles: ['ADMIN'] },
+  { prefix: '/api/mesero', roles: ['ADMIN', 'MESERO'] },
+  { prefix: '/api/cocina', roles: ['ADMIN', 'COCINA'] },
+  { prefix: '/api/pizzeria', roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
+  { prefix: '/api/cajero', roles: ['ADMIN', 'CAJERO'] },
+]
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
+
+  // Rutas públicas - permitir
+  if (PUBLIC_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'))) {
+    return NextResponse.next()
+  }
+
+  // Archivos estáticos - permitir
+  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.includes('.')) {
+    return NextResponse.next()
+  }
+
+  // Verificar sesión
+  const token = req.cookies.get(SESSION_COOKIE)?.value
+  if (!token) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
+    }
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  const session = await verifySessionToken(token)
+  if (!session) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ ok: false, error: 'SESION_EXPIRADA' }, { status: 401 })
+    }
+    const url = req.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('redirect', pathname)
+    return NextResponse.redirect(url)
+  }
+
+  // Verificar permiso por rol
+  for (const { prefix, roles } of ROUTE_ROLE_MAP) {
+    if (pathname === prefix || pathname.startsWith(prefix + '/')) {
+      if (!roles.includes(session.role)) {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
+        }
+        const url = req.nextUrl.clone()
+        url.pathname = '/login'
+        url.searchParams.set('redirect', '/')
+        url.searchParams.set('error', 'sin_permiso')
+        return NextResponse.redirect(url)
+      }
+      break
+    }
+  }
+
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}

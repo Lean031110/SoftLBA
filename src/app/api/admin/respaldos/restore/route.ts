@@ -1,0 +1,106 @@
+// POST /api/admin/respaldos/restore - Restaurar desde archivo
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+import { getCurrentUser } from '@/lib/auth'
+import { audit } from '@/lib/audit'
+import { z } from 'zod'
+import { promises as fs } from 'fs'
+import path from 'path'
+
+const DB_PATH = path.join(process.cwd(), 'db', 'custom.db')
+const BACKUP_DIR = path.join(process.cwd(), 'backups')
+
+const RestoreSchema = z.object({
+  backupId: z.string().min(1).optional(),
+  filename: z.string().min(1).optional(),
+  confirm: z.boolean().refine((v) => v === true, 'Debes confirmar la restauración'),
+})
+
+export async function POST(req: NextRequest) {
+  try {
+    const user = await getCurrentUser()
+    if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
+    if (user.role !== 'ADMIN') {
+      return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
+    }
+
+    const json = await req.json().catch(() => null)
+    if (!json) return NextResponse.json({ ok: false, error: 'Cuerpo inválido' }, { status: 400 })
+    const parsed = RestoreSchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message || 'Datos inválidos' }, { status: 400 })
+    }
+    const d = parsed.data
+
+    let filename: string
+    if (d.backupId) {
+      const backup = await db.backup.findUnique({ where: { id: d.backupId } })
+      if (!backup) {
+        return NextResponse.json({ ok: false, error: 'Backup no encontrado' }, { status: 404 })
+      }
+      filename = backup.filename
+    } else if (d.filename) {
+      filename = d.filename
+    } else {
+      return NextResponse.json({ ok: false, error: 'Debe proporcionar backupId o filename' }, { status: 400 })
+    }
+
+    const backupPath = path.join(BACKUP_DIR, filename)
+    try {
+      await fs.access(backupPath)
+    } catch {
+      return NextResponse.json({ ok: false, error: 'Archivo de backup no encontrado en disco' }, { status: 404 })
+    }
+
+    // Hacer un backup automático del estado actual antes de restaurar (por seguridad)
+    const ts = new Date()
+    const autoBackup = `pre-restore-${ts.getFullYear()}${ts.getMonth() + 1}${ts.getDate()}-${ts.getHours()}${ts.getMinutes()}${ts.getSeconds()}.db`
+    const autoBackupPath = path.join(BACKUP_DIR, autoBackup)
+    try {
+      // Checkpoint antes de copiar para tener todo en el archivo principal
+      try {
+        await db.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL)')
+      } catch {}
+      await fs.copyFile(DB_PATH, autoBackupPath)
+      const stat = await fs.stat(autoBackupPath)
+      await db.backup.create({
+        data: {
+          filename: autoBackup,
+          size: stat.size,
+          type: 'auto-pre-restore',
+          status: 'COMPLETED',
+          notes: `Auto-backup previo a restaurar ${filename}`,
+        },
+      })
+      // Checkpoint de nuevo para asegurar el registro en el archivo
+      try {
+        await db.$executeRawUnsafe('PRAGMA wal_checkpoint(FULL)')
+      } catch {}
+    } catch (e) {
+      console.error('No se pudo hacer auto-backup', e)
+    }
+
+    // Restaurar: copiar el archivo de backup sobre custom.db
+    await fs.copyFile(backupPath, DB_PATH)
+
+    // Eliminar WAL y SHM para que Prisma lea el estado restaurado
+    try {
+      await fs.unlink(DB_PATH + '-wal')
+    } catch {}
+    try {
+      await fs.unlink(DB_PATH + '-shm')
+    } catch {}
+
+    await audit({
+      userId: user.id,
+      action: 'BACKUP_RESTORE',
+      entity: 'backup',
+      after: { restoredFrom: filename },
+    })
+
+    return NextResponse.json({ ok: true, restoredFrom: filename })
+  } catch (e: any) {
+    console.error('POST /api/admin/respaldos/restore', e)
+    return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
+  }
+}

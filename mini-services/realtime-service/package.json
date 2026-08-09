@@ -1,0 +1,12 @@
+{
+  "name": "realtime-service",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.5",
+    "cors": "^2.8.5"
+  }
+}

@@ -1,0 +1,670 @@
+// ============================================================
+// Schema Prisma - Sistema de Restaurante Cuba
+// ============================================================
+// Base de datos: SQLite (migrable a PostgreSQL/MySQL)
+// Última actualización: v0.1.0
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 1. USUARIOS, ROLES Y AUTENTICACIÓN
+// ============================================================
+
+model User {
+  id                String    @id @default(cuid())
+  username          String    @unique
+  email             String?   @unique
+  passwordHash     String
+  role              UserRole  @default(MESERO)
+  isActive          Boolean   @default(true)
+  mustChangePass   Boolean   @default(true)
+  failedAttempts    Int       @default(0)
+  lockedUntil       DateTime?
+
+  // Perfil
+  firstName        String?
+  lastName         String?
+  phone            String?
+  mobile           String?
+  address          String?
+  idNumber         String?
+  bio              String?
+  avatarUrl        String?
+
+  // Auditoría
+  lastLoginAt      DateTime?
+  lastLoginIp      String?
+  createdAt        DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relaciones
+  profile          UserProfile?
+  orders           Order[]
+  payments         Payment[]
+  auditLogs        AuditLog[]
+  stockMovements   StockMovement[]
+  physicalStocks   PhysicalStock[]
+  financeEntries   FinanceEntry[]
+  dailyCloses      DailyClose[]
+  notifications    Notification[]
+  sessions         Session[]
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emergencyContact String?
+  hireDate        DateTime?
+  salary          Float    @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent     String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ============================================================
+// 2. CONFIGURACIÓN DEL RESTAURANTE Y NOTICIAS
+// ============================================================
+
+model RestaurantConfig {
+  id              String   @id @default(cuid())
+  name            String   @default("Mi Restaurante")
+  legalName       String?
+  logo            String?
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+  facebook        String?
+  instagram       String?
+  telegram        String?
+  whatsapp        String?
+  hours           String?
+  slogan          String?
+  welcomeText     String?
+  currency        String   @default("CUP")
+  currencySymbol  String   @default("$")
+  receiptHeader   String?
+  receiptFooter   String?
+  taxRate         Float    @default(0)
+  updatedAt       DateTime @updatedAt
+}
+
+model News {
+  id           String     @id @default(cuid())
+  title        String
+  content      String
+  type         NewsType   @default(INFO)
+  isPublic     Boolean    @default(true)
+  isActive     Boolean    @default(true)
+  priority     Int        @default(0)
+  publishedAt  DateTime   @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Area {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  inventories AreaInventory[]
+  orders      Order[]
+  dailyCloses DailyCloseArea[]
+  stockMovements StockMovement[]
+  physicalStocks PhysicalStock[]
+}
+
+// ============================================================
+// 3. PRODUCTOS, RECETAS E INVENTARIO
+// ============================================================
+
+model Product {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  description   String?
+  type          ProductType  @default(FINAL)
+  category      String?
+  unit          String       @default("unidad")
+  cost          Float        @default(0)
+  price         Float        @default(0)
+  minStock      Float        @default(0)
+  isActive      Boolean      @default(true)
+  isAvailable   Boolean      @default(true)
+  imageUrl      String?
+  notes         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relaciones
+  recipe        Recipe?
+  recipeItems   RecipeIngredient[]
+  orderItems    OrderItem[]
+  inventory     InventoryItem?
+  areaStocks    AreaInventory[]
+  stockMovements StockMovement[]
+  physicalStocks PhysicalStock[]
+  subproducts   ProductSubproduct[] @relation("FinalProduct")
+  parents       ProductSubproduct[] @relation("Subproduct")
+
+  @@index([type])
+  @@index([isActive])
+  @@index([isAvailable])
+}
+
+// Relación entre producto final y subproducto
+model ProductSubproduct {
+  id              String  @id @default(cuid())
+  finalProductId  String
+  subproductId    String
+  quantity        Float   @default(1)
+  finalProduct    Product @relation("FinalProduct", fields: [finalProductId], references: [id], onDelete: Cascade)
+  subproduct      Product @relation("Subproduct", fields: [subproductId], references: [id], onDelete: Cascade)
+
+  @@index([finalProductId])
+  @@index([subproductId])
+}
+
+model Recipe {
+  id            String   @id @default(cuid())
+  productId     String   @unique
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  yield         Float    @default(1)
+  preparationTime Int     @default(0)
+  instructions  String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ingredients   RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id          String   @id @default(cuid())
+  recipeId    String
+  productId   String
+  quantity    Float
+  unit        String
+  notes       String?
+  recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+  @@index([productId])
+}
+
+// Inventario general (gestión central)
+model InventoryItem {
+  id            String   @id @default(cuid())
+  productId     String   @unique
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stock         Float    @default(0)
+  reserved      Float    @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+// Inventario por área
+model AreaInventory {
+  id          String   @id @default(cuid())
+  areaId      String
+  productId   String
+  stock       Float    @default(0)
+  reserved    Float    @default(0)
+  minStock    Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  area        Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([areaId, productId])
+  @@index([areaId])
+  @@index([productId])
+}
+
+// Movimientos de stock (entradas, salidas, traslados, ajustes)
+model StockMovement {
+  id            String         @id @default(cuid())
+  type          StockMovementType
+  productId     String
+  areaId        String?
+  quantity      Float
+  unit          String
+  reason        String?
+  reference     String?
+  userId        String
+  createdAt     DateTime       @default(now())
+
+  product       Product        @relation(fields: [productId], references: [id])
+  area          Area?          @relation(fields: [areaId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([areaId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Stock físico (conteo real del área)
+model PhysicalStock {
+  id          String   @id @default(cuid())
+  productId   String
+  areaId      String
+  countedQty  Float
+  observedQty Float?
+  observation String?
+  userId      String
+  createdAt   DateTime @default(now())
+
+  product     Product  @relation(fields: [productId], references: [id])
+  area        Area     @relation(fields: [areaId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([areaId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 4. MESAS Y PEDIDOS
+// ============================================================
+
+model Table {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  areaId      String?
+  capacity    Int      @default(4)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+}
+
+model Order {
+  id            String     @id @default(cuid())
+  number        Int        @unique
+  userId        String
+  areaId        String
+  tableId       String?
+  customerName  String?
+  status        OrderStatus @default(CREADO)
+  subtotal      Float      @default(0)
+  discountPct   Float      @default(0)
+  discountAmount Float     @default(0)
+  total         Float      @default(0)
+  notes         String?
+  paymentStatus PaymentStatus @default(PENDIENTE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  closedAt      DateTime?
+
+  user          User       @relation(fields: [userId], references: [id])
+  area          Area       @relation(fields: [areaId], references: [id])
+  table         Table?     @relation(fields: [tableId], references: [id])
+  items         OrderItem[]
+  payments      Payment[]
+
+  @@index([userId])
+  @@index([areaId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  quantity    Float
+  unitPrice   Float
+  discount    Float    @default(0)
+  notes       String?
+  status      OrderItemStatus @default(PENDIENTE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([status])
+}
+
+// ============================================================
+// 5. PAGOS Y FINANZAS
+// ============================================================
+
+model Payment {
+  id          String       @id @default(cuid())
+  orderId     String
+  userId      String
+  method      PaymentMethod
+  currency    String       @default("CUP")
+  amount      Float
+  reference   String?
+  notes       String?
+  createdAt   DateTime     @default(now())
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([method])
+  @@index([createdAt])
+}
+
+model FinanceEntry {
+  id          String        @id @default(cuid())
+  type        FinanceType
+  category    String
+  description String
+  amount      Float
+  currency    String        @default("CUP")
+  reference   String?
+  userId      String
+  orderId     String?
+  dailyCloseId String?
+  createdAt   DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id])
+  dailyClose  DailyClose?   @relation(fields: [dailyCloseId], references: [id])
+
+  @@index([type])
+  @@index([category])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 6. CIERRE DIARIO
+// ============================================================
+
+model DailyClose {
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  userId        String
+  status        DailyCloseStatus @default(ABIERTO)
+  totalSales    Float    @default(0)
+  totalCash     Float    @default(0)
+  totalTransfer Float    @default(0)
+  totalOther    Float    @default(0)
+  totalDiscount Float    @default(0)
+  totalWaste    Float    @default(0)
+  totalExpected Float    @default(0)
+  totalReal     Float    @default(0)
+  difference    Float    @default(0)
+  observations  String?
+  openedAt      DateTime @default(now())
+  closedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id])
+  denominations DailyCloseDenomination[]
+  financeEntries FinanceEntry[]
+  areas         DailyCloseArea[]
+
+  @@index([date])
+  @@index([status])
+}
+
+model DailyCloseDenomination {
+  id           String   @id @default(cuid())
+  dailyCloseId String
+  currency     String
+  denomination Float
+  count        Int      @default(0)
+  total        Float    @default(0)
+
+  dailyClose   DailyClose @relation(fields: [dailyCloseId], references: [id], onDelete: Cascade)
+
+  @@index([dailyCloseId])
+}
+
+model DailyCloseArea {
+  id           String   @id @default(cuid())
+  dailyCloseId String
+  areaId       String
+  total        Float    @default(0)
+  ordersCount  Int      @default(0)
+
+  dailyClose   DailyClose @relation(fields: [dailyCloseId], references: [id], onDelete: Cascade)
+  area         Area       @relation(fields: [areaId], references: [id])
+
+  @@unique([dailyCloseId, areaId])
+  @@index([dailyCloseId])
+}
+
+// ============================================================
+// 7. CLIENTES Y PROMOCIONES
+// ============================================================
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?
+  preferences String?
+  totalOrders Int      @default(0)
+  totalSpent  Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([phone])
+}
+
+model Promotion {
+  id           String    @id @default(cuid())
+  name         String
+  description  String?
+  type         PromotionType @default(GENERAL)
+  discountPct  Float     @default(0)
+  discountAmount Float   @default(0)
+  startDate    DateTime
+  endDate      DateTime?
+  isActive     Boolean   @default(true)
+  customerId   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([type])
+  @@index([customerId])
+}
+
+// ============================================================
+// 8. AUDITORÍA, NOTIFICACIONES Y AYUDA
+// ============================================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  before      String?
+  after       String?
+  ipAddress   String?
+  userAgent   String?
+  result      String   @default("SUCCESS")
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String?
+  type        String
+  title       String
+  message     String
+  data        String?
+  isRead      Boolean  @default(false)
+  isDelivered Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model HelpArticle {
+  id          String   @id @default(cuid())
+  module      String
+  title       String
+  content     String
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([module])
+  @@index([isActive])
+}
+
+model Backup {
+  id          String   @id @default(cuid())
+  filename    String
+  size        Int
+  type        String   @default("manual")
+  status      String  @default("COMPLETED")
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// ============================================================
+// ENUMS (en SQLite se guardan como String)
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  MESERO
+  COCINA
+  PIZZERIA
+  CAJERO
+}
+
+enum NewsType {
+  INFO
+  WARNING
+  PROMO
+  URGENT
+}
+
+enum ProductType {
+  DIRECTO
+  FINAL
+  SUBPRODUCTO
+}
+
+enum StockMovementType {
+  ENTRADA
+  SALIDA
+  TRASLADO
+  AJUSTE
+  MERMA
+  COMPRA
+}
+
+enum OrderStatus {
+  CREADO
+  ENVIADO
+  EN_PREPARACION
+  LISTO
+  SERVIDO
+  COBRADO
+  ARCHIVADO
+  CANCELADO
+}
+
+enum OrderItemStatus {
+  PENDIENTE
+  EN_PREPARACION
+  LISTO
+  SERVIDO
+  CANCELADO
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  PARCIAL
+  PAGADO
+}
+
+enum PaymentMethod {
+  EFECTIVO_CUP
+  EFECTIVO_USD
+  TRANSFERENCIA_CUP
+  TRANSFERENCIA_USD
+  ZELLE
+  BANCARIA_USD
+  COMBINADO
+}
+
+enum FinanceType {
+  INGRESO
+  EGRESO
+  VENTA
+  COMPRA
+  SALARIO
+  GASTO
+  MERMA
+  AJUSTE
+}
+
+enum DailyCloseStatus {
+  ABIERTO
+  EN_PROCESO
+  CERRADO
+  BLOQUEADO
+}
+
+enum PromotionType {
+  GENERAL
+  CLIENTE
+  PRODUCTO
+}
