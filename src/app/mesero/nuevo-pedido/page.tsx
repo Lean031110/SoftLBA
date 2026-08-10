@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -61,6 +62,7 @@ export default function NuevoPedidoPage() {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [submitting, setSubmitting] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)
 
   // Cargar áreas
   useEffect(() => {
@@ -366,16 +368,82 @@ export default function NuevoPedidoPage() {
           </Card>
         </div>
 
-        {/* Carrito */}
-        <div className="space-y-4">
-          <Card className="lg:sticky lg:top-4">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2">
-                <ShoppingCart className="h-4 w-4" />
-                Pedido
-                {cart.length > 0 && <Badge variant="secondary" className="text-xs">{cart.length}</Badge>}
-              </CardTitle>
-            </CardHeader>
+        {/* Carrito - Desktop sticky */}
+        <div className="hidden lg:block space-y-4">
+          <CartContent
+            cart={cart}
+            customerName={customerName}
+            setCustomerName={setCustomerName}
+            notes={notes}
+            setNotes={setNotes}
+            discountPct={discountPct}
+            setDiscountPct={setDiscountPct}
+            subtotal={subtotal}
+            discountAmount={discountAmount}
+            total={total}
+            submitting={submitting}
+            onRemove={removeItem}
+            onUpdateQty={updateQuantity}
+            onSetQty={setQuantity}
+            onUpdateNotes={updateItemNotes}
+            onSubmit={handleSubmit}
+            formatCurrency={formatCurrency}
+          />
+        </div>
+      </div>
+
+      {/* Botón flotante del carrito - solo móvil */}
+      {cart.length > 0 && (
+        <div className="lg:hidden fixed bottom-4 left-4 right-4 z-50">
+          <Sheet open={cartOpen} onOpenChange={setCartOpen}>
+            <SheetTrigger asChild>
+              <Button className="w-full h-14 shadow-lg text-base" size="lg">
+                <ShoppingCart className="h-5 w-5 mr-2" />
+                Ver pedido ({cart.length}) · {formatCurrency(total)}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="h-[85vh] p-0 overflow-y-auto">
+              <CartContent
+                cart={cart}
+                customerName={customerName}
+                setCustomerName={setCustomerName}
+                notes={notes}
+                setNotes={setNotes}
+                discountPct={discountPct}
+                setDiscountPct={setDiscountPct}
+                subtotal={subtotal}
+                discountAmount={discountAmount}
+                total={total}
+                submitting={submitting}
+                onRemove={removeItem}
+                onUpdateQty={updateQuantity}
+                onSetQty={setQuantity}
+                onUpdateNotes={updateItemNotes}
+                onSubmit={(send) => { handleSubmit(send); setCartOpen(false) }}
+                formatCurrency={formatCurrency}
+              />
+            </SheetContent>
+          </Sheet>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Componente separado para el contenido del carrito (reutilizable)
+function CartContent({
+  cart, customerName, setCustomerName, notes, setNotes, discountPct, setDiscountPct,
+  subtotal, discountAmount, total, submitting, onRemove, onUpdateQty, onSetQty, onUpdateNotes, onSubmit, formatCurrency,
+}: any) {
+  return (
+    <Card className="lg:sticky lg:top-4">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <ShoppingCart className="h-4 w-4" />
+          Pedido
+          {cart.length > 0 && <Badge variant="secondary" className="text-xs">{cart.length}</Badge>}
+        </CardTitle>
+      </CardHeader>
             <CardContent className="space-y-3">
               <div className="space-y-1">
                 <Label htmlFor="customer" className="text-xs">Cliente (opcional)</Label>
@@ -520,9 +588,6 @@ export default function NuevoPedidoPage() {
                 </Button>
               </div>
             </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
+    </Card>
   )
 }
