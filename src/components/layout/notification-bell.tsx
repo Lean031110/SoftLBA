@@ -61,6 +61,7 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -77,72 +78,123 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
 
   useEffect(() => {
     if (userId) load()
-    const interval = setInterval(load, 30000) // refrescar cada 30s
+    const interval = setInterval(load, 30000)
     return () => clearInterval(interval)
   }, [userId, load])
+
+  // Solicitar permiso de notificaciones nativas del navegador
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      setPushEnabled(true)
+    }
+  }, [])
+
+  // Función para mostrar notificación nativa (funciona aunque la web no esté en primer plano)
+  const showNativeNotification = useCallback((title: string, body: string, data?: any) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const notif = new Notification(title, {
+          body,
+          icon: '/softlba-logo.png',
+          badge: '/softlba-favicon.png',
+          tag: data?.tag || 'softlba',
+          vibrate: [200, 100, 200],
+          data: data || {},
+        })
+        notif.onclick = () => {
+          window.focus()
+          if (data?.url) {
+            router.push(data.url)
+          }
+          notif.close()
+        }
+        // Auto-cerrar después de 10 segundos
+        setTimeout(() => notif.close(), 10000)
+      } catch (e) {
+        console.error('Native notification error:', e)
+      }
+    }
+  }, [router])
+
+  // Función para reproducir sonido
+  const playSound = useCallback((frequency: number, duration: number, repeat: number = 1) => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      for (let i = 0; i < repeat; i++) {
+        setTimeout(() => {
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.connect(gain)
+          gain.connect(ctx.destination)
+          osc.frequency.value = frequency
+          gain.gain.value = 0.3
+          osc.start()
+          osc.stop(ctx.currentTime + duration)
+        }, i * (duration * 1000 + 100))
+      }
+      if ('vibrate' in navigator) navigator.vibrate(repeat > 1 ? [200, 100, 200, 100, 200] : 200)
+    } catch {}
+  }, [])
 
   // Sonido y toast cuando llega una nueva notificación por WebSocket
   const { connected } = useRealtime({
     userId,
     role,
     onNotification: (n) => {
-      // Sonar
-      try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain)
-        gain.connect(ctx.destination)
-        osc.frequency.value = 880
-        gain.gain.value = 0.2
-        osc.start()
-        osc.stop(ctx.currentTime + 0.2)
-        // vibrar si soporta
-        if ('vibrate' in navigator) navigator.vibrate(200)
-      } catch {}
-      // Toast
-      toast(n.title, {
-        description: n.message,
-      })
-      // Recargar lista
+      playSound(880, 0.2)
+      toast(n.title, { description: n.message })
+      showNativeNotification(n.title, n.message, n)
       load()
     },
     onOrderStatus: (data) => {
-      toast(`Pedido #${data.orderNumber || data.orderId} actualizado`, {
-        description: `Estado: ${data.status}`,
-      })
+      const statusLabels: Record<string, string> = {
+        EN_PREPARACION: 'en preparación',
+        LISTO: 'listo para recoger',
+        SERVIDO: 'servido',
+        COBRADO: 'cobrado',
+      }
+      const status = statusLabels[data.status] || data.status
+      const title = `Pedido #${data.orderNumber || data.orderId} ${status}`
+      const body = `El pedido ha sido actualizado a: ${status}`
+      toast(title, { description: body })
+      showNativeNotification(title, body, { url: `/mesero/pedidos/${data.orderId}` })
       load()
     },
     onOrderReady: (data) => {
-      // Sonido más fuerte para pedido listo
-      try {
-        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
-        for (let i = 0; i < 3; i++) {
-          setTimeout(() => {
-            const osc = ctx.createOscillator()
-            const gain = ctx.createGain()
-            osc.connect(gain)
-            gain.connect(ctx.destination)
-            osc.frequency.value = 1000
-            gain.gain.value = 0.3
-            osc.start()
-            osc.stop(ctx.currentTime + 0.15)
-          }, i * 250)
-        }
-        if ('vibrate' in navigator) navigator.vibrate([200, 100, 200, 100, 200])
-      } catch {}
-      toast.success(`¡Pedido #${data.orderNumber} listo!`, {
-        description: 'Ya puedes servirlo o cobrarlo',
+      // Sonido más fuerte para pedido listo (3 beeps)
+      playSound(1000, 0.15, 3)
+      const title = `¡Pedido #${data.orderNumber} LISTO!`
+      const body = `Ya puedes servirlo o cobrarlo. Mesa: ${data.tableName || 'Para llevar'}`
+      toast.success(title, { description: body })
+      showNativeNotification(title, body, {
+        url: `/mesero/pedidos/${data.orderId}`,
+        tag: `order-ready-${data.orderId}`,
       })
       load()
     },
     onStockLow: (data) => {
-      toast.warning('Stock bajo', {
-        description: `${data.productName || 'Producto'} está por debajo del mínimo`,
-      })
+      const title = 'Stock bajo'
+      const body = `${data.productName || 'Producto'} está por debajo del mínimo`
+      toast.warning(title, { description: body })
+      showNativeNotification(title, body)
       load()
     },
   })
+
+  // Solicitar permiso de notificaciones
+  async function requestPushPermission() {
+    if (!('Notification' in window)) {
+      toast.error('Tu navegador no soporta notificaciones')
+      return
+    }
+    const permission = await Notification.requestPermission()
+    if (permission === 'granted') {
+      setPushEnabled(true)
+      toast.success('Notificaciones activadas. Te avisaremos aunque la web no esté abierta.')
+    } else {
+      toast.error('Permiso de notificaciones denegado')
+    }
+  }
 
   async function markAllRead() {
     setLoading(true)
@@ -197,12 +249,19 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
               </Badge>
             )}
           </div>
-          {unread > 0 && (
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead} disabled={loading}>
-              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
-              Marcar todo leído
-            </Button>
-          )}
+          <div className="flex items-center gap-1">
+            {!pushEnabled && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={requestPushPermission}>
+                Activar
+              </Button>
+            )}
+            {unread > 0 && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead} disabled={loading}>
+                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                Leídas
+              </Button>
+            )}
+          </div>
         </div>
         <ScrollArea className="max-h-80">
           {notifications.length === 0 ? (

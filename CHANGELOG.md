@@ -6,6 +6,25 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.9.0] - 2026-08-10 - HISTÓRICOS + ESTADÍSTICAS + NOTIFICACIONES PUSH
+
+### Resumen
+Añade UI completa de históricos, estadísticas con gráficos, notificaciones nativas
+del navegador y verificación del inventario por área.
+
+### Agregado
+- **Página de Históricos** (`/admin/historicos`) con filtros por tipo (diario/semanal/mensual/anual), rango de fechas, búsqueda, agrupación expandible, top productos y paginación
+- **Página de Estadísticas** (`/admin/estadisticas`) con gráficos de línea, barras y pie, top productos, dependientes destacados, métodos de pago, áreas y mermas
+- **Notificaciones nativas** (Notification API) que funcionan aunque la web no esté en primer plano, con botón de activar en la campana
+- APIs: `GET /api/admin/historicos` y `GET /api/admin/estadisticas`
+
+### Verificación
+- ✅ Lint limpio
+- ✅ Páginas nuevas responden 200
+- ✅ APIs devuelven datos correctos
+
+---
+
 ## [v0.8.0] - 2026-08-10 - DISTRIBUCIÓN POR ÁREA + PWA + COMPROBANTE AUTO
 
 ### Resumen

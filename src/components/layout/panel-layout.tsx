@@ -45,6 +45,8 @@ import {
   BookOpen,
   Database,
   UserCircle,
+  BarChart3,
+  History,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Image from 'next/image'
@@ -73,6 +75,8 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/finanzas', label: 'Finanzas', icon: Wallet, roles: ['ADMIN'] },
   { href: '/admin/cierre-diario', label: 'Cierre Diario', icon: Receipt, roles: ['ADMIN', 'CAJERO', 'MESERO_PRO'] },
   { href: '/admin/auditoria', label: 'Auditoría', icon: ScrollText, roles: ['ADMIN'] },
+  { href: '/admin/historicos', label: 'Históricos', icon: History, roles: ['ADMIN'] },
+  { href: '/admin/estadisticas', label: 'Estadísticas', icon: BarChart3, roles: ['ADMIN'] },
   { href: '/admin/respaldos', label: 'Respaldos', icon: Database, roles: ['ADMIN'] },
   { href: '/admin/configuracion', label: 'Configuración', icon: Settings, roles: ['ADMIN'] },
   // Operativas
