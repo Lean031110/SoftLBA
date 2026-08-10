@@ -2,15 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Separator } from '@/components/ui/separator'
+import { LoadingScreen } from '@/components/loading'
 import {
   Users, ShoppingCart, Wallet, Package, AlertTriangle,
-  Newspaper, TrendingUp, Clock, Activity,
+  Newspaper, TrendingUp, Clock, Activity, DollarSign, RefreshCw, Bell,
 } from 'lucide-react'
 import { ROLE_LABELS, ROLE_BADGE_COLORS } from '@/lib/permissions'
+import { toast } from 'sonner'
 
 type DashboardData = {
   stats: {
@@ -79,6 +84,9 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [usdRate, setUsdRate] = useState('320')
+  const [rateLoading, setRateLoading] = useState(false)
+  const [lastRateUpdate, setLastRateUpdate] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/admin/dashboard')
@@ -89,17 +97,51 @@ export default function AdminDashboardPage() {
       })
       .catch(() => setError('Error de conexión'))
       .finally(() => setLoading(false))
+    // Cargar tasa de cambio
+    fetch('/api/public/config')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && d.config) {
+          setUsdRate(String(d.config.usdToCup || 320))
+          setLastRateUpdate(d.config.lastRateUpdate || null)
+        }
+      })
+      .catch(() => {})
   }, [])
 
+  async function updateRate() {
+    setRateLoading(true)
+    try {
+      const res = await fetch('/api/admin/config', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usdToCup: parseFloat(usdRate) }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        toast.success('Tasa de cambio actualizada')
+        setLastRateUpdate(new Date().toISOString())
+      } else {
+        toast.error(data.error || 'Error al actualizar')
+      }
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setRateLoading(false)
+    }
+  }
+
+  // Verificar si la tasa no se ha actualizado hoy
+  const rateNeedsUpdate = () => {
+    if (!lastRateUpdate) return true
+    const last = new Date(lastRateUpdate)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return last < today
+  }
+
   if (loading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-28" />)}
-        </div>
-      </div>
-    )
+    return <LoadingScreen message="Cargando dashboard..." />
   }
 
   if (error || !data) {
@@ -146,6 +188,65 @@ export default function AdminDashboardPage() {
           accent="bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
           sub={`${data.stats.totalProducts} totales`}
         />
+      </div>
+
+      {/* Widget de tasa de cambio + recordatorio */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Card className={rateNeedsUpdate() ? 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/20' : ''}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-blue-600" />
+              Tasa de cambio USD → CUP
+            </CardTitle>
+            <CardDescription>
+              {lastRateUpdate
+                ? `Última actualización: ${new Date(lastRateUpdate).toLocaleString('es-CU')}`
+                : 'Nunca actualizada'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-end gap-2">
+            <div className="flex-1">
+              <Label className="text-xs">1 USD =</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={usdRate}
+                  onChange={(e) => setUsdRate(e.target.value)}
+                  className="w-28"
+                  min="0"
+                  step="1"
+                />
+                <span className="text-sm text-slate-500">CUP</span>
+                <Button size="sm" onClick={updateRate} disabled={rateLoading}>
+                  {rateLoading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                  <span className="ml-1">Actualizar</span>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {rateNeedsUpdate() && (
+          <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
+            <CardContent className="p-4 flex items-start gap-3">
+              <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
+                <Bell className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-medium text-sm text-amber-800 dark:text-amber-200">
+                  Recordatorio diario
+                </p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                  Verifica si ha cambiado el precio del dólar hoy y actualiza la tasa de cambio.
+                  Esto asegura que los cobros en USD se calculen correctamente.
+                </p>
+                <Button size="sm" variant="outline" className="mt-2 text-xs" onClick={updateRate} disabled={rateLoading}>
+                  Actualizar ahora
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

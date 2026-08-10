@@ -120,6 +120,10 @@ model RestaurantConfig {
   printerPort     Int?
   printerWidth    Int      @default(80)  // 80mm o 58mm
   printerAutoPrint Boolean @default(false) // Auto-imprimir al cobrar
+  // Tasa de cambio
+  usdToCup        Float    @default(320)  // 1 USD = X CUP
+  lastRateUpdate  DateTime?
+  rateReminderEnabled Boolean @default(true)
   updatedAt       DateTime @updatedAt
 }
 

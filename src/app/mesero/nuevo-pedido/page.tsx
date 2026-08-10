@@ -241,17 +241,6 @@ export default function NuevoPedidoPage() {
             <CardContent className="p-4 space-y-3">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
-                  <Label className="text-xs">Área</Label>
-                  <Select value={areaId} onValueChange={setAreaId}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Selecciona área" /></SelectTrigger>
-                    <SelectContent>
-                      {areas.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
                   <Label className="text-xs">Mesa (opcional)</Label>
                   <Select value={tableId} onValueChange={setTableId}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Sin mesa (para llevar)" /></SelectTrigger>
@@ -261,6 +250,15 @@ export default function NuevoPedidoPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Cliente (opcional)</Label>
+                  <Input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Nombre del cliente"
+                    maxLength={120}
+                  />
                 </div>
               </div>
               <div className="relative">

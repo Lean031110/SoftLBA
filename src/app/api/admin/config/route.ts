@@ -59,6 +59,9 @@ const PatchSchema = z.object({
   printerPort: z.coerce.number().min(1).max(65535).optional(),
   printerWidth: z.coerce.number().min(58).max(80).optional(),
   printerAutoPrint: z.boolean().optional(),
+  // Tasa de cambio
+  usdToCup: z.coerce.number().min(0).optional(),
+  rateReminderEnabled: z.boolean().optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -88,6 +91,10 @@ export async function PATCH(req: NextRequest) {
       } else {
         data[k] = v
       }
+    }
+    // Si se actualiza la tasa, registrar la fecha
+    if (data.usdToCup !== undefined) {
+      data.lastRateUpdate = new Date()
     }
 
     const updated = await db.restaurantConfig.update({ where: { id: CONFIG_ID }, data })

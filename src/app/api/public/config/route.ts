@@ -19,6 +19,8 @@ export async function GET() {
           currencySymbol: config.currencySymbol,
           welcomeText: config.welcomeText,
           showDemoUsers: config.showDemoUsers,
+          usdToCup: config.usdToCup,
+          lastRateUpdate: config.lastRateUpdate,
         }
       : {
           // Configuración por defecto si no existe
