@@ -230,12 +230,12 @@ export default function EditarProductoPage() {
 
             <div className="space-y-2">
               <Label htmlFor="areaId">Área asignada</Label>
-              <Select value={form.areaId} onValueChange={(v) => set('areaId', v)}>
+              <Select value={form.areaId || 'none'} onValueChange={(v) => set('areaId', v === 'none' ? '' : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Sin área específica (visible en todas)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin área específica (visible en todas)</SelectItem>
+                  <SelectItem value="none">Sin área específica (visible en todas)</SelectItem>
                   {areas.map((a) => (
                     <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
                   ))}

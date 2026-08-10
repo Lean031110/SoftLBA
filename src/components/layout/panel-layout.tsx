@@ -194,12 +194,24 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [restaurantName, setRestaurantName] = useState('Restaurante')
+  const [currentPath, setCurrentPath] = useState('')
 
   useEffect(() => {
     fetch('/api/public/config')
       .then((r) => r.json())
-      .then((d) => d.ok && d.config?.name && setRestaurantName(d.config.name))
+      .then((d) => {
+        if (d.ok && d.config?.name) {
+          setRestaurantName(d.config.name)
+        }
+      })
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname) {
+      const path = window.location.pathname
+      requestAnimationFrame(() => setCurrentPath(path))
+    }
   }, [])
 
   // Si no hay usuario y no está cargando, no mostramos panel (la ruta lo redirige)
@@ -261,8 +273,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
             </Sheet>
             <h1 className="text-base font-semibold hidden sm:block">
               {NAV_ITEMS.find((i) => {
-                const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
-                return pathname === i.href || (i.href !== '/' && pathname.startsWith(i.href))
+                return currentPath === i.href || (i.href !== '/' && currentPath.startsWith(i.href))
               })?.label || 'Panel'}
             </h1>
           </div>
