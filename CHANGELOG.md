@@ -6,6 +6,72 @@ y este proyecto se adhiere a [Versionado Semántico](https://semver.org/lang/es/
 
 ---
 
+## [v0.8.0] - 2026-08-10 - DISTRIBUCIÓN POR ÁREA + PWA + COMPROBANTE AUTO
+
+### Resumen
+Implementa la distribución automática de items en comandas mixtas (cada área solo ve
+sus productos), comprobante automático al cobrar, configuración de impresora térmica,
+PWA instalable con página offline, y modelos para históricos y estadísticas.
+
+### Agregado
+- **Distribución automática de items por área**:
+  - Campo `targetAreaId` en OrderItem: indica a qué área se envía para elaboración
+  - Campo `serveMode` en OrderItem: "now" (servir inmediatamente) o "with_order" (con el pedido)
+  - Al crear pedido: cada item se asigna automáticamente al área del producto
+  - Cocina SOLO ve items con targetAreaId = SALON (hamburguesas, ensaladas, platos, bebidas)
+  - Pizzería SOLO ve items con targetAreaId = PIZZERIA (pizzas)
+  - Una comanda con pizza + hamburguesa + coca cola se distribuye automáticamente
+- **Comprobante automático al cobrar**:
+  - Al cobrar completamente un pedido, se crea automáticamente un Receipt
+  - El comprobante se guarda como JSON en `/download/comprobantes/`
+  - Registra: número de pedido, orderId, total, método de pago, datos del restaurante
+- **Configuración de impresora térmica**:
+  - Nuevos campos en RestaurantConfig: printerEnabled, printerName, printerIp, printerPort, printerWidth, printerAutoPrint
+  - Pestaña "Impresora" en `/admin/configuracion` con:
+    - Activar/desactivar impresora
+    - Nombre, IP, puerto (default 9100 ESC/POS)
+    - Ancho del papel (80mm o 58mm)
+    - Auto-imprimir al cobrar
+  - Si no hay impresora: comprobantes se guardan como imagen en servidor
+- **PWA instalable**:
+  - `manifest.json` con nombre, iconos, shortcuts, theme color azul
+  - Service Worker (`/sw.js`) con:
+    - Cache de archivos estáticos
+    - Página offline cuando no hay conexión al servidor
+    - Detección de red (WiFi del servidor)
+    - Soporte para notificaciones push
+  - Página `/offline` con instrucciones para conectarse al servidor
+  - Meta tags para PWA (apple-mobile-web-app-capable, theme-color, etc.)
+  - ServiceWorkerRegister component en layout
+- **Modelos para históricos y estadísticas**:
+  - `Receipt`: comprobantes generados (para historial)
+  - `DailyHistory`: resumen diario guardado al cerrar el día
+  - `Stats`: estadísticas agregadas (daily, weekly, monthly, yearly)
+
+### Cambiado
+- API `POST /api/mesero/orders`: ahora asigna `targetAreaId` y `serveMode` a cada item
+- API `GET /api/cocina/orders`: ahora filtra por `targetAreaId = SALON` en items
+- API `GET /api/pizzeria/orders`: ahora filtra por `targetAreaId = PIZZERIA` en items
+- API `PATCH /api/admin/config`: acepta campos de impresora térmica
+- Layout: incluye manifest.json, theme-color, ServiceWorkerRegister
+- Middleware: `/offline`, `/manifest.json`, `/sw.js` son rutas públicas
+
+### Verificación
+- ✅ Lint limpio (0 errores)
+- ✅ Schema aplicado correctamente
+- ✅ Pedido mixto (pizza + hamburguesa + agua) creado correctamente
+- ✅ Cocina ve solo hamburguesa y agua (NO pizza)
+- ✅ Pizzería ve solo pizza (NO hamburguesa ni agua)
+- ✅ Comprobante automático creado al cobrar
+- ✅ Página offline accesible (200)
+- ✅ manifest.json y sw.js accesibles (200)
+- ✅ Todas las páginas responden 200
+
+### Backup
+- `download/salva/SoftLBA-v0.8.0-{timestamp}.tar.gz` (solo código fuente)
+
+---
+
 ## [v0.7.0] - 2026-08-09 - PUNTOS 11-15 + SEPARACIÓN POR ÁREA
 
 ### Resumen

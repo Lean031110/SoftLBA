@@ -87,6 +87,7 @@ const ItemSchema = z.object({
   productId: z.string().min(1),
   quantity: z.coerce.number().min(0.01).max(9999),
   notes: z.string().max(300).optional().or(z.literal('')),
+  serveMode: z.enum(['now', 'with_order']).optional(), // Para productos directos
 })
 
 const CreateOrderSchema = z.object({
@@ -173,10 +174,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Calcular subtotal
+    // Calcular subtotal y asignar área de elaboración a cada item
     const itemLines = d.items.map((i) => {
       const p = products.find((pp) => pp.id === i.productId)!
       const lineTotal = p.price * i.quantity
+      // El área de elaboración (targetAreaId) se determina así:
+      // - Si el producto tiene areaId asignado, ese es el área de elaboración
+      // - Si no tiene areaId (null = global), el área de elaboración es el área del pedido
+      const targetAreaId = p.areaId || d.areaId
       return {
         productId: i.productId,
         quantity: i.quantity,
@@ -184,6 +189,8 @@ export async function POST(req: NextRequest) {
         discount: 0,
         notes: i.notes || null,
         lineTotal,
+        targetAreaId,
+        serveMode: i.serveMode || (p.type === 'DIRECTO' ? 'now' : 'with_order'),
       }
     })
     const subtotal = itemLines.reduce((s, i) => s + i.lineTotal, 0)
@@ -218,6 +225,8 @@ export async function POST(req: NextRequest) {
               discount: l.discount,
               notes: l.notes,
               status: 'PENDIENTE',
+              targetAreaId: l.targetAreaId,
+              serveMode: l.serveMode,
             })),
           },
         },

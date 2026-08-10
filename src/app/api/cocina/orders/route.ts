@@ -1,4 +1,5 @@
-// GET /api/cocina/orders - Pedidos pendientes para cocina (status ENVIADO, EN_PREPARACION, LISTO)
+// GET /api/cocina/orders - Pedidos pendientes para cocina
+// Cocina ve los items cuyo targetAreaId es el área de SALON (cocina prepara los platos del salón)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -17,23 +18,33 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get('status') || ''
     const includeServed = searchParams.get('served') === 'true'
 
-    // Cocina prepara los pedidos del SALÓN (comedor principal)
+    // Cocina prepara los items cuyo targetAreaId es SALON
     const salonArea = await db.area.findUnique({ where: { code: 'SALON' } })
-    const where: any = {
-      status: status ? status : { in: includeServed ? ACTIVE_STATUS : ['ENVIADO', 'EN_PREPARACION', 'LISTO'] },
-    }
-    if (salonArea) {
-      where.areaId = salonArea.id
+    if (!salonArea) {
+      return NextResponse.json({ ok: true, items: [] })
     }
 
+    // Buscar pedidos que tengan al menos un item con targetAreaId = SALON
     const orders = await db.order.findMany({
-      where,
+      where: {
+        status: status ? status : { in: includeServed ? ACTIVE_STATUS : ['ENVIADO', 'EN_PREPARACION', 'LISTO'] },
+        items: {
+          some: {
+            targetAreaId: salonArea.id,
+            status: { not: 'CANCELADO' },
+          },
+        },
+      },
       orderBy: [{ createdAt: 'asc' }],
       include: {
         area: { select: { id: true, name: true, code: true } },
         table: { select: { id: true, name: true, code: true } },
         user: { select: { id: true, firstName: true, lastName: true, username: true } },
         items: {
+          where: {
+            targetAreaId: salonArea.id,
+            status: { not: 'CANCELADO' },
+          },
           include: {
             product: { select: { id: true, name: true, code: true, unit: true, notes: true } },
           },
@@ -60,6 +71,7 @@ export async function GET(req: NextRequest) {
         unitPrice: it.unitPrice,
         notes: it.notes,
         status: it.status,
+        serveMode: it.serveMode,
         product: it.product,
       })),
     }))

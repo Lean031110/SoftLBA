@@ -165,6 +165,44 @@ export async function POST(
       },
     })
 
+    // Si se pagó completamente, crear comprobante automáticamente
+    if (result.isFullyPaid) {
+      try {
+        const config = await db.restaurantConfig.findFirst()
+        const receiptDir = '/home/z/my-project/download/comprobantes'
+        const fs = await import('fs')
+        const path = await import('path')
+        if (!fs.existsSync(receiptDir)) {
+          fs.mkdirSync(receiptDir, { recursive: true })
+        }
+        const filename = `comprobante-${order.number}-${Date.now()}.json`
+        const filePath = path.join(receiptDir, filename)
+        const receiptData = {
+          orderNumber: order.number,
+          orderId: order.id,
+          total: order.total,
+          paymentMethod: result.createdPayments[0]?.method || 'EFECTIVO_CUP',
+          restaurantName: config?.name || 'Restaurante',
+          restaurantAddress: config?.address,
+          restaurantPhone: config?.phone,
+          createdAt: new Date().toISOString(),
+        }
+        fs.writeFileSync(filePath, JSON.stringify(receiptData, null, 2))
+        await db.receipt.create({
+          data: {
+            orderId: order.id,
+            orderNumber: order.number,
+            filename,
+            filePath,
+            total: order.total,
+            paymentMethod: result.createdPayments[0]?.method || null,
+          },
+        })
+      } catch (e) {
+        console.error('Error creando comprobante automático:', e)
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       item: result.updated,

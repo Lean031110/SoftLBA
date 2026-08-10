@@ -9,8 +9,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Save, Settings, Loader2, AlertTriangle, Store, Phone, FileText, Image as ImageIcon, Eye } from 'lucide-react'
+import { Save, Settings, Loader2, AlertTriangle, Store, Phone, FileText, Image as ImageIcon, Eye, Printer } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 
 type Config = {
@@ -34,6 +35,12 @@ type Config = {
   receiptFooter: string
   taxRate: string
   showDemoUsers: boolean
+  printerEnabled: boolean
+  printerName: string
+  printerIp: string
+  printerPort: string
+  printerWidth: string
+  printerAutoPrint: boolean
 }
 
 const INITIAL: Config = {
@@ -57,6 +64,12 @@ const INITIAL: Config = {
   receiptFooter: '',
   taxRate: '0',
   showDemoUsers: true,
+  printerEnabled: false,
+  printerName: '',
+  printerIp: '',
+  printerPort: '9100',
+  printerWidth: '80',
+  printerAutoPrint: false,
 }
 
 export default function ConfiguracionPage() {
@@ -92,6 +105,12 @@ export default function ConfiguracionPage() {
             receiptFooter: i.receiptFooter || '',
             taxRate: String(i.taxRate ?? 0),
             showDemoUsers: i.showDemoUsers !== false ? true : false,
+            printerEnabled: i.printerEnabled || false,
+            printerName: i.printerName || '',
+            printerIp: i.printerIp || '',
+            printerPort: String(i.printerPort || 9100),
+            printerWidth: String(i.printerWidth || 80),
+            printerAutoPrint: i.printerAutoPrint || false,
           })
         } else {
           setError(d.error || 'Error al cargar')
@@ -161,6 +180,7 @@ export default function ConfiguracionPage() {
             <TabsTrigger value="contacto"><Phone className="h-4 w-4 mr-1" /> Contacto</TabsTrigger>
             <TabsTrigger value="redes"><ImageIcon className="h-4 w-4 mr-1" /> Redes</TabsTrigger>
             <TabsTrigger value="recibo"><FileText className="h-4 w-4 mr-1" /> Recibo</TabsTrigger>
+            <TabsTrigger value="impresora"><Printer className="h-4 w-4 mr-1" /> Impresora</TabsTrigger>
           </TabsList>
 
           {/* GENERAL */}
@@ -307,6 +327,122 @@ export default function ConfiguracionPage() {
                   <Label htmlFor="receiptFooter">Pie del recibo</Label>
                   <Textarea id="receiptFooter" value={form.receiptFooter} onChange={(e) => set('receiptFooter', e.target.value)} maxLength={500} rows={4} placeholder="¡Gracias por su visita!" />
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* IMPRESORA */}
+          <TabsContent value="impresora">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Printer className="h-4 w-4" />
+                  Impresora térmica
+                </CardTitle>
+                <CardDescription>
+                  Configura una impresora térmica para imprimir comprobantes automáticamente al cobrar.
+                  Si no hay impresora configurada, los comprobantes se guardan como imagen en el servidor.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Activar impresora */}
+                <div className="flex items-center justify-between rounded-lg border p-4 bg-slate-50 dark:bg-slate-900/50">
+                  <div className="flex items-start gap-3">
+                    <Printer className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+                    <div>
+                      <Label htmlFor="printerEnabled" className="font-medium cursor-pointer">Activar impresora térmica</Label>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Si está activa, los comprobantes se enviarán a la impresora configurada.
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    id="printerEnabled"
+                    checked={form.printerEnabled}
+                    onCheckedChange={(v) => set('printerEnabled', v)}
+                  />
+                </div>
+
+                {form.printerEnabled && (
+                  <>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="printerName">Nombre de la impresora</Label>
+                        <Input
+                          id="printerName"
+                          value={form.printerName}
+                          onChange={(e) => set('printerName', e.target.value)}
+                          placeholder="Ej: EPSON TM-T20"
+                          maxLength={200}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="printerIp">IP de la impresora</Label>
+                        <Input
+                          id="printerIp"
+                          value={form.printerIp}
+                          onChange={(e) => set('printerIp', e.target.value)}
+                          placeholder="Ej: 192.168.1.100"
+                          maxLength={100}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="printerPort">Puerto</Label>
+                        <Input
+                          id="printerPort"
+                          type="number"
+                          value={form.printerPort}
+                          onChange={(e) => set('printerPort', e.target.value)}
+                          placeholder="9100"
+                          min={1}
+                          max={65535}
+                        />
+                        <p className="text-xs text-slate-500">Puerto por defecto: 9100 (ESC/POS)</p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="printerWidth">Ancho del papel</Label>
+                        <Select value={form.printerWidth} onValueChange={(v) => set('printerWidth', v)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Ancho del papel" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="80">80mm (estándar)</SelectItem>
+                            <SelectItem value="58">58mm (mini)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {/* Auto-imprimir */}
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <Label htmlFor="printerAutoPrint" className="font-medium">Auto-imprimir al cobrar</Label>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Si está activo, el comprobante se imprime automáticamente cuando se cobra un pedido.
+                        </p>
+                      </div>
+                      <Switch
+                        id="printerAutoPrint"
+                        checked={form.printerAutoPrint}
+                        onCheckedChange={(v) => set('printerAutoPrint', v)}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {!form.printerEnabled && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4 text-sm text-blue-800 dark:text-blue-200">
+                    <p className="font-medium">💡 Sin impresora configurada</p>
+                    <p className="mt-1 text-xs">
+                      Los comprobantes se guardarán automáticamente como imagen en el servidor
+                      (en <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">/download/comprobantes/</code>)
+                      al cobrar cada pedido. El mesero podrá descargarlos si lo desea.
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

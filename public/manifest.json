@@ -1,0 +1,55 @@
+{
+  "name": "SoftLBA - Sistema de Restaurante",
+  "short_name": "SoftLBA",
+  "description": "Sistema integral de gestión para restaurante en red local",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "categories": ["business", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/softlba-logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Nuevo pedido",
+      "short_name": "Pedido",
+      "description": "Crear un nuevo pedido",
+      "url": "/mesero/nuevo-pedido",
+      "icons": [{ "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Cocina",
+      "short_name": "Cocina",
+      "description": "Ver pedidos de cocina",
+      "url": "/cocina",
+      "icons": [{ "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Panel admin",
+      "short_name": "Admin",
+      "description": "Panel de administración",
+      "url": "/admin",
+      "icons": [{ "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ]
+}

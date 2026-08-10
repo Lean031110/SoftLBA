@@ -3,12 +3,14 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ServiceWorkerRegister } from "@/components/service-worker-register";
 
 export const metadata: Metadata = {
   title: "SoftLBA - Sistema de Restaurante",
   description: "SoftLBA - Sistema integral de gestión para restaurante en red local",
   keywords: ["SoftLBA", "restaurante", "Cuba", "POS", "pedidos", "cocina", "inventario"],
   authors: [{ name: "SoftLBA" }],
+  manifest: "/manifest.json",
   icons: {
     icon: "/softlba-logo.svg",
     shortcut: "/softlba-favicon.png",
@@ -32,6 +34,12 @@ export default function RootLayout({
       <head>
         <link rel="icon" type="image/svg+xml" href="/softlba-logo.svg" />
         <link rel="apple-touch-icon" href="/softlba-logo.png" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#2563eb" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="SoftLBA" />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="antialiased bg-background text-foreground min-h-screen flex flex-col">
         <ThemeProvider
@@ -43,6 +51,7 @@ export default function RootLayout({
           {children}
           <Toaster />
           <SonnerToaster position="top-right" />
+          <ServiceWorkerRegister />
         </ThemeProvider>
       </body>
     </html>

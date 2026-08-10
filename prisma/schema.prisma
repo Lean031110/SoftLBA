@@ -113,6 +113,13 @@ model RestaurantConfig {
   receiptFooter   String?
   taxRate         Float    @default(0)
   showDemoUsers   Boolean  @default(true)
+  // Impresora térmica
+  printerEnabled  Boolean  @default(false)
+  printerName     String?
+  printerIp       String?
+  printerPort     Int?
+  printerWidth    Int      @default(80)  // 80mm o 58mm
+  printerAutoPrint Boolean @default(false) // Auto-imprimir al cobrar
   updatedAt       DateTime @updatedAt
 }
 
@@ -145,6 +152,7 @@ model Area {
   stockMovements StockMovement[]
   physicalStocks PhysicalStock[]
   products   Product[]
+  orderItems OrderItem[]
 }
 
 // ============================================================
@@ -355,11 +363,16 @@ model OrderItem {
   discount    Float    @default(0)
   notes       String?
   status      OrderItemStatus @default(PENDIENTE)
+  // Área a la que se envía para elaboración (derivado del área del producto)
+  targetAreaId String?
+  // Para productos directos: "now" (servir inmediatamente) o "with_order" (con el pedido)
+  serveMode   String?  @default("now")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product     Product  @relation(fields: [productId], references: [id])
+  targetArea  Area?    @relation(fields: [targetAreaId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([productId])
@@ -580,6 +593,66 @@ model Backup {
   createdAt   DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// Comprobantes generados (para historial)
+model Receipt {
+  id          String   @id @default(cuid())
+  orderId     String
+  orderNumber Int
+  filename    String   // Nombre del archivo de imagen
+  filePath    String   // Ruta en el servidor
+  total       Float
+  paymentMethod String?
+  printed     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+// Histórico diario (resumen guardado al cerrar el día)
+model DailyHistory {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  totalSales  Float    @default(0)
+  totalOrders Int      @default(0)
+  totalCash   Float    @default(0)
+  totalTransfer Float  @default(0)
+  totalDiscount Float  @default(0)
+  totalWaste  Float    @default(0)
+  totalMermas Float    @default(0)
+  // Top productos vendidos (JSON)
+  topProducts String?
+  // Top dependientes (JSON)
+  topWaiters  String?
+  observations String?
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+}
+
+// Estadísticas agregadas (para consultas rápidas)
+model Stats {
+  id          String   @id @default(cuid())
+  type        String   // "daily", "weekly", "monthly", "yearly"
+  period      String   // "2026-08-09", "2026-W32", "2026-08", "2026"
+  totalSales  Float    @default(0)
+  totalOrders Int      @default(0)
+  totalCash   Float    @default(0)
+  totalTransfer Float  @default(0)
+  totalDiscount Float  @default(0)
+  totalWaste  Float    @default(0)
+  // Productos más vendidos (JSON array)
+  topProducts String?
+  // Dependientes destacados (JSON array)
+  topWaiters  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([type, period])
+  @@index([type])
+  @@index([period])
 }
 
 // ============================================================

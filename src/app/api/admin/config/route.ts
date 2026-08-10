@@ -52,6 +52,13 @@ const PatchSchema = z.object({
   receiptFooter: z.string().max(500).optional().or(z.literal('')),
   taxRate: z.coerce.number().min(0).max(100).optional(),
   showDemoUsers: z.boolean().optional(),
+  // Impresora térmica
+  printerEnabled: z.boolean().optional(),
+  printerName: z.string().max(200).optional().or(z.literal('')),
+  printerIp: z.string().max(100).optional().or(z.literal('')),
+  printerPort: z.coerce.number().min(1).max(65535).optional(),
+  printerWidth: z.coerce.number().min(58).max(80).optional(),
+  printerAutoPrint: z.boolean().optional(),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -72,7 +79,7 @@ export async function PATCH(req: NextRequest) {
     }
     const d = parsed.data
 
-    const nullable = ['legalName', 'logo', 'address', 'phone', 'email', 'website', 'facebook', 'instagram', 'telegram', 'whatsapp', 'hours', 'slogan', 'welcomeText', 'receiptHeader', 'receiptFooter']
+    const nullable = ['legalName', 'logo', 'address', 'phone', 'email', 'website', 'facebook', 'instagram', 'telegram', 'whatsapp', 'hours', 'slogan', 'welcomeText', 'receiptHeader', 'receiptFooter', 'printerName', 'printerIp']
     const data: any = {}
     for (const [k, v] of Object.entries(d)) {
       if (v === undefined) continue
