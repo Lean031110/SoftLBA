@@ -166,6 +166,38 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
     }
   }
 
+  // Cambiar estado de un ITEM individual (no todo el pedido)
+  async function handleItemStatusChange(orderId: string, itemId: string, newStatus: string) {
+    setActionLoading(`${itemId}-${newStatus}`)
+    try {
+      const res = await fetch(`${apiBase}/orders/${orderId}/items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        // Emitir WebSocket
+        if (data.wsPayload) {
+          try {
+            const { io } = await import('socket.io-client')
+            const socket = io('/?XTransformPort=3003', { transports: ['websocket'] })
+            socket.emit(data.wsEvent || 'order:status', data.wsPayload)
+            setTimeout(() => socket.disconnect(), 1000)
+          } catch {}
+        }
+        toast.success(newStatus === 'LISTO' ? 'Producto listo' : 'Producto en preparación')
+        load()
+      } else {
+        toast.error(data.error || 'Error')
+      }
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const filtered = items.filter((i) => {
     if (tab === 'pending') return i.status === 'ENVIADO' || i.status === 'CREADO'
     if (tab === 'preparing') return i.status === 'EN_PREPARACION'
@@ -287,26 +319,82 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                   </CollapsibleTrigger>
 
                   <CardContent className="pt-0 pb-3 space-y-2">
-                    <div className="space-y-1">
-                      {o.items.slice(0, expanded ? undefined : 3).map((it) => (
-                        <div key={it.id} className="flex items-start justify-between gap-2 text-sm">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium">
-                              <span className="text-blue-700 dark:text-blue-300 mr-1">{it.quantity}×</span>
-                              {it.product.name}
-                            </p>
-                            {it.notes && (
-                              <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">📝 {it.notes}</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                      {!expanded && o.items.length > 3 && (
-                        <p className="text-xs text-stone-400">+ {o.items.length - 3} más...</p>
-                      )}
+                    {/* Información del pedido - siempre visible */}
+                    <div className="flex items-center gap-2 text-xs text-stone-500 flex-wrap">
+                      <span className="font-medium">{o.user.firstName || o.user.username}</span>
+                      <span>·</span>
+                      <span>{o.table ? o.table.name : 'Para llevar'}</span>
+                      {o.customerName && <><span>·</span><span>{o.customerName}</span></>}
+                      <span>·</span>
+                      <span>{formatTime(o.createdAt)}</span>
                     </div>
 
-                    {expanded && o.notes && (
+                    {/* Items con botones individuales */}
+                    <div className="space-y-2">
+                      {o.items.map((it) => {
+                        const itemStatus = it.status || 'PENDIENTE'
+                        const itemColor =
+                          itemStatus === 'LISTO' ? 'border-l-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
+                          : itemStatus === 'EN_PREPARACION' ? 'border-l-blue-400 bg-blue-50/50 dark:bg-blue-950/20'
+                          : 'border-l-amber-300'
+
+                        return (
+                          <div key={it.id} className={`border-l-4 ${itemColor} rounded-r-lg p-2 space-y-1.5`}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium">
+                                  <span className="text-blue-700 dark:text-blue-300 font-bold mr-1">{it.quantity}×</span>
+                                  {it.product.name}
+                                </p>
+                                {it.notes && (
+                                  <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">📝 {it.notes}</p>
+                                )}
+                              </div>
+                              <Badge
+                                className={
+                                  itemStatus === 'LISTO' ? 'bg-emerald-100 text-emerald-800'
+                                  : itemStatus === 'EN_PREPARACION' ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-amber-100 text-amber-800'
+                                }
+                                variant="secondary"
+                              >
+                                {itemStatus === 'LISTO' ? 'Listo' : itemStatus === 'EN_PREPARACION' ? 'Preparando' : 'Pendiente'}
+                              </Badge>
+                            </div>
+                            {/* Botones por item */}
+                            {itemStatus !== 'CANCELADO' && itemStatus !== 'SERVIDO' && (
+                              <div className="flex gap-1.5">
+                                {itemStatus === 'PENDIENTE' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700"
+                                    onClick={() => handleItemStatusChange(o.id, it.id, 'EN_PREPARACION')}
+                                    disabled={actionLoading === `${it.id}-EN_PREPARACION`}
+                                  >
+                                    <Play className="h-3 w-3 mr-1" /> Empezar
+                                  </Button>
+                                )}
+                                {itemStatus === 'PENDIENTE' || itemStatus === 'EN_PREPARACION' ? (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-700"
+                                    onClick={() => handleItemStatusChange(o.id, it.id, 'LISTO')}
+                                    disabled={actionLoading === `${it.id}-LISTO`}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" /> Listo
+                                  </Button>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Notas del pedido */}
+                    {o.notes && (
                       <>
                         <Separator />
                         <div>
@@ -316,45 +404,18 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                       </>
                     )}
 
-                    {expanded && (
-                      <p className="text-xs text-stone-400">
-                        Total: {formatCurrency(o.total)} · {formatTime(o.createdAt)}
-                      </p>
+                    {/* Marcar todo como servido cuando esté listo */}
+                    {o.status === 'LISTO' && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => handleStatusChange(o.id, 'SERVIDO')}
+                        disabled={actionLoading === `${o.id}-SERVIDO`}
+                        className="w-full"
+                      >
+                        <Utensils className="h-3 w-3 mr-1" /> Marcar como servido
+                      </Button>
                     )}
-
-                    <Separator />
-                    <div className="grid grid-cols-1 gap-1.5">
-                      {(o.status === 'ENVIADO' || o.status === 'CREADO') && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleStatusChange(o.id, 'EN_PREPARACION')}
-                          disabled={actionLoading === `${o.id}-EN_PREPARACION`}
-                          className="bg-blue-600 hover:bg-blue-700"
-                        >
-                          <Play className="h-3 w-3 mr-1" /> Empezar a preparar
-                        </Button>
-                      )}
-                      {o.status === 'EN_PREPARACION' && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleStatusChange(o.id, 'LISTO')}
-                          disabled={actionLoading === `${o.id}-LISTO`}
-                          className="bg-emerald-600 hover:bg-emerald-700"
-                        >
-                          <CheckCircle2 className="h-3 w-3 mr-1" /> Marcar como listo
-                        </Button>
-                      )}
-                      {o.status === 'LISTO' && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => handleStatusChange(o.id, 'SERVIDO')}
-                          disabled={actionLoading === `${o.id}-SERVIDO`}
-                        >
-                          <Utensils className="h-3 w-3 mr-1" /> Marcar como servido
-                        </Button>
-                      )}
-                    </div>
                   </CardContent>
                 </Collapsible>
               </Card>
