@@ -120,6 +120,71 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
 
   const canCobrar = user ? hasPermission(user.role, 'CAN_COBRAR') : false
 
+  // Verificar si todos los productos están listos (para poder cobrar)
+  const allItemsReady = order ? order.items.every((it) => it.status === 'LISTO' || it.status === 'CANCELADO' || it.status === 'SERVIDO') : false
+  const pendingItems = order ? order.items.filter((it) => it.status === 'PENDIENTE' || it.status === 'EN_PREPARACION') : []
+  const canAddProducts = order ? !['CANCELADO', 'COBRADO', 'ARCHIVADO'].includes(order.status) : false
+
+  // Estado para añadir productos
+  const [addProductOpen, setAddProductOpen] = useState(false)
+  const [availableProducts, setAvailableProducts] = useState<any[]>([])
+  const [selectedProductId, setSelectedProductId] = useState('')
+  const [addQuantity, setAddQuantity] = useState('1')
+  const [addNotes, setAddNotes] = useState('')
+  const [adding, setAdding] = useState(false)
+
+  async function loadProducts() {
+    try {
+      const params = new URLSearchParams()
+      if (order?.area?.id) params.set('areaId', order.area.id)
+      const res = await fetch(`/api/mesero/products?${params.toString()}`)
+      const data = await res.json()
+      if (data.ok) setAvailableProducts(data.items || [])
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  function openAddProductDialog() {
+    loadProducts()
+    setSelectedProductId('')
+    setAddQuantity('1')
+    setAddNotes('')
+    setAddProductOpen(true)
+  }
+
+  async function handleAddProduct() {
+    if (!order || !selectedProductId) {
+      toast.error('Selecciona un producto')
+      return
+    }
+    const qty = parseFloat(addQuantity)
+    if (!qty || qty <= 0) {
+      toast.error('Cantidad inválida')
+      return
+    }
+    setAdding(true)
+    try {
+      const res = await fetch(`/api/mesero/orders/${order.id}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: selectedProductId, quantity: qty, notes: addNotes || undefined }),
+      })
+      const data = await res.json()
+      if (!data.ok) {
+        toast.error(data.error || 'Error al añadir producto')
+        return
+      }
+      toast.success('Producto añadido al pedido')
+      setAddProductOpen(false)
+      await load()
+    } catch (e) {
+      toast.error('Error de conexión')
+    } finally {
+      setAdding(false)
+    }
+  }
+
   function addPaymentLine() {
     setPayments((p) => [...p, { method: 'EFECTIVO_CUP', amount: '', currency: 'CUP', reference: '' }])
   }
@@ -127,11 +192,29 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
     setPayments((p) => p.filter((_, i) => i !== idx))
   }
   function updatePayment(idx: number, field: keyof PaymentForm, value: string) {
-    setPayments((p) => p.map((pay, i) => (i === idx ? { ...pay, [field]: value } : pay)))
+    setPayments((p) => p.map((pay, i) => {
+      if (i !== idx) return pay
+      const updated = { ...pay, [field]: value }
+      // Auto-set currency based on method
+      if (field === 'method') {
+        if (value.includes('USD') || value === 'ZELLE' || value === 'BANCARIA_USD') {
+          updated.currency = 'USD'
+        } else {
+          updated.currency = 'CUP'
+        }
+      }
+      return updated
+    }))
   }
 
   function openPayDialog() {
     if (!order) return
+    // Verificar que todos los productos estén listos
+    const pending = order.items.filter((it) => it.status !== 'LISTO' && it.status !== 'CANCELADO' && it.status !== 'SERVIDO')
+    if (pending.length > 0) {
+      toast.error(`No se puede cobrar: ${pending.length} producto(s) aún no están listos`)
+      return
+    }
     // Pre-llenar con monto pendiente
     setPayments([{ method: 'EFECTIVO_CUP', amount: order.pendingTotal.toFixed(2), currency: 'CUP', reference: '' }])
     setPayOpen(true)
@@ -245,24 +328,37 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Actualizar
           </Button>
           <Button variant="outline" onClick={() => router.push(`/mesero/pedidos/${order.id}/comprobante`)}>
             <Printer className="h-4 w-4 mr-2" /> Comprobante
           </Button>
+          {canAddProducts && (
+            <Button variant="outline" onClick={openAddProductDialog}>
+              <Plus className="h-4 w-4 mr-2" /> Añadir productos
+            </Button>
+          )}
           {canCancel && (
-            <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-blue-600 border-red-300 hover:bg-red-50">
+            <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-red-600 border-red-300 hover:bg-red-50">
               <XCircle className="h-4 w-4 mr-2" /> Cancelar
             </Button>
           )}
           {canCobrar && !isFullyPaid && order.status !== 'CANCELADO' && (
-            <Button onClick={openPayDialog}>
+            <Button onClick={openPayDialog} disabled={!allItemsReady}>
               <Wallet className="h-4 w-4 mr-2" /> Cobrar
             </Button>
           )}
         </div>
+        {!allItemsReady && order && order.status !== 'CANCELADO' && order.status !== 'COBRADO' && pendingItems.length > 0 && (
+          <Alert className="mt-3 border-amber-200 bg-amber-50 dark:bg-amber-950/30">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-200">
+              No se puede cobrar hasta que todos los productos estén listos. Pendientes: {pendingItems.length} producto(s) en preparación o pendientes.
+            </AlertDescription>
+          </Alert>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -423,7 +519,7 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs">Método</Label>
+                    <Label className="text-xs">Método de pago</Label>
                     <Select value={p.method} onValueChange={(v) => updatePayment(idx, 'method', v)}>
                       <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -434,33 +530,24 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Moneda</Label>
-                    <Select value={p.currency} onValueChange={(v) => updatePayment(idx, 'currency', v)}>
-                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="CUP">CUP</SelectItem>
-                        <SelectItem value="USD">USD</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label className="text-xs">Monto</Label>
+                    <Input
+                      type="number"
+                      value={p.amount}
+                      onChange={(e) => updatePayment(idx, 'amount', e.target.value)}
+                      placeholder="0.00"
+                      step="0.01"
+                      min="0"
+                    />
                   </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Monto</Label>
-                  <Input
-                    type="number"
-                    value={p.amount}
-                    onChange={(e) => updatePayment(idx, 'amount', e.target.value)}
-                    placeholder="0.00"
-                    step="0.01"
-                    min="0"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Referencia (opcional)</Label>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">{p.currency}</Badge>
                   <Input
                     value={p.reference}
                     onChange={(e) => updatePayment(idx, 'reference', e.target.value)}
-                    placeholder="Número de transacción, etc."
+                    placeholder="Referencia (opcional)"
+                    className="h-7 text-xs flex-1"
                     maxLength={120}
                   />
                 </div>
@@ -500,6 +587,50 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog: Añadir productos */}
+      <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-5 w-5" /> Añadir producto al pedido #{order?.number}
+            </DialogTitle>
+            <DialogDescription>Selecciona un producto y la cantidad a añadir</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Producto</Label>
+              <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                <SelectTrigger><SelectValue placeholder="Selecciona un producto..." /></SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {availableProducts.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name} ({p.code}) · {formatCurrency(p.price)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Cantidad</Label>
+                <Input type="number" value={addQuantity} onChange={(e) => setAddQuantity(e.target.value)} min="1" step="0.5" />
+              </div>
+              <div className="space-y-2">
+                <Label>Notas (opcional)</Label>
+                <Input value={addNotes} onChange={(e) => setAddNotes(e.target.value)} placeholder="Ej: sin cebolla" maxLength={300} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddProductOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddProduct} disabled={adding || !selectedProductId}>
+              {adding ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
+              {adding ? 'Añadiendo...' : 'Añadir al pedido'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

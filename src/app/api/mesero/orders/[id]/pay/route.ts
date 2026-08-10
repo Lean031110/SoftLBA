@@ -57,6 +57,17 @@ export async function POST(
       return NextResponse.json({ ok: false, error: 'El pedido ya está cobrado' }, { status: 400 })
     }
 
+    // Verificar que todos los productos estén listos antes de cobrar
+    const pendingItems = order.items.filter(
+      (it) => it.status !== 'LISTO' && it.status !== 'CANCELADO' && it.status !== 'SERVIDO'
+    )
+    if (pendingItems.length > 0) {
+      return NextResponse.json(
+        { ok: false, error: `No se puede cobrar: ${pendingItems.length} producto(s) aún no están listos. Espera a que todas las áreas terminen.` },
+        { status: 400 },
+      )
+    }
+
     const json = await req.json().catch(() => null)
     if (!json) return NextResponse.json({ ok: false, error: 'Cuerpo inválido' }, { status: 400 })
     const parsed = PaySchema.safeParse(json)
