@@ -1,17 +1,15 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { toast } from 'sonner'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LoadingScreen } from '@/components/loading'
 import {
-  Plus, ShoppingBag, ChefHat, CheckCircle2, Clock, Wallet, AlertTriangle, RefreshCw, Eye,
+  Plus, Clock, Wallet, RefreshCw, Eye, ChefHat,
 } from 'lucide-react'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useRealtime } from '@/hooks/use-realtime'
@@ -28,28 +26,32 @@ type OrderItem = {
   total: number
   createdAt: string
   updatedAt: string
-  area: { id: string; name: string; code: string }
-  table: { id: string; name: string; code: string } | null
-  itemsCount: number
-  paidTotal: number
-  pendingTotal: number
+  area?: { name: string }
+  table?: { name: string } | null
+  items?: { product: { name: string }; quantity: number; status: string }[]
 }
+
+const ACTIVE_STATUSES = ['CREADO', 'ENVIADO', 'EN_PREPARACION', 'LISTO', 'SERVIDO']
+const INACTIVE_STATUSES = ['COBRADO', 'CANCELADO', 'ARCHIVADO']
 
 export default function MeseroDashboardPage() {
   const router = useRouter()
-  const { user } = useCurrentUser()
-  const [items, setItems] = useState<OrderItem[]>([])
+  const { user, loading: userLoading } = useCurrentUser()
+  const [orders, setOrders] = useState<OrderItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState<'active' | 'inactive'>('active')
 
   const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
     try {
-      const res = await fetch('/api/mesero/orders')
+      const res = await fetch('/api/mesero/orders?pageSize=100')
       const data = await res.json()
-      if (data.ok) setItems(data.items || [])
-      else setError(data.error || 'Error al cargar')
+      if (data.ok) {
+        setOrders(data.items || [])
+        setError(null)
+      } else {
+        setError(data.error || 'Error al cargar')
+      }
     } catch {
       setError('Error de conexión')
     } finally {
@@ -57,169 +59,171 @@ export default function MeseroDashboardPage() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (user) load()
+  }, [user, load])
 
-  // WebSocket: refrescar cuando llegue un cambio de estado
   useRealtime({
     userId: user?.id,
     role: user?.role,
     onOrderStatus: () => { load() },
-    onOrderReady: (data) => {
-      toast.success(`Pedido #${data.orderNumber || ''} listo para servir`)
-      load()
-    },
+    onOrderReady: () => { load() },
   })
 
-  // Estadísticas rápidas
-  const stats = {
-    activos: items.filter((i) => ['CREADO', 'ENVIADO', 'EN_PREPARACION', 'LISTO', 'SERVIDO'].includes(i.status)).length,
-    pendientes: items.filter((i) => i.status === 'ENVIADO').length,
-    listos: items.filter((i) => i.status === 'LISTO').length,
-    porCobrar: items.filter((i) => i.paymentStatus !== 'PAGADO' && i.status !== 'CANCELADO').length,
+  if (userLoading || loading) {
+    return <LoadingScreen message="Cargando pedidos..." />
   }
 
+  if (error) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    )
+  }
+
+  // Filtrar por pestaña
+  const filtered = orders.filter((o) =>
+    tab === 'active' ? ACTIVE_STATUSES.includes(o.status) : INACTIVE_STATUSES.includes(o.status)
+  )
+
+  // Ordenar: en elaboración primero (anclados), luego los más nuevos
+  const sorted = [...filtered].sort((a, b) => {
+    const aInPrep = a.status === 'EN_PREPARACION' ? 0 : 1
+    const bInPrep = b.status === 'EN_PREPARACION' ? 0 : 1
+    if (aInPrep !== bInPrep) return aInPrep - bInPrep
+    // Más nuevos primero
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  })
+
+  const activeCount = orders.filter((o) => ACTIVE_STATUSES.includes(o.status)).length
+  const inactiveCount = orders.filter((o) => INACTIVE_STATUSES.includes(o.status)).length
+  const pendingPayment = orders.filter((o) => ACTIVE_STATUSES.includes(o.status) && o.paymentStatus !== 'PAGADO').length
+  const totalToday = orders
+    .filter((o) => o.status === 'COBRADO')
+    .reduce((s, o) => s + o.total, 0)
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <ShoppingBag className="h-6 w-6" />
-            Panel del Mesero
-          </h1>
-          <p className="text-sm text-stone-500">
-            Hola, {user?.firstName || user?.username}. Gestiona tus pedidos.
-          </p>
+          <h1 className="text-xl font-bold">Hola, {user?.firstName || user?.username}</h1>
+          <p className="text-xs text-slate-500">Gestiona tus pedidos</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Actualizar
+          <Button variant="outline" size="sm" onClick={load}>
+            <RefreshCw className="h-3 w-3 mr-1" /> Actualizar
           </Button>
-          <Button onClick={() => router.push('/mesero/nuevo-pedido')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo pedido
+          <Button size="sm" onClick={() => router.push('/mesero/nuevo-pedido')}>
+            <Plus className="h-3 w-3 mr-1" /> Nuevo pedido
           </Button>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-3 gap-2">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-stone-500 uppercase">Activos</p>
-              <ShoppingBag className="h-4 w-4 text-stone-500" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{stats.activos}</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-slate-500 uppercase">Activos</p>
+            <p className="text-xl font-bold text-blue-600">{activeCount}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-stone-500 uppercase">En cocina</p>
-              <ChefHat className="h-4 w-4 text-amber-600" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{stats.pendientes}</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-slate-500 uppercase">Por cobrar</p>
+            <p className="text-xl font-bold text-amber-600">{pendingPayment}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-stone-500 uppercase">Listos</p>
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{stats.listos}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-stone-500 uppercase">Por cobrar</p>
-              <Wallet className="h-4 w-4 text-purple-600" />
-            </div>
-            <p className="text-2xl font-bold mt-1">{stats.porCobrar}</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-xs text-slate-500 uppercase">Cobrado hoy</p>
+            <p className="text-xl font-bold text-emerald-600">${totalToday.toFixed(0)}</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Tabs: Activos / Inactivos */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as 'active' | 'inactive')}>
+        <TabsList className="w-full">
+          <TabsTrigger value="active" className="flex-1">
+            Activos ({activeCount})
+          </TabsTrigger>
+          <TabsTrigger value="inactive" className="flex-1">
+            Completados ({inactiveCount})
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Lista de pedidos */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between">
-            <span>Mis pedidos</span>
-            <Badge variant="secondary" className="text-xs">{items.length}</Badge>
-          </CardTitle>
-          <CardDescription>Pedidos activos de tu sesión</CardDescription>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-4 space-y-2">
-              {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-20 w-full" />)}
-            </div>
-          ) : error ? (
-            <div className="p-4">
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            </div>
-          ) : items.length === 0 ? (
-            <div className="p-10 text-center">
-              <ShoppingBag className="h-10 w-10 mx-auto text-stone-300 mb-3" />
-              <p className="text-sm text-stone-500 mb-3">No tienes pedidos activos</p>
-              <Button onClick={() => router.push('/mesero/nuevo-pedido')}>
-                <Plus className="h-4 w-4 mr-2" /> Crear primer pedido
+      {sorted.length === 0 ? (
+        <Card>
+          <CardContent className="p-10 text-center text-slate-500">
+            <ChefHat className="h-10 w-10 mx-auto mb-3 text-slate-300" />
+            <p className="font-medium">
+              {tab === 'active' ? 'No tienes pedidos activos' : 'No tienes pedidos completados'}
+            </p>
+            {tab === 'active' && (
+              <Button size="sm" className="mt-3" onClick={() => router.push('/mesero/nuevo-pedido')}>
+                <Plus className="h-4 w-4 mr-1" /> Crear pedido
               </Button>
-            </div>
-          ) : (
-            <ScrollArea className="max-h-[60vh]">
-              <div className="divide-y">
-                {items.map((o) => (
-                  <div key={o.id} className="p-4 hover:bg-stone-50 dark:hover:bg-stone-900 transition-colors">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold">#{o.number}</span>
-                          <Badge className={STATUS_COLORS[o.status] || STATUS_COLORS.CREADO} variant="secondary">
-                            {STATUS_LABELS[o.status] || o.status}
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {sorted.map((order) => {
+            const mins = Math.max(0, Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000))
+            const isAnclada = order.status === 'EN_PREPARACION'
+            return (
+              <Card
+                key={order.id}
+                className={isAnclada ? 'border-blue-300 bg-blue-50/30 dark:bg-blue-950/20' : ''}
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold">#{order.number}</span>
+                        <Badge className={STATUS_COLORS[order.status] || ''} variant="secondary">
+                          {STATUS_LABELS[order.status] || order.status}
+                        </Badge>
+                        {isAnclada && (
+                          <Badge variant="default" className="text-[10px] bg-blue-600">
+                            🔔 En elaboración
                           </Badge>
-                          {o.paymentStatus === 'PAGADO' && (
-                            <Badge variant="outline" className="text-emerald-700 border-emerald-300">Pagado</Badge>
-                          )}
-                          {o.paymentStatus === 'PARCIAL' && (
-                            <Badge variant="outline" className="text-amber-700 border-amber-300">Pago parcial</Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-stone-500 mt-1">
-                          {o.area?.name}
-                          {o.table ? ` · ${o.table.name}` : ''}
-                          {o.customerName ? ` · ${o.customerName}` : ''}
-                        </p>
-                        <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {formatTime(o.createdAt)} · {o.itemsCount} items
-                        </p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="font-bold text-base">{formatCurrency(o.total)}</span>
-                        {o.pendingTotal > 0 && o.status !== 'CANCELADO' && (
-                          <span className="text-xs text-amber-600">Pend: {formatCurrency(o.pendingTotal)}</span>
                         )}
-                        <Button size="sm" variant="outline" asChild>
-                          <Link href={`/mesero/pedidos/${o.id}`}>
-                            <Eye className="h-3 w-3 mr-1" /> Ver
-                          </Link>
-                        </Button>
                       </div>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {order.table ? order.table.name : 'Para llevar'}
+                        {order.area ? ` · ${order.area.name}` : ''}
+                        {order.customerName ? ` · ${order.customerName}` : ''}
+                      </p>
+                      {order.items && order.items.length > 0 && (
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {order.items.length} producto(s)
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <Badge variant={mins >= 15 ? 'destructive' : 'secondary'} className="text-[10px]">
+                        <Clock className="h-3 w-3 mr-1" />
+                        {mins} min
+                      </Badge>
+                      <p className="font-bold text-sm">{formatCurrency(order.total)}</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </CardContent>
-      </Card>
+                  <div className="flex justify-end mt-2">
+                    <Button size="sm" variant="outline" onClick={() => router.push(`/mesero/pedidos/${order.id}`)}>
+                      <Eye className="h-3 w-3 mr-1" /> Ver
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

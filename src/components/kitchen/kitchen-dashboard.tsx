@@ -319,16 +319,6 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                   </CollapsibleTrigger>
 
                   <CardContent className="pt-0 pb-3 space-y-2">
-                    {/* Información del pedido - siempre visible */}
-                    <div className="flex items-center gap-2 text-xs text-stone-500 flex-wrap">
-                      <span className="font-medium">{o.user.firstName || o.user.username}</span>
-                      <span>·</span>
-                      <span>{o.table ? o.table.name : 'Para llevar'}</span>
-                      {o.customerName && <><span>·</span><span>{o.customerName}</span></>}
-                      <span>·</span>
-                      <span>{formatTime(o.createdAt)}</span>
-                    </div>
-
                     {/* Items con botones individuales */}
                     <div className="space-y-2">
                       {o.items.map((it) => {

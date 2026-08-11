@@ -570,15 +570,15 @@ function CartContent({
 
               <div className="grid grid-cols-1 gap-2 pt-2">
                 <Button
-                  onClick={() => handleSubmit(true)}
+                  onClick={() => onSubmit(true)}
                   disabled={submitting || cart.length === 0}
                 >
                   <Send className="h-4 w-4 mr-2" />
-                  {submitting ? 'Enviando...' : 'Enviar a cocina'}
+                  {submitting ? 'Enviando...' : 'Enviar a preparación'}
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => handleSubmit(false)}
+                  onClick={() => onSubmit(false)}
                   disabled={submitting || cart.length === 0}
                 >
                   <Check className="h-4 w-4 mr-2" />

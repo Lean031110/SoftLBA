@@ -3,6 +3,26 @@
 import Image from 'next/image'
 import { Loader2 } from 'lucide-react'
 
+// Pantalla de carga con fondo transparente que deja ver el contenido detrás
+export function LoadingOverlay({ message = 'Cargando...' }: { message?: string }) {
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm">
+      <div className="relative">
+        <Image
+          src="/softlba-logo.svg"
+          alt="SoftLBA"
+          width={48}
+          height={48}
+          className="h-12 w-12 rounded-xl opacity-50 animate-pulse"
+        />
+        <Loader2 className="absolute inset-0 m-auto h-6 w-6 text-blue-600 animate-spin" />
+      </div>
+      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">{message}</p>
+    </div>
+  )
+}
+
+// Pantalla de carga completa (reemplaza contenido)
 export function LoadingScreen({ message = 'Cargando...' }: { message?: string }) {
   return (
     <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
@@ -24,6 +44,7 @@ export function LoadingScreen({ message = 'Cargando...' }: { message?: string })
   )
 }
 
+// Skeleton card para listas
 export function LoadingCard({ lines = 3 }: { lines?: number }) {
   return (
     <div className="space-y-3 p-4">
@@ -40,6 +61,7 @@ export function LoadingCard({ lines = 3 }: { lines?: number }) {
   )
 }
 
+// Spinner simple
 export function LoadingSpinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   const sizeClass = size === 'sm' ? 'h-4 w-4' : size === 'lg' ? 'h-8 w-8' : 'h-6 w-6'
   return <Loader2 className={`${sizeClass} animate-spin text-blue-600`} />

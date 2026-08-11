@@ -181,6 +181,19 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
     },
   })
 
+  // Solicitar permiso de notificaciones al cargar si no está concedido
+  useEffect(() => {
+    if (userId && 'Notification' in window && Notification.permission === 'default') {
+      // Auto-solicitar después de 3 segundos
+      const timer = setTimeout(() => {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') setPushEnabled(true)
+        })
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [userId])
+
   // Solicitar permiso de notificaciones
   async function requestPushPermission() {
     if (!('Notification' in window)) {
@@ -191,6 +204,15 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
     if (permission === 'granted') {
       setPushEnabled(true)
       toast.success('Notificaciones activadas. Te avisaremos aunque la web no esté abierta.')
+      // Enviar notificación de prueba
+      try {
+        new Notification('SoftLBA - Notificaciones activadas', {
+          body: 'Recibirás alertas de pedidos y estados en tiempo real.',
+          icon: '/softlba-logo.png',
+          badge: '/softlba-favicon.png',
+          tag: 'softlba-welcome',
+        })
+      } catch {}
     } else {
       toast.error('Permiso de notificaciones denegado')
     }
