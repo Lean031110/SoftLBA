@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import {
-  ArrowLeft, Printer, Utensils, MapPin, Phone, Mail, Clock,
+  ArrowLeft, Printer, Utensils, MapPin, Phone, Mail, Clock, Download, Loader2,
 } from 'lucide-react'
 import {
   STATUS_LABELS, PAYMENT_METHOD_LABELS, formatCurrency,
@@ -95,8 +95,50 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => { load() }, [load])
 
+  const [downloading, setDownloading] = useState(false)
+  const receiptRef = useRef<HTMLDivElement>(null)
+
   function handlePrint() {
     window.print()
+  }
+
+  async function handleDownloadImage() {
+    if (!receiptRef.current || !order) return
+    setDownloading(true)
+    try {
+      const { toPng } = await import('html-to-image')
+      const dataUrl = await toPng(receiptRef.current, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        width: 400,
+      })
+      const link = document.createElement('a')
+      link.download = `comprobante-${order.number}.png`
+      link.href = dataUrl
+      link.click()
+      toast.success('Comprobante descargado como imagen')
+    } catch (e) {
+      toast.error('Error al generar imagen')
+      console.error(e)
+    } finally {
+      setDownloading(false)
+    }
+  }
+
+  async function handlePrintThermal() {
+    if (!order) return
+    try {
+      const res = await fetch(`/api/mesero/orders/${order.id}/print`, { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        toast.success(data.message || 'Enviado a impresora')
+      } else {
+        toast.error(data.error || 'Error al imprimir')
+      }
+    } catch {
+      toast.error('Error de conexión')
+    }
   }
 
   const symbol = config?.currencySymbol || '$'
@@ -125,13 +167,24 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <h1 className="text-base font-semibold flex-1">Comprobante</h1>
-        <Button onClick={handlePrint}>
-          <Printer className="h-4 w-4 mr-2" /> Imprimir
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="outline" size="sm" onClick={handleDownloadImage} disabled={downloading}>
+            {downloading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+            <span className="hidden sm:inline">{downloading ? 'Generando...' : 'Imagen'}</span>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handlePrintThermal}>
+            <Printer className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Térmica</span>
+          </Button>
+          <Button size="sm" onClick={handlePrint}>
+            <Printer className="h-4 w-4 mr-1" /> Imprimir
+          </Button>
+        </div>
       </div>
 
+      <div ref={receiptRef}>
       <Card className="print:shadow-none print:border-0">
-        <CardContent className="p-6 space-y-4 font-mono text-sm">
+        <CardContent className="p-6 space-y-4 font-mono text-sm bg-white">
           {/* Header del restaurante */}
           <div className="text-center space-y-1">
             <div className="flex items-center justify-center gap-2">
@@ -297,6 +350,7 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }

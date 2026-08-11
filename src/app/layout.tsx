@@ -35,16 +35,20 @@ export default function RootLayout({
         <link rel="icon" type="image/svg+xml" href="/softlba-logo.svg" />
         <link rel="apple-touch-icon" href="/softlba-logo.png" />
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#2563eb" />
+        <meta name="theme-color" content="#0f172a" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#0f172a" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f172a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="SoftLBA" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="application-name" content="SoftLBA" />
+        <meta name="color-scheme" content="dark light" />
       </head>
       <body className="antialiased bg-background text-foreground min-h-screen flex flex-col">
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >

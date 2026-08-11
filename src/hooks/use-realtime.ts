@@ -29,6 +29,7 @@ export function useRealtime(opts: {
   onOrderNew?: (data: any) => void
   onOrderStatus?: (data: any) => void
   onOrderReady?: (data: any) => void
+  onPaymentDone?: (data: any) => void
   onStockLow?: (data: any) => void
   onDailyClose?: (data: any) => void
 }) {
@@ -82,6 +83,9 @@ export function useRealtime(opts: {
     })
     socket.on('order:ready', (data: any) => {
       handlersRef.current.onOrderReady?.(data)
+    })
+    socket.on('payment:done', (data: any) => {
+      handlersRef.current.onPaymentDone?.(data)
     })
     socket.on('stock:low', (data: any) => {
       handlersRef.current.onStockLow?.(data)

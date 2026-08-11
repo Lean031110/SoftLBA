@@ -1,154 +1,430 @@
 // ============================================================
-// Service Worker - SoftLBA PWA
+// Service Worker - SoftLBA PWA v0.17.0
 // ============================================================
-// Maneja:
-// - Cache de archivos estáticos
-// - Página offline cuando no hay conexión al servidor
-// - Detección de red (WiFi del servidor)
+// Estrategias:
+//  - Network-first  → páginas de navegación (HTML)
+//  - Cache-first   → assets estáticos (CSS, JS, fonts, imágenes)
+//  - Stale-while-revalidate → fuentes e imágenes críticas
+//  - Background Sync → recupera operaciones POST/PUT al volver la red
+//  - Push notifications → avisa de pedidos nuevos aunque la app esté cerrada
 // ============================================================
 
-const CACHE_NAME = 'softlba-v0.8.0'
+const SW_VERSION = 'softlba-v0.17.0'
 const OFFLINE_URL = '/offline'
-const STATIC_ASSETS = [
+
+// Caches separados para invalidación granular
+const CACHE_PAGES = `${SW_VERSION}-pages`
+const CACHE_ASSETS = `${SW_VERSION}-assets`
+const CACHE_IMAGES = `${SW_VERSION}-images`
+const CACHE_FONTS = `${SW_VERSION}-fonts`
+
+// Assets críticos que se cachean en install (app shell)
+const CRITICAL_ASSETS = [
   '/',
   '/offline',
   '/softlba-logo.svg',
   '/softlba-logo.png',
   '/softlba-favicon.png',
   '/manifest.json',
+  '/globals.css',
 ]
 
-// Instalar service worker
+// Patrones para enrutar las estrategias
+const STATIC_ASSET_RE = /\.(?:css|js|woff2?|ttf|eot|otf|wasm|map)$/
+const IMAGE_RE = /\.(?:png|jpe?g|gif|webp|avif|svg|ico)$/
+const FONT_RE = /\.(?:woff2?|ttf|eot|otf)$/
+
+// ------------------------------------------------------------
+// Instalación: pre-cache del app shell
+// ------------------------------------------------------------
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando service worker...')
+  console.log('[SW] Instalando service worker v0.17.0...')
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Cacheando archivos estáticos')
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('[SW] Error cacheando algunos archivos:', err)
-      })
-    })
+    (async () => {
+      const cache = await caches.open(CACHE_ASSETS)
+      // addAll falla si uno solo falla; hacemos best-effort
+      await Promise.allSettled(
+        CRITICAL_ASSETS.map((url) =>
+          fetch(url)
+            .then((res) => {
+              if (res.ok) return cache.put(url, res.clone())
+            })
+            .catch((err) => console.warn('[SW] No se pudo cachear', url, err))
+        )
+      )
+      console.log('[SW] App shell cacheado')
+    })()
   )
   self.skipWaiting()
 })
 
-// Activar service worker
+// ------------------------------------------------------------
+// Activación: limpia caches viejos y toma control
+// ------------------------------------------------------------
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activando service worker...')
+  console.log('[SW] Activando service worker v0.17.0...')
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => {
-            console.log('[SW] Eliminando cache viejo:', name)
-            return caches.delete(name)
+    (async () => {
+      const keys = await caches.keys()
+      await Promise.all(
+        keys
+          .filter((key) => !key.startsWith(SW_VERSION))
+          .map((key) => {
+            console.log('[SW] Eliminando cache viejo:', key)
+            return caches.delete(key)
           })
       )
-    })
+      await self.clients.claim()
+      // Avisar a los clientes que hay una nueva versión disponible
+      const clientsList = await self.clients.matchAll({ type: 'window' })
+      clientsList.forEach((client) => {
+        client.postMessage({ type: 'SW_UPDATED', version: SW_VERSION })
+      })
+    })()
   )
-  self.clients.claim()
 })
 
-// Interceptar fetch
+// ------------------------------------------------------------
+// Helper: network-first para navegación
+// ------------------------------------------------------------
+async function networkFirstNavigation(request) {
+  try {
+    const networkResponse = await fetch(request)
+    if (networkResponse && networkResponse.ok) {
+      const cache = await caches.open(CACHE_PAGES)
+      cache.put(request, networkResponse.clone())
+    }
+    return networkResponse
+  } catch (err) {
+    const cached = await caches.match(request)
+    if (cached) return cached
+    const offline = await caches.match(OFFLINE_URL)
+    return (
+      offline ||
+      new Response(
+        '<h1>Sin conexión</h1><p>SoftLBA no está disponible sin red.</p>',
+        { status: 503, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+      )
+    )
+  }
+}
+
+// ------------------------------------------------------------
+// Helper: cache-first para assets estáticos (CSS, JS, fuentes)
+// ------------------------------------------------------------
+async function cacheFirstStatic(request, cacheName) {
+  const cached = await caches.match(request)
+  if (cached) return cached
+  try {
+    const networkResponse = await fetch(request)
+    if (
+      networkResponse &&
+      (networkResponse.ok || networkResponse.type === 'opaque') &&
+      networkResponse.status !== 206
+    ) {
+      const cache = await caches.open(cacheName)
+      cache.put(request, networkResponse.clone())
+    }
+    return networkResponse
+  } catch (err) {
+    // Fallback para SVG (usado como logo)
+    if (request.url.endsWith('.svg')) {
+      const logoFallback = await caches.match('/softlba-logo.svg')
+      if (logoFallback) return logoFallback
+    }
+    return new Response('', { status: 503, statusText: 'Offline' })
+  }
+}
+
+// ------------------------------------------------------------
+// Helper: stale-while-revalidate para imágenes
+// ------------------------------------------------------------
+async function staleWhileRevalidate(request, cacheName) {
+  const cache = await caches.open(cacheName)
+  const cached = await cache.match(request)
+  const fetchPromise = fetch(request)
+    .then((networkResponse) => {
+      if (
+        networkResponse &&
+        (networkResponse.ok || networkResponse.type === 'opaque')
+      ) {
+        cache.put(request, networkResponse.clone())
+      }
+      return networkResponse
+    })
+    .catch(() => cached)
+  return cached || fetchPromise
+}
+
+// ------------------------------------------------------------
+// Interceptar fetch y enrutar a estrategia
+// ------------------------------------------------------------
 self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // No interceptar API requests (siempre van al servidor)
-  if (url.pathname.startsWith('/api/')) {
+  // Solo GET
+  if (request.method !== 'GET') {
+    // Para POST/PUT/DELETE → intentar Background Sync (si está soportado)
+    if (
+      'sync' in self.registration &&
+      (request.method === 'POST' ||
+        request.method === 'PUT' ||
+        request.method === 'DELETE')
+    ) {
+      event.respondWith(handleBackgroundSyncRequest(event))
+    }
     return
   }
 
-  // No interceptar WebSocket
-  if (request.url.includes('XTransformPort') || url.protocol === 'ws:' || url.protocol === 'wss:') {
+  // No interceptar API requests (siempre al servidor)
+  if (url.pathname.startsWith('/api/')) return
+
+  // No interceptar WebSocket ni requests al realtime service
+  if (
+    url.protocol === 'ws:' ||
+    url.protocol === 'wss:' ||
+    url.searchParams.has('XTransformPort')
+  ) {
     return
   }
 
-  // Para navegación (páginas), intentar red primero, luego cache, luego offline
+  // Navegación (HTML) → network-first
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Si la red funciona, cachear la respuesta
-          const responseClone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone)
-          })
-          return response
-        })
-        .catch(() => {
-          // Si no hay red, intentar cache
-          return caches.match(request).then((cached) => {
-            if (cached) return cached
-            // Si no está en cache, mostrar página offline
-            return caches.match(OFFLINE_URL)
-          })
-        })
-    )
+    event.respondWith(networkFirstNavigation(request))
     return
   }
 
-  // Para otros recursos (CSS, JS, imágenes), estrategia cache-first
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) return cached
-      return fetch(request)
-        .then((response) => {
-          // Solo cachear respuestas OK
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response
-          }
-          const responseClone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, responseClone)
-          })
-          return response
-        })
-        .catch(() => {
-          // Si no hay red y no está en cache, devolver vacío
-          return new Response('', { status: 503, statusText: 'Offline' })
-        })
-    })
-  )
+  // Fuentes → cache-first con prioridad alta
+  if (FONT_RE.test(url.pathname)) {
+    event.respondWith(cacheFirstStatic(request, CACHE_FONTS))
+    return
+  }
+
+  // CSS/JS/WASM → cache-first
+  if (STATIC_ASSET_RE.test(url.pathname)) {
+    event.respondWith(cacheFirstStatic(request, CACHE_ASSETS))
+    return
+  }
+
+  // Imágenes → stale-while-revalidate
+  if (IMAGE_RE.test(url.pathname) || request.destination === 'image') {
+    event.respondWith(staleWhileRevalidate(request, CACHE_IMAGES))
+    return
+  }
+
+  // Default: stale-while-revalidate
+  event.respondWith(staleWhileRevalidate(request, CACHE_ASSETS))
 })
 
-// Escuchar mensajes del cliente
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting()
+// ------------------------------------------------------------
+// Background Sync: encola operaciones fallidas y las reenvía
+// ------------------------------------------------------------
+const SYNC_QUEUE_DB = 'softlba-sync-queue'
+const SYNC_QUEUE_STORE = 'pending-requests'
+const SYNC_TAG = 'softlba-sync'
+
+function openSyncDB() {
+  return new Promise((resolve, reject) => {
+    if (!('indexedDB' in self)) {
+      reject(new Error('IndexedDB no disponible'))
+      return
+    }
+    const req = indexedDB.open(SYNC_QUEUE_DB, 1)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains(SYNC_QUEUE_STORE)) {
+        db.createObjectStore(SYNC_QUEUE_STORE, { keyPath: 'id', autoIncrement: true })
+      }
+    }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+async function enqueueRequest(request) {
+  try {
+    const body = request.method === 'GET' ? null : await request.clone().text()
+    const entry = {
+      url: request.url,
+      method: request.method,
+      headers: Object.fromEntries(request.headers.entries()),
+      body,
+      timestamp: Date.now(),
+    }
+    const db = await openSyncDB()
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(SYNC_QUEUE_STORE, 'readwrite')
+      tx.objectStore(SYNC_QUEUE_STORE).add(entry)
+      tx.oncomplete = resolve
+      tx.onerror = () => reject(tx.error)
+    })
+    console.log('[SW] Request encolado para background sync:', request.url)
+  } catch (err) {
+    console.warn('[SW] No se pudo encolar request:', err)
+  }
+}
+
+async function flushQueue() {
+  let db
+  try {
+    db = await openSyncDB()
+  } catch (err) {
+    console.warn('[SW] IndexedDB no disponible para flush:', err)
+    return
+  }
+  const tx = db.transaction(SYNC_QUEUE_STORE, 'readwrite')
+  const store = tx.objectStore(SYNC_QUEUE_STORE)
+  const allReq = store.getAll()
+  await new Promise((resolve) => {
+    allReq.onsuccess = resolve
+  })
+  const entries = allReq.result || []
+  for (const entry of entries) {
+    try {
+      const res = await fetch(entry.url, {
+        method: entry.method,
+        headers: entry.headers,
+        body: entry.body,
+      })
+      if (res.ok) {
+        await new Promise((resolve) => {
+          const delTx = db.transaction(SYNC_QUEUE_STORE, 'readwrite')
+          delTx.objectStore(SYNC_QUEUE_STORE).delete(entry.id)
+          delTx.oncomplete = resolve
+        })
+        console.log('[SW] Request reenviado con éxito:', entry.url)
+      }
+    } catch (err) {
+      console.warn('[SW] Reintento falló, se mantendrá en cola:', entry.url)
+      break // si falla la red otra vez, dejamos el resto para el próximo sync
+    }
+  }
+}
+
+async function handleBackgroundSyncRequest(event) {
+  await enqueueRequest(event.request)
+  try {
+    await self.registration.sync.register(SYNC_TAG)
+    console.log('[SW] Background sync registrado')
+  } catch (err) {
+    console.warn('[SW] Background sync no soportado, intento directo:', err)
+  }
+  return new Response(
+    JSON.stringify({ ok: false, error: 'offline-queued' }),
+    {
+      status: 202,
+      headers: { 'Content-Type': 'application/json' },
+    }
+  )
+}
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === SYNC_TAG) {
+    console.log('[SW] Ejecutando background sync:', event.tag)
+    event.waitUntil(flushQueue())
   }
 })
 
-// Notificaciones push
+// ------------------------------------------------------------
+// Periodic Sync (cuando esté disponible) para refrescar datos
+// ------------------------------------------------------------
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'softlba-refresh') {
+    event.waitUntil(
+      (async () => {
+        const cache = await caches.open(CACHE_ASSETS)
+        await cache.addAll(CRITICAL_ASSETS).catch(() => {})
+      })()
+    )
+  }
+})
+
+// ------------------------------------------------------------
+// Push notifications: avisa de nuevos pedidos aunque la app esté cerrada
+// ------------------------------------------------------------
 self.addEventListener('push', (event) => {
   console.log('[SW] Push recibido:', event)
-  let data = { title: 'SoftLBA', body: 'Nueva notificación' }
-  try {
-    data = event.data.json()
-  } catch (e) {
-    data.body = event.data ? event.data.text() : data.body
+  let data = { type: 'generic', title: 'SoftLBA', body: 'Nueva notificación' }
+  if (event.data) {
+    try {
+      data = event.data.json()
+    } catch {
+      data = { ...data, body: event.data.text() }
+    }
+  }
+
+  const eventType = (data.type || '').toLowerCase()
+  const orderId = data.orderId || data.data?.orderId
+  const orderNumber = data.orderNumber || data.data?.orderNumber
+
+  // Plantillas por tipo de evento
+  let title = data.title || 'SoftLBA'
+  let body = data.body || data.message || ''
+  let tag = `softlba-${eventType || 'notification'}`
+  let url = data.data?.url || '/'
+  const actions = []
+
+  if (eventType === 'order:new' || eventType === 'order_new') {
+    title = '📦 Nuevo pedido'
+    body = orderNumber
+      ? `Pedido #${orderNumber} recibido, pendiente de preparación`
+      : body || 'Ha llegado un nuevo pedido'
+    tag = `softlba-order-new-${orderId || Date.now()}`
+    url = data.data?.url || '/cocina'
+    actions.push({ action: 'view-order', title: 'Ver pedido' })
+    actions.push({ action: 'dismiss', title: 'Descartar' })
+  } else if (eventType === 'order:ready' || eventType === 'order_ready') {
+    title = '✅ Pedido listo'
+    body = orderNumber
+      ? `El pedido #${orderNumber} está listo para servir`
+      : body || 'Un pedido está listo'
+    tag = `softlba-order-ready-${orderId || Date.now()}`
+    url = data.data?.url || '/mesero'
+    actions.push({ action: 'view-order', title: 'Ver pedido' })
+    actions.push({ action: 'dismiss', title: 'Descartar' })
+  } else if (eventType === 'order:status' || eventType === 'order_status') {
+    title = '🔄 Estado de pedido actualizado'
+    body = body || `Pedido #${orderNumber || ''} cambió de estado`
+    tag = `softlba-order-status-${orderId || Date.now()}`
+    url = data.data?.url || '/admin'
+    actions.push({ action: 'view-order', title: 'Ver' })
+  } else if (eventType === 'payment:done' || eventType === 'payment_done') {
+    title = '💰 Cobro registrado'
+    body = body || `Pago confirmado para el pedido #${orderNumber || ''}`
+    tag = `softlba-payment-${orderId || Date.now()}`
+    url = data.data?.url || '/admin'
+    actions.push({ action: 'view-order', title: 'Ver' })
+  } else if (eventType === 'stock:low' || eventType === 'stock_low') {
+    title = '⚠️ Stock bajo'
+    body = body || 'Un producto ha alcanzado su stock mínimo'
+    tag = 'softlba-stock-low'
+    url = data.data?.url || '/admin/inventario-general'
+  } else if (eventType === 'daily-close' || eventType === 'daily_close') {
+    title = '🔚 Cierre diario'
+    body = body || 'Se ha realizado el cierre diario'
+    tag = 'softlba-daily-close'
+    url = data.data?.url || '/admin/cierre-diario'
   }
 
   const options = {
-    body: data.body || data.message,
+    body,
     icon: '/softlba-logo.png',
     badge: '/softlba-favicon.png',
-    vibrate: [200, 100, 200],
-    tag: data.tag || 'softlba-notification',
-    data: data.data || {},
-    actions: data.actions || [
-      { action: 'ok', title: 'OK' },
-      { action: 'dismiss', title: 'Descartar' },
-    ],
+    vibrate: [200, 100, 200, 100, 200],
+    tag,
+    data: { url, orderId, eventType, ...(data.data || {}) },
+    actions: actions.length ? actions : undefined,
+    requireInteraction: eventType.startsWith('order'),
+    renotify: true,
   }
 
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'SoftLBA', options)
-  )
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
+// ------------------------------------------------------------
 // Click en notificación
+// ------------------------------------------------------------
 self.addEventListener('notificationclick', (event) => {
   console.log('[SW] Click en notificación:', event)
   event.notification.close()
@@ -156,18 +432,50 @@ self.addEventListener('notificationclick', (event) => {
   if (event.action === 'dismiss') return
 
   const targetUrl = event.notification.data?.url || '/'
+
   event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
-      // Si ya hay una ventana abierta, enfocarla
+    (async () => {
+      const clientList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true,
+      })
+      // Si ya hay una ventana abierta en la app, enfocarla y navegar
       for (const client of clientList) {
-        if (client.url.includes(targetUrl) && 'focus' in client) {
+        if ('focus' in client) {
+          if (targetUrl && 'navigate' in client) {
+            try {
+              await client.focus()
+              await client.navigate(targetUrl)
+              return
+            } catch {
+              return client.focus()
+            }
+          }
           return client.focus()
         }
       }
       // Si no, abrir nueva ventana
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl)
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl)
       }
-    })
+    })()
   )
+})
+
+// ------------------------------------------------------------
+// Mensajes desde el cliente
+// ------------------------------------------------------------
+self.addEventListener('message', (event) => {
+  const data = event.data || {}
+  if (data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  } else if (data.type === 'GET_VERSION') {
+    event.ports[0]?.postMessage({ version: SW_VERSION })
+  } else if (data.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then((keys) =>
+        Promise.all(keys.map((k) => caches.delete(k)))
+      )
+    )
+  }
 })

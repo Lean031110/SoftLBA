@@ -1,21 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
-import { LoadingScreen } from '@/components/loading'
 import {
   Users, ShoppingCart, Wallet, Package, AlertTriangle,
-  Newspaper, TrendingUp, Clock, Activity, DollarSign, RefreshCw, Bell,
+  TrendingUp, Clock, Activity, DollarSign, RefreshCw, Bell,
 } from 'lucide-react'
-import { ROLE_LABELS, ROLE_BADGE_COLORS } from '@/lib/permissions'
 import { toast } from 'sonner'
+import { useCurrentUser } from '@/hooks/use-current-user'
+import { useRealtime } from '@/hooks/use-realtime'
 
 type DashboardData = {
   stats: {
@@ -59,14 +57,14 @@ const METHOD_LABELS: Record<string, string> = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  CREADO: 'bg-stone-100 text-stone-800',
-  ENVIADO: 'bg-blue-100 text-blue-800',
-  EN_PREPARACION: 'bg-amber-100 text-amber-800',
-  LISTO: 'bg-emerald-100 text-emerald-800',
-  SERVIDO: 'bg-purple-100 text-purple-800',
-  COBRADO: 'bg-green-100 text-green-800',
-  ARCHIVADO: 'bg-stone-100 text-stone-600',
-  CANCELADO: 'bg-red-100 text-red-800',
+  CREADO: 'bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200',
+  ENVIADO: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  EN_PREPARACION: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  LISTO: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+  SERVIDO: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  COBRADO: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  ARCHIVADO: 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300',
+  CANCELADO: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -81,23 +79,39 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 export default function AdminDashboardPage() {
+  const { user } = useCurrentUser()
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [usdRate, setUsdRate] = useState('320')
   const [rateLoading, setRateLoading] = useState(false)
   const [lastRateUpdate, setLastRateUpdate] = useState<string | null>(null)
+  const [lastEvent, setLastEvent] = useState<string | null>(null)
 
+  const loadDashboard = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
+    try {
+      const res = await fetch('/api/admin/dashboard', { cache: 'no-store' })
+      const d = await res.json()
+      if (d.ok) {
+        setData(d)
+        setError(null)
+      } else {
+        if (!silent) setError(d.error || 'Error al cargar')
+      }
+    } catch {
+      if (!silent) setError('Error de conexión')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [])
+
+  // Carga inicial + tasa de cambio
   useEffect(() => {
-    fetch('/api/admin/dashboard')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.ok) setData(d)
-        else setError(d.error || 'Error al cargar')
-      })
-      .catch(() => setError('Error de conexión'))
-      .finally(() => setLoading(false))
-    // Cargar tasa de cambio
+    loadDashboard()
     fetch('/api/public/config')
       .then((r) => r.json())
       .then((d) => {
@@ -107,7 +121,47 @@ export default function AdminDashboardPage() {
         }
       })
       .catch(() => {})
-  }, [])
+  }, [loadDashboard])
+
+  // WebSocket en tiempo real: recarga el dashboard cuando llegan eventos relevantes
+  const { connected } = useRealtime({
+    userId: user?.id,
+    role: user?.role,
+    onOrderNew: (payload) => {
+      const num = payload?.orderNumber ?? payload?.orderId?.slice(-4) ?? ''
+      setLastEvent(`Nuevo pedido #${num}`)
+      toast.info(`Nuevo pedido #${num}`, { description: 'Dashboard actualizado en vivo' })
+      loadDashboard(true)
+    },
+    onOrderStatus: (payload) => {
+      const num = payload?.orderNumber ?? ''
+      setLastEvent(`Pedido #${num} actualizado`)
+      toast.info(`Pedido #${num} cambió de estado`)
+      loadDashboard(true)
+    },
+    onOrderReady: (payload) => {
+      const num = payload?.orderNumber ?? ''
+      setLastEvent(`Pedido #${num} listo`)
+      toast.success(`Pedido #${num} listo para servir`)
+      loadDashboard(true)
+    },
+    onPaymentDone: (payload) => {
+      const num = payload?.orderNumber ?? ''
+      const amount = payload?.amount ? ` ($${payload.amount.toFixed(2)})` : ''
+      setLastEvent(`Cobro registrado${num ? ` #${num}` : ''}`)
+      toast.success(`Cobro registrado${num ? ` #${num}` : ''}${amount}`)
+      loadDashboard(true)
+    },
+    onStockLow: () => {
+      setLastEvent('Stock bajo detectado')
+      loadDashboard(true)
+    },
+    onDailyClose: () => {
+      setLastEvent('Cierre diario realizado')
+      toast.info('Se ha realizado un cierre diario')
+      loadDashboard(true)
+    },
+  })
 
   async function updateRate() {
     setRateLoading(true)
@@ -141,7 +195,23 @@ export default function AdminDashboardPage() {
   }
 
   if (loading) {
-    return <LoadingScreen message="Cargando dashboard..." />
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Panel de Administración</h1>
+            <p className="text-sm text-stone-500">Cargando dashboard…</p>
+          </div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardContent className="p-4 h-24 animate-pulse bg-stone-100 dark:bg-stone-800" />
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   if (error || !data) {
@@ -155,9 +225,17 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Panel de Administración</h1>
-        <p className="text-sm text-stone-500">Resumen general del día</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Panel de Administración</h1>
+          <p className="text-sm text-stone-500 dark:text-stone-400">
+            Resumen general del día
+            {lastEvent && (
+              <span className="ml-2 text-xs text-stone-400 dark:text-stone-500">· {lastEvent}</span>
+            )}
+          </p>
+        </div>
+        <LiveBadge connected={connected} refreshing={refreshing} onRefresh={() => loadDashboard(true)} />
       </div>
 
       {/* Stats grid */}
@@ -195,7 +273,7 @@ export default function AdminDashboardPage() {
         <Card className={rateNeedsUpdate() ? 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/20' : ''}>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-blue-600" />
+              <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               Tasa de cambio USD → CUP
             </CardTitle>
             <CardDescription>
@@ -216,7 +294,7 @@ export default function AdminDashboardPage() {
                   min="0"
                   step="1"
                 />
-                <span className="text-sm text-slate-500">CUP</span>
+                <span className="text-sm text-slate-500 dark:text-slate-400">CUP</span>
                 <Button size="sm" onClick={updateRate} disabled={rateLoading}>
                   {rateLoading ? <RefreshCw className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                   <span className="ml-1">Actualizar</span>
@@ -230,7 +308,7 @@ export default function AdminDashboardPage() {
           <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
             <CardContent className="p-4 flex items-start gap-3">
               <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
-                <Bell className="h-5 w-5 text-amber-600" />
+                <Bell className="h-5 w-5 text-amber-600 dark:text-amber-300" />
               </div>
               <div className="min-w-0">
                 <p className="font-medium text-sm text-amber-800 dark:text-amber-200">
@@ -260,7 +338,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {data.salesByMethod.length === 0 ? (
-              <p className="text-sm text-stone-500 text-center py-4">Aún no hay cobros registrados hoy</p>
+              <p className="text-sm text-stone-500 dark:text-stone-400 text-center py-4">Aún no hay cobros registrados hoy</p>
             ) : (
               <div className="space-y-2">
                 {data.salesByMethod.map((m) => (
@@ -287,7 +365,7 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {data.salesByArea.length === 0 ? (
-              <p className="text-sm text-stone-500 text-center py-4">Aún no hay pedidos hoy</p>
+              <p className="text-sm text-stone-500 dark:text-stone-400 text-center py-4">Aún no hay pedidos hoy</p>
             ) : (
               <div className="space-y-2">
                 {data.salesByArea.map((a, i) => (
@@ -316,14 +394,14 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {data.recentOrders.length === 0 ? (
-              <p className="text-sm text-stone-500 text-center py-4">No hay pedidos recientes</p>
+              <p className="text-sm text-stone-500 dark:text-stone-400 text-center py-4">No hay pedidos recientes</p>
             ) : (
               <div className="space-y-3">
                 {data.recentOrders.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between gap-3 text-sm border-b pb-2 last:border-0 last:pb-0">
+                  <div key={o.id} className="flex items-center justify-between gap-3 text-sm border-b border-stone-100 dark:border-stone-800 pb-2 last:border-0 last:pb-0">
                     <div className="min-w-0">
                       <p className="font-medium">#{o.number} · {o.user}</p>
-                      <p className="text-xs text-stone-500">{o.area} · {new Date(o.createdAt).toLocaleTimeString('es-CU')}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">{o.area} · {new Date(o.createdAt).toLocaleTimeString('es-CU')}</p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="font-semibold">${o.total.toFixed(2)}</span>
@@ -349,14 +427,14 @@ export default function AdminDashboardPage() {
           </CardHeader>
           <CardContent>
             {data.lowStock.length === 0 ? (
-              <p className="text-sm text-emerald-600 text-center py-4">Todo el stock está en niveles saludables</p>
+              <p className="text-sm text-emerald-600 dark:text-emerald-400 text-center py-4">Todo el stock está en niveles saludables</p>
             ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {data.lowStock.map((s) => (
                   <div key={s.id} className="flex items-center justify-between gap-2 text-sm">
                     <div className="min-w-0">
                       <p className="font-medium truncate">{s.product.name}</p>
-                      <p className="text-xs text-stone-500">{s.area.name} · {s.product.code}</p>
+                      <p className="text-xs text-stone-500 dark:text-stone-400">{s.area.name} · {s.product.code}</p>
                     </div>
                     <Badge variant="destructive" className="shrink-0">
                       {s.stock} {s.product && 'u'}
@@ -372,6 +450,56 @@ export default function AdminDashboardPage() {
   )
 }
 
+// ------------------------------------------------------------
+// Indicador "En vivo" — muestra estado de conexión WebSocket
+// ------------------------------------------------------------
+function LiveBadge({
+  connected,
+  refreshing,
+  onRefresh,
+}: {
+  connected: boolean
+  refreshing: boolean
+  onRefresh: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Badge
+        variant="outline"
+        className={
+          connected
+            ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+            : 'border-stone-300 bg-stone-50 text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400'
+        }
+        suppressHydrationWarning
+      >
+        <span className="relative flex h-2 w-2 mr-1.5">
+          {connected && (
+            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+          )}
+          <span
+            className={
+              'relative inline-flex rounded-full h-2 w-2 ' +
+              (connected ? 'bg-emerald-500' : 'bg-stone-400')
+            }
+          />
+        </span>
+        {connected ? 'En vivo' : 'Sin conexión'}
+      </Badge>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={onRefresh}
+        disabled={refreshing}
+        aria-label="Refrescar dashboard"
+        className="h-8 w-8 p-0"
+      >
+        <RefreshCw className={'h-4 w-4 ' + (refreshing ? 'animate-spin' : '')} />
+      </Button>
+    </div>
+  )
+}
+
 function StatCard({
   title, value, icon, accent, sub,
 }: { title: string; value: string; icon: React.ReactNode; accent: string; sub?: string }) {
@@ -379,11 +507,11 @@ function StatCard({
     <Card>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs text-stone-500 uppercase tracking-wider">{title}</p>
+          <p className="text-xs text-stone-500 dark:text-stone-400 uppercase tracking-wider">{title}</p>
           <div className={`rounded-lg p-1.5 ${accent}`}>{icon}</div>
         </div>
         <p className="mt-2 text-2xl font-bold">{value}</p>
-        {sub && <p className="text-xs text-stone-500 mt-0.5">{sub}</p>}
+        {sub && <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">{sub}</p>}
       </CardContent>
     </Card>
   )

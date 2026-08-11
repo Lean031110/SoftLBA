@@ -1,14 +1,19 @@
 {
+  "id": "/",
   "name": "SoftLBA - Sistema de Restaurante",
   "short_name": "SoftLBA",
-  "description": "Sistema integral de gestión para restaurante en red local",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#2563eb",
-  "orientation": "portrait-primary",
+  "description": "Sistema integral de gestión para restaurante en red local. Pedidos, cocina, inventario, cobros y reportes en tiempo real.",
+  "start_url": "/?source=pwa",
   "scope": "/",
-  "categories": ["business", "productivity", "utilities"],
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["business", "food", "productivity"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/softlba-logo.svg",
@@ -20,36 +25,89 @@
       "src": "/softlba-logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/softlba-logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "monochrome"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Panel de administración en móvil"
+    },
+    {
+      "src": "/softlba-logo.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Panel de administración en escritorio"
     }
   ],
   "shortcuts": [
     {
       "name": "Nuevo pedido",
       "short_name": "Pedido",
-      "description": "Crear un nuevo pedido",
-      "url": "/mesero/nuevo-pedido",
-      "icons": [{ "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "description": "Crear un nuevo pedido desde la mesa",
+      "url": "/mesero/nuevo-pedido?source=shortcut",
+      "icons": [
+        { "src": "/softlba-logo.png", "sizes": "96x96", "type": "image/png" },
+        { "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }
+      ]
     },
     {
       "name": "Cocina",
       "short_name": "Cocina",
-      "description": "Ver pedidos de cocina",
-      "url": "/cocina",
-      "icons": [{ "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "description": "Ver pedidos pendientes en cocina",
+      "url": "/cocina?source=shortcut",
+      "icons": [
+        { "src": "/softlba-logo.png", "sizes": "96x96", "type": "image/png" },
+        { "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }
+      ]
+    },
+    {
+      "name": "Cierre diario",
+      "short_name": "Cierre",
+      "description": "Realizar el cierre diario de caja",
+      "url": "/admin/cierre-diario?source=shortcut",
+      "icons": [
+        { "src": "/softlba-logo.png", "sizes": "96x96", "type": "image/png" },
+        { "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }
+      ]
     },
     {
       "name": "Panel admin",
       "short_name": "Admin",
-      "description": "Panel de administración",
-      "url": "/admin",
-      "icons": [{ "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }]
+      "description": "Ver el dashboard de administración",
+      "url": "/admin?source=shortcut",
+      "icons": [
+        { "src": "/softlba-logo.png", "sizes": "96x96", "type": "image/png" },
+        { "src": "/softlba-logo.svg", "sizes": "any", "type": "image/svg+xml" }
+      ]
     }
   ]
 }
