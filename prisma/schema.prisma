@@ -55,7 +55,6 @@ model User {
   financeEntries   FinanceEntry[]
   dailyCloses      DailyClose[]
   notifications    Notification[]
-  sessions         Session[]
 
   @@index([role])
   @@index([isActive])
@@ -73,19 +72,13 @@ model UserProfile {
   updatedAt       DateTime @updatedAt
 }
 
-model Session {
-  id           String   @id @default(cuid())
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token        String   @unique
-  expiresAt    DateTime
-  ipAddress    String?
-  userAgent     String?
-  createdAt    DateTime @default(now())
-
-  @@index([userId])
-  @@index([expiresAt])
-}
+// ============================================================
+// NOTA (FIX 12):
+// El modelo `Session` fue eliminado. La autenticación se basa en
+// cookies firmadas con HMAC (src/lib/auth/token.ts), no en una
+// tabla de sesiones en la base de datos. Mantener una tabla Session
+// sin usar añadía peso a las consultas y confusión en el schema.
+// ============================================================
 
 // ============================================================
 // 2. CONFIGURACIÓN DEL RESTAURANTE Y NOTICIAS
@@ -129,6 +122,8 @@ model RestaurantConfig {
   offlineMessage     String   @default("Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante (red local). Verifica que estás en la misma red que el servidor.")
   offlineWifiName    String?
   offlineInstructions String?
+  // Control de stock negativo en ventas DIRECTAS (FIX 4)
+  blockNegativeStock Boolean  @default(false)
   updatedAt       DateTime @updatedAt
 }
 
@@ -386,6 +381,14 @@ model OrderItem {
   @@index([orderId])
   @@index([productId])
   @@index([status])
+}
+
+// Secuencia atómica para generación de números de pedido (FIX 5)
+// Singleton con id=1; el campo nextNumber se incrementa de forma atómica
+// mediante `db.orderSequence.upsert({ update: { nextNumber: { increment: 1 } } })`.
+model OrderSequence {
+  id         Int  @id @default(1)
+  nextNumber Int  @default(1001)
 }
 
 // ============================================================

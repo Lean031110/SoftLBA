@@ -1,8 +1,13 @@
-// PATCH /api/cocina/orders/[id]/items/[itemId]/status - Cambiar estado de un item individual
+// PATCH /api/pizzeria/orders/[id]/items/[itemId]/status - Cambiar estado de un item individual
+// FIX 1: usa el state machine centralizado para validar transiciones
+// FIX 3: cuando un item pasa a LISTO, llama automáticamente a consumeRecipe()
+//        para descontar los ingredientes de la receta del inventario.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { canTransitionItem } from '@/lib/order-state-machine'
+import { consumeRecipe } from '@/lib/recipe-consumer'
 import { z } from 'zod'
 
 const ItemStatusSchema = z.object({
@@ -40,7 +45,16 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message || 'Estado inválido' }, { status: 400 })
     }
 
-    const newStatus = parsed.data.status
+    const newStatus = parsed.data.status as 'EN_PREPARACION' | 'LISTO'
+
+    // FIX 1: validar transición con el state machine
+    if (!canTransitionItem(item.status, newStatus)) {
+      return NextResponse.json(
+        { ok: false, error: `No se puede pasar el item de ${item.status} a ${newStatus}` },
+        { status: 400 },
+      )
+    }
+
     const before = { status: item.status }
 
     await db.$transaction(async (tx) => {
@@ -50,7 +64,7 @@ export async function PATCH(
         data: { status: newStatus as any },
       })
 
-      // Verificar si todos los items del área de cocina están listos
+      // Verificar si todos los items del área de pizzería están listos
       const areaItems = order.items.filter(
         (it) => it.targetAreaId === order.areaId && it.status !== 'CANCELADO'
       )
@@ -65,7 +79,6 @@ export async function PATCH(
 
       // Si todos los items de esta área están listos, verificar si todas las áreas terminaron
       if (allReady) {
-        // Obtener todos los items del pedido (todas las áreas)
         const allItems = await tx.orderItem.findMany({
           where: { orderId: id, status: { not: 'CANCELADO' } },
         })
@@ -76,6 +89,40 @@ export async function PATCH(
         }
       }
     })
+
+    // FIX 3: consumir receta automáticamente cuando el item pasa a LISTO.
+    let recipeResult: { ok: boolean; alerts?: string[]; deductionsCount?: number } | null = null
+    if (newStatus === 'LISTO') {
+      try {
+        recipeResult = await consumeRecipe(
+          item.productId,
+          item.quantity,
+          item.targetAreaId || order.areaId,
+          order.id,
+          item.id,
+          user.id,
+        )
+        await audit({
+          userId: user.id,
+          action: 'SYNC_RECIPE',
+          entity: 'order-item',
+          entityId: itemId,
+          result: (recipeResult?.alerts?.length ?? 0) > 0 ? 'ALERT' : 'SUCCESS',
+          after: {
+            orderId: order.id,
+            orderNumber: order.number,
+            itemId,
+            productId: item.productId,
+            deductionsCount: recipeResult?.deductionsCount ?? 0,
+            alertsCount: recipeResult?.alerts?.length ?? 0,
+            alerts: recipeResult?.alerts ?? [],
+          },
+        })
+      } catch (err) {
+        console.error('consumeRecipe failed', err)
+        // No bloqueamos el cambio de estado del item por un fallo de inventario.
+      }
+    }
 
     await audit({
       userId: user.id,
@@ -96,6 +143,7 @@ export async function PATCH(
         areaId: order.areaId,
         status: newStatus,
       },
+      recipeSync: recipeResult,
     })
   } catch (e: any) {
     console.error('PATCH item status', e)

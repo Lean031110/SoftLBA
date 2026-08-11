@@ -67,6 +67,8 @@ const PatchSchema = z.object({
   offlineMessage: z.string().max(1000).optional(),
   offlineWifiName: z.string().max(200).optional().or(z.literal('')),
   offlineInstructions: z.string().max(2000).optional().or(z.literal('')),
+  // Control de stock negativo en ventas DIRECTAS (FIX 4)
+  blockNegativeStock: z.boolean().optional(),
 })
 
 export async function PATCH(req: NextRequest) {

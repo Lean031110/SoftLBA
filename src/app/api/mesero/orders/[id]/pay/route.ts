@@ -127,21 +127,10 @@ export async function POST(
         },
       })
 
-      // Registrar entrada de financiamiento (venta)
-      if (isFullyPaid) {
-        await tx.financeEntry.create({
-          data: {
-            type: 'VENTA',
-            category: 'Venta directa',
-            description: `Venta pedido #${order.number}`,
-            amount: order.total,
-            currency: 'CUP',
-            reference: order.id,
-            userId: user.id,
-            orderId: order.id,
-          },
-        })
-      }
+      // NOTA: No se crea FinanceEntry aquí. La única fuente de verdad para finanzas
+      // es el cierre diario (close/route.ts), que crea un FinanceEntry VENTA por cada
+      // método de pago al cerrar la caja. Esto evita la doble contabilización.
+      // Los pagos quedan registrados en la tabla Payment.
 
       return { updated, createdPayments, isFullyPaid, newPaidTotal }
     })

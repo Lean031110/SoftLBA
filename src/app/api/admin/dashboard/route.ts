@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
+import { getTotalInCurrency } from '@/lib/currency'
 
 export async function GET() {
   const user = await getCurrentUser()
@@ -20,19 +21,20 @@ export async function GET() {
     totalProducts,
     activeProducts,
     ordersToday,
-    salesTodayAgg,
+    paymentsToday,
     pendingOrders,
     lowStockItems,
     newsCount,
     customersCount,
+    config,
   ] = await Promise.all([
     db.user.count({ where: { isActive: true } }),
     db.product.count(),
     db.product.count({ where: { isActive: true } }),
     db.order.count({ where: { createdAt: { gte: today, lt: tomorrow } } }),
-    db.payment.aggregate({
-      _sum: { amount: true },
+    db.payment.findMany({
       where: { createdAt: { gte: today, lt: tomorrow } },
+      select: { amount: true, currency: true, method: true },
     }),
     db.order.count({
       where: {
@@ -46,15 +48,25 @@ export async function GET() {
     }),
     db.news.count({ where: { isActive: true } }),
     db.customer.count(),
+    db.restaurantConfig.findFirst({ select: { usdToCup: true, currency: true } }),
   ])
 
-  // Ventas por método
-  const salesByMethod = await db.payment.groupBy({
-    by: ['method'],
-    _sum: { amount: true },
-    _count: true,
-    where: { createdAt: { gte: today, lt: tomorrow } },
-  })
+  const usdToCupRate = config?.usdToCup || 320
+  // Total ventas del día en CUP equivalente (convierte USD→CUP usando tasa configurada)
+  const salesTodayCUP = getTotalInCurrency(paymentsToday, 'CUP', usdToCupRate)
+  const salesTodayUSD = getTotalInCurrency(paymentsToday, 'USD', usdToCupRate)
+
+  // Ventas por método (en CUP equivalente para comparación)
+  const salesByMethodMap = new Map<string, { totalCUP: number; totalOriginal: number; count: number }>()
+  for (const p of paymentsToday) {
+    const cur = (p.currency || 'CUP').toUpperCase()
+    const inCUP = cur === 'USD' ? p.amount * usdToCupRate : p.amount
+    const entry = salesByMethodMap.get(p.method || 'OTHER') || { totalCUP: 0, totalOriginal: 0, count: 0 }
+    entry.totalCUP += inCUP
+    entry.totalOriginal += p.amount
+    entry.count += 1
+    salesByMethodMap.set(p.method || 'OTHER', entry)
+  }
 
   // Ventas por área
   const salesByArea = await db.order.groupBy({
@@ -87,15 +99,19 @@ export async function GET() {
       totalProducts,
       activeProducts,
       ordersToday,
-      salesToday: salesTodayAgg._sum.amount || 0,
+      salesToday: salesTodayCUP,
+      salesTodayUSD,
+      salesTodayCUP,
       pendingOrders,
       newsCount,
       customersCount,
+      usdToCupRate,
     },
-    salesByMethod: salesByMethod.map((s) => ({
-      method: s.method,
-      total: s._sum.amount || 0,
-      count: s._count,
+    salesByMethod: Array.from(salesByMethodMap.entries()).map(([method, v]) => ({
+      method,
+      total: v.totalOriginal,
+      totalCUP: v.totalCUP,
+      count: v.count,
     })),
     salesByArea: salesByAreaNamed,
     lowStock: lowStockItems,

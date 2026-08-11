@@ -174,6 +174,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // FIX 4: Verificar stock suficiente si blockNegativeStock=true.
+    // Solo aplica a productos DIRECTO (los FINALES descuentan al prepararse vía receta).
+    const config = await db.restaurantConfig.findFirst({ where: { id: 'config-1' } })
+    const blockNegative = !!config?.blockNegativeStock
+    if (blockNegative) {
+      // Cargar inventarios (área + general) en paralelo para validar stock suficiente
+      const directItems = d.items.filter((i) => {
+        const p = products.find((pp) => pp.id === i.productId)!
+        return p.type === 'DIRECTO'
+      })
+      const areaInvRows = await db.areaInventory.findMany({
+        where: {
+          areaId: d.areaId,
+          productId: { in: directItems.map((i) => i.productId) },
+        },
+      })
+      const generalInvRows = await db.inventoryItem.findMany({
+        where: { productId: { in: directItems.map((i) => i.productId) } },
+      })
+      // Sumar cantidades por producto (puede haber dos items del mismo producto)
+      const neededByProduct = new Map<string, number>()
+      for (const i of directItems) {
+        neededByProduct.set(i.productId, (neededByProduct.get(i.productId) || 0) + i.quantity)
+      }
+      for (const [pid, needed] of neededByProduct.entries()) {
+        const p = products.find((pp) => pp.id === pid)!
+        const areaInv = areaInvRows.find((r) => r.productId === pid)
+        const genInv = generalInvRows.find((r) => r.productId === pid)
+        // Si existe en el área, se descuenta del área; si no, del general.
+        const available = areaInv ? areaInv.stock : (genInv?.stock ?? 0)
+        if (available < needed) {
+          return NextResponse.json(
+            { ok: false, error: `Stock insuficiente de "${p.name}" (disponible: ${available}, requerido: ${needed})` },
+            { status: 400 },
+          )
+        }
+      }
+    }
+
     // Calcular subtotal y asignar área de elaboración a cada item
     const itemLines = d.items.map((i) => {
       const p = products.find((pp) => pp.id === i.productId)!
@@ -197,15 +236,30 @@ export async function POST(req: NextRequest) {
     const discountAmount = +(subtotal * (d.discountPct / 100)).toFixed(2)
     const total = +(subtotal - discountAmount).toFixed(2)
 
-    // Generar número único
-    const lastOrder = await db.order.findFirst({ orderBy: { number: 'desc' }, select: { number: true } })
-    const nextNumber = (lastOrder?.number || 1000) + 1
+    // FIX 5: Generar número único mediante OrderSequence (transacción atómica).
+    // El upsert incrementa nextNumber atómicamente; usamos nextNumber-1 como número del pedido.
+    const nextNumber = await db.$transaction(async (tx) => {
+      const seq = await tx.orderSequence.upsert({
+        where: { id: 1 },
+        update: { nextNumber: { increment: 1 } },
+        create: { id: 1, nextNumber: 1001 },
+      })
+      return seq.nextNumber - 1
+    })
+    // Fallback de seguridad: si por algún motivo el número ya existe (base migrada desde
+    // pedidos anteriores que usaban lastOrder+1), buscar el último + 1.
+    const exists = await db.order.findUnique({ where: { number: nextNumber }, select: { id: true } })
+    let finalNumber = nextNumber
+    if (exists) {
+      const lastOrder = await db.order.findFirst({ orderBy: { number: 'desc' }, select: { number: true } })
+      finalNumber = (lastOrder?.number || 1000) + 1
+    }
 
     // Crear pedido con transacción (incluye decrementar stock del área)
     const order = await db.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
-          number: nextNumber,
+          number: finalNumber,
           userId: user.id,
           areaId: d.areaId,
           tableId: table?.id || null,

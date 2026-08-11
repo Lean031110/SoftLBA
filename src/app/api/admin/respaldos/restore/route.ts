@@ -45,7 +45,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Debe proporcionar backupId o filename' }, { status: 400 })
     }
 
-    const backupPath = path.join(BACKUP_DIR, filename)
+    // ============================================================
+    // FIX 10 - Prevenir path traversal:
+    //   - Validar que el filename no contenga '..' ni separadores de ruta.
+    //   - Usar path.basename() para eliminar cualquier prefijo de path.
+    //   - Construir la ruta final y verificar con path.resolve() que
+    //     realmente queda dentro de BACKUP_DIR.
+    // ============================================================
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return NextResponse.json(
+        { ok: false, error: 'Nombre de archivo inválido (caracteres prohibidos)' },
+        { status: 400 },
+      )
+    }
+    const safeName = path.basename(filename)
+    if (!safeName || safeName !== filename) {
+      return NextResponse.json(
+        { ok: false, error: 'Nombre de archivo inválido' },
+        { status: 400 },
+      )
+    }
+
+    const backupPath = path.resolve(BACKUP_DIR, safeName)
+    // Verificación final: la ruta resuelta debe estar dentro de BACKUP_DIR
+    const resolvedBackupDir = path.resolve(BACKUP_DIR)
+    if (!backupPath.startsWith(resolvedBackupDir + path.sep) && backupPath !== resolvedBackupDir) {
+      return NextResponse.json(
+        { ok: false, error: 'Acceso a ruta fuera del directorio de backups' },
+        { status: 400 },
+      )
+    }
+
     try {
       await fs.access(backupPath)
     } catch {

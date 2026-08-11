@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { z } from 'zod'
+import { breakdownPayments } from '@/lib/currency'
 
 const CloseSchema = z.object({
   action: z.enum(['close', 'lock']),
@@ -50,20 +51,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         where: { createdAt: { gte: start, lte: end } },
       })
 
-      // Calcular ventas por método
-      const methodTotals: Record<string, number> = {}
-      let totalCash = 0
-      let totalTransfer = 0
-      let totalOther = 0
-      let totalSales = 0
+      // Cargar tasa USD→CUP configurada (default 320)
+      const config = await db.restaurantConfig.findFirst()
+      const usdToCupRate = config?.usdToCup || 320
 
-      for (const p of payments) {
-        methodTotals[p.method] = (methodTotals[p.method] || 0) + p.amount
-        totalSales += p.amount
-        if (p.method === 'EFECTIVO_CUP' || p.method === 'EFECTIVO_USD') totalCash += p.amount
-        else if (p.method.startsWith('TRANSFERENCIA') || p.method === 'ZELLE' || p.method === 'BANCARIA_USD') totalTransfer += p.amount
-        else totalOther += p.amount
-      }
+      // Calcular ventas por método y moneda usando librería de conversión
+      const breakdown = breakdownPayments(payments, usdToCupRate)
+      const methodTotals: Record<string, number> = { ...breakdown.byMethod }
+
+      // Totales agregados (en CUP equivalente) para persistir en DailyClose
+      const totalCash = breakdown.totalCashCUP + breakdown.totalCashUSD * usdToCupRate
+      const totalTransfer =
+        breakdown.totalTransferCUP + breakdown.totalTransferUSD * usdToCupRate
+      const totalOther = breakdown.totalOther
+      const totalSales = breakdown.totalCUP
 
       // Mermas del día
       const mermas = await db.financeEntry.findMany({
@@ -147,7 +148,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         action: 'CLOSE_DAILY',
         entity: 'daily-close',
         entityId: id,
-        after: { status: 'CERRADO', totalSales, totalCash, totalTransfer, totalWaste },
+        after: {
+          status: 'CERRADO',
+          totalSales,
+          totalCash,
+          totalTransfer,
+          totalWaste,
+          totalCashCUP: breakdown.totalCashCUP,
+          totalCashUSD: breakdown.totalCashUSD,
+          totalTransferCUP: breakdown.totalTransferCUP,
+          totalTransferUSD: breakdown.totalTransferUSD,
+          usdToCupRate,
+        },
       })
       return NextResponse.json({ ok: true, item: updated })
     } else if (d.action === 'lock') {

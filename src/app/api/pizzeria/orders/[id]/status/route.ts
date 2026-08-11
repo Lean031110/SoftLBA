@@ -1,16 +1,13 @@
 // PATCH /api/pizzeria/orders/[id]/status - Cambiar estado del pedido desde pizzería
+// FIX 1: usa el state machine centralizado (src/lib/order-state-machine.ts)
+// FIX 2: verifica que el pedido tenga items cuyo targetAreaId sea PIZZERIA
+//        (en lugar de verificar order.area.code === 'PIZZERIA')
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { canTransitionOrder } from '@/lib/order-state-machine'
 import { z } from 'zod'
-
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  ENVIADO: ['EN_PREPARACION', 'LISTO'],
-  EN_PREPARACION: ['LISTO'],
-  LISTO: ['SERVIDO', 'EN_PREPARACION'],
-  SERVIDO: [],
-}
 
 const StatusSchema = z.object({
   status: z.enum(['EN_PREPARACION', 'LISTO', 'SERVIDO']),
@@ -36,10 +33,22 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: 'Pedido no encontrado' }, { status: 404 })
     }
 
-    // Validar que sea del área pizzería
-    if (order.area.code !== 'PIZZERIA') {
+    // FIX 2: Pizzería procesa los items cuyo targetAreaId = área PIZZERIA.
+    // Verificamos que el pedido tenga al menos un item dirigido a PIZZERIA.
+    const pizzeriaArea = await db.area.findUnique({ where: { code: 'PIZZERIA' } })
+    if (!pizzeriaArea) {
       return NextResponse.json(
-        { ok: false, error: 'Este pedido no corresponde a pizzería' },
+        { ok: false, error: 'No existe el área PIZZERIA configurada' },
+        { status: 500 },
+      )
+    }
+
+    const hasPizzeriaItems = order.items.some(
+      (it) => it.targetAreaId === pizzeriaArea.id && it.status !== 'CANCELADO',
+    )
+    if (!hasPizzeriaItems) {
+      return NextResponse.json(
+        { ok: false, error: 'Este pedido no tiene items para pizzería' },
         { status: 400 },
       )
     }
@@ -53,10 +62,10 @@ export async function PATCH(
         { status: 400 },
       )
     }
-    const newStatus = parsed.data.status
+    const newStatus = parsed.data.status as 'EN_PREPARACION' | 'LISTO' | 'SERVIDO'
 
-    const allowed = VALID_TRANSITIONS[order.status] || []
-    if (!allowed.includes(newStatus)) {
+    // FIX 1: usar el state machine centralizado
+    if (!canTransitionOrder(order.status, newStatus)) {
       return NextResponse.json(
         { ok: false, error: `No se puede pasar de ${order.status} a ${newStatus}` },
         { status: 400 },

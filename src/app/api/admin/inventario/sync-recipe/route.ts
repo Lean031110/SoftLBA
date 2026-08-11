@@ -76,10 +76,16 @@ export async function POST(req: NextRequest) {
     // ============================================================
     // Idempotencia: si ya existe un movimiento con la referencia,
     // NO se descuenta de nuevo.
+    // ------------------------------------------------------------
+    // FIX 3: usamos el nuevo formato `recipe-sync:${itemId}` (compartido
+    // con `consumeRecipe` en src/lib/recipe-consumer.ts). Mantenemos el
+    // formato legacy `recipe-sync:${orderId}:${itemId}` para no perder
+    // idempotencia con items ya sincronizados por versiones anteriores.
     // ============================================================
-    const referenceKey = `recipe-sync:${orderId}:${itemId}`
+    const referenceKey = `recipe-sync:${itemId}`
+    const legacyReferenceKey = `recipe-sync:${orderId}:${itemId}`
     const existing = await db.stockMovement.findFirst({
-      where: { reference: referenceKey },
+      where: { reference: { in: [referenceKey, legacyReferenceKey] } },
       select: { id: true, createdAt: true },
     })
     if (existing) {
