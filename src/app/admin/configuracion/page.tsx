@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { Save, Settings, Loader2, AlertTriangle, Store, Phone, FileText, Image as ImageIcon, Eye, Printer } from 'lucide-react'
+import { Save, Settings, Loader2, AlertTriangle, Store, Phone, FileText, Image as ImageIcon, Eye, Printer, WifiOff } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 
 type Config = {
@@ -41,6 +41,10 @@ type Config = {
   printerPort: string
   printerWidth: string
   printerAutoPrint: boolean
+  offlineTitle: string
+  offlineMessage: string
+  offlineWifiName: string
+  offlineInstructions: string
 }
 
 const INITIAL: Config = {
@@ -70,6 +74,10 @@ const INITIAL: Config = {
   printerPort: '9100',
   printerWidth: '80',
   printerAutoPrint: false,
+  offlineTitle: 'Sin conexión al servidor',
+  offlineMessage: 'Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante (red local). Verifica que estás en la misma red que el servidor.',
+  offlineWifiName: '',
+  offlineInstructions: '',
 }
 
 export default function ConfiguracionPage() {
@@ -77,6 +85,24 @@ export default function ConfiguracionPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<Config>(INITIAL)
+  const [printerTesting, setPrinterTesting] = useState(false)
+
+  async function testPrinter() {
+    setPrinterTesting(true)
+    try {
+      const res = await fetch('/api/admin/printer/test', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        toast.success(data.message || 'Conexión exitosa')
+      } else {
+        toast.error(data.error || 'Error de conexión')
+      }
+    } catch {
+      toast.error('Error de conexión')
+    } finally {
+      setPrinterTesting(false)
+    }
+  }
 
   useEffect(() => {
     fetch('/api/admin/config')
@@ -111,6 +137,10 @@ export default function ConfiguracionPage() {
             printerPort: String(i.printerPort || 9100),
             printerWidth: String(i.printerWidth || 80),
             printerAutoPrint: i.printerAutoPrint || false,
+            offlineTitle: i.offlineTitle || '',
+            offlineMessage: i.offlineMessage || '',
+            offlineWifiName: i.offlineWifiName || '',
+            offlineInstructions: i.offlineInstructions || '',
           })
         } else {
           setError(d.error || 'Error al cargar')
@@ -181,6 +211,7 @@ export default function ConfiguracionPage() {
             <TabsTrigger value="redes"><ImageIcon className="h-4 w-4 mr-1" /> Redes</TabsTrigger>
             <TabsTrigger value="recibo"><FileText className="h-4 w-4 mr-1" /> Recibo</TabsTrigger>
             <TabsTrigger value="impresora"><Printer className="h-4 w-4 mr-1" /> Impresora</TabsTrigger>
+            <TabsTrigger value="offline"><WifiOff className="h-4 w-4 mr-1" /> Offline</TabsTrigger>
           </TabsList>
 
           {/* GENERAL */}
@@ -430,6 +461,18 @@ export default function ConfiguracionPage() {
                         onCheckedChange={(v) => set('printerAutoPrint', v)}
                       />
                     </div>
+
+                    {/* Probar conexión */}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={testPrinter}
+                      disabled={printerTesting || !form.printerEnabled}
+                      className="w-full"
+                    >
+                      {printerTesting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Printer className="h-4 w-4 mr-2" />}
+                      {printerTesting ? 'Probando...' : 'Probar conexión con impresora'}
+                    </Button>
                   </>
                 )}
 
@@ -443,6 +486,71 @@ export default function ConfiguracionPage() {
                     </p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* OFFLINE */}
+          <TabsContent value="offline">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <WifiOff className="h-4 w-4" />
+                  Página offline personalizable
+                </CardTitle>
+                <CardDescription>
+                  Personaliza la página que ven los usuarios cuando no hay conexión al servidor.
+                  Esta página se muestra si el dispositivo no está en la misma red WiFi del restaurante.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="offlineTitle">Título de la página</Label>
+                  <Input
+                    id="offlineTitle"
+                    value={form.offlineTitle}
+                    onChange={(e) => set('offlineTitle', e.target.value)}
+                    maxLength={200}
+                    placeholder="Sin conexión al servidor"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="offlineMessage">Mensaje principal</Label>
+                  <Textarea
+                    id="offlineMessage"
+                    value={form.offlineMessage}
+                    onChange={(e) => set('offlineMessage', e.target.value)}
+                    maxLength={1000}
+                    rows={3}
+                    placeholder="Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="offlineWifiName">Nombre de la red WiFi (opcional)</Label>
+                  <Input
+                    id="offlineWifiName"
+                    value={form.offlineWifiName}
+                    onChange={(e) => set('offlineWifiName', e.target.value)}
+                    maxLength={200}
+                    placeholder="Ej: Restaurante_WiFi"
+                  />
+                  <p className="text-xs text-slate-500">Si lo indicas, se mostrará en las instrucciones de conexión</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="offlineInstructions">Instrucciones adicionales (opcional)</Label>
+                  <Textarea
+                    id="offlineInstructions"
+                    value={form.offlineInstructions}
+                    onChange={(e) => set('offlineInstructions', e.target.value)}
+                    maxLength={2000}
+                    rows={4}
+                    placeholder="Ej: Preguntar al administrador por la contraseña del WiFi. El servidor debe estar encendido en el PC principal..."
+                  />
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/30 p-4 text-sm text-blue-800 dark:text-blue-200">
+                  <p className="font-medium">💡 Vista previa</p>
+                  <p className="mt-1 text-xs">Los cambios se reflejarán en la página /offline que ven los dispositivos cuando pierden conexión con el servidor.</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

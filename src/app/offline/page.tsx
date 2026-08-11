@@ -5,9 +5,18 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Wifi, WifiOff, RefreshCw, Loader2 } from 'lucide-react'
 
+type OfflineConfig = {
+  offlineTitle?: string
+  offlineMessage?: string
+  offlineWifiName?: string | null
+  offlineInstructions?: string | null
+  name?: string | null
+}
+
 export default function OfflinePage() {
   const [isOnline, setIsOnline] = useState(false)
   const [checking, setChecking] = useState(false)
+  const [config, setConfig] = useState<OfflineConfig>({})
 
   useEffect(() => {
     setIsOnline(navigator.onLine)
@@ -15,6 +24,19 @@ export default function OfflinePage() {
     const handleOffline = () => setIsOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+
+    // Cargar configuración offline desde la API (puede estar en cache del SW)
+    fetch('/api/public/config', { cache: 'force-cache' })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && d.config) {
+          setConfig(d.config)
+        }
+      })
+      .catch(() => {
+        // Usar valores por defecto
+      })
+
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
@@ -37,6 +59,11 @@ export default function OfflinePage() {
     }
   }
 
+  const title = config.offlineTitle || 'Sin conexión al servidor'
+  const message = config.offlineMessage || 'Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante (red local). Verifica que estás en la misma red que el servidor.'
+  const wifiName = config.offlineWifiName
+  const instructions = config.offlineInstructions
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
       <div className="w-full max-w-md text-center">
@@ -52,7 +79,9 @@ export default function OfflinePage() {
           />
         </div>
 
-        <h1 className="text-2xl font-bold text-blue-700 dark:text-blue-300 mb-2">SoftLBA</h1>
+        <h1 className="text-2xl font-bold text-blue-700 dark:text-blue-300 mb-2">
+          {config.name || 'SoftLBA'}
+        </h1>
 
         {/* Icono de estado */}
         <div className="inline-flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900 mb-6 mt-4">
@@ -60,20 +89,22 @@ export default function OfflinePage() {
         </div>
 
         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-2">
-          Sin conexión al servidor
+          {title}
         </h2>
         <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-          Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante
-          (red local). Verifica que estás en la misma red que el servidor.
+          {message}
         </p>
 
-        {/* Instrucciones */}
+        {/* Instrucciones personalizadas */}
         <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-4 mb-6 text-left">
           <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Pasos:</p>
           <ol className="text-sm text-slate-700 dark:text-slate-300 space-y-2">
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">1.</span>
-              <span>Conéctate a la red WiFi del restaurante</span>
+              <span>
+                Conéctate a la red WiFi del restaurante
+                {wifiName && <strong className="text-blue-600"> ({wifiName})</strong>}
+              </span>
             </li>
             <li className="flex gap-2">
               <span className="font-bold text-blue-600">2.</span>
@@ -84,6 +115,12 @@ export default function OfflinePage() {
               <span>Pulsa el botón &quot;Reintentar&quot; para continuar</span>
             </li>
           </ol>
+          {instructions && (
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Instrucciones adicionales:</p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{instructions}</p>
+            </div>
+          )}
         </div>
 
         {/* Estado de conexión */}
@@ -122,7 +159,7 @@ export default function OfflinePage() {
         </Button>
 
         <p className="text-xs text-slate-400 mt-6">
-          SoftLBA v0.8.0 · Sistema local · Sin dependencia de Internet
+          SoftLBA v0.15.0 · Sistema local · Sin dependencia de Internet
         </p>
       </div>
     </div>

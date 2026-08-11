@@ -21,6 +21,10 @@ export async function GET() {
           showDemoUsers: config.showDemoUsers,
           usdToCup: config.usdToCup,
           lastRateUpdate: config.lastRateUpdate,
+          offlineTitle: config.offlineTitle,
+          offlineMessage: config.offlineMessage,
+          offlineWifiName: config.offlineWifiName,
+          offlineInstructions: config.offlineInstructions,
         }
       : {
           // Configuración por defecto si no existe

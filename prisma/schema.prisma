@@ -124,6 +124,11 @@ model RestaurantConfig {
   usdToCup        Float    @default(320)  // 1 USD = X CUP
   lastRateUpdate  DateTime?
   rateReminderEnabled Boolean @default(true)
+  // Página offline personalizable
+  offlineTitle       String   @default("Sin conexión al servidor")
+  offlineMessage     String   @default("Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante (red local). Verifica que estás en la misma red que el servidor.")
+  offlineWifiName    String?
+  offlineInstructions String?
   updatedAt       DateTime @updatedAt
 }
 

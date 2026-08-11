@@ -62,6 +62,11 @@ const PatchSchema = z.object({
   // Tasa de cambio
   usdToCup: z.coerce.number().min(0).optional(),
   rateReminderEnabled: z.boolean().optional(),
+  // Página offline
+  offlineTitle: z.string().max(200).optional(),
+  offlineMessage: z.string().max(1000).optional(),
+  offlineWifiName: z.string().max(200).optional().or(z.literal('')),
+  offlineInstructions: z.string().max(2000).optional().or(z.literal('')),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -82,7 +87,7 @@ export async function PATCH(req: NextRequest) {
     }
     const d = parsed.data
 
-    const nullable = ['legalName', 'logo', 'address', 'phone', 'email', 'website', 'facebook', 'instagram', 'telegram', 'whatsapp', 'hours', 'slogan', 'welcomeText', 'receiptHeader', 'receiptFooter', 'printerName', 'printerIp']
+    const nullable = ['legalName', 'logo', 'address', 'phone', 'email', 'website', 'facebook', 'instagram', 'telegram', 'whatsapp', 'hours', 'slogan', 'welcomeText', 'receiptHeader', 'receiptFooter', 'printerName', 'printerIp', 'offlineWifiName', 'offlineInstructions']
     const data: any = {}
     for (const [k, v] of Object.entries(d)) {
       if (v === undefined) continue
