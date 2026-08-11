@@ -793,3 +793,60 @@ Stage Summary:
   - El mini-servicio realtime moría al cerrar la sesión bash inicial, incluso con `setsid ... &` + `disown`. Solución: usar `(setsid bun index.ts > /tmp/realtime.log 2>&1 &)` con doble fork para que el proceso quede reparentado a init (PID 1). El servicio ahora sobrevive al shell que lo lanzó.
   - Next.js 16 ya no soporta `eslint` como key en `next.config.ts` (warning "Unrecognized key(s) in object: 'eslint'"). Eliminé el bloque `eslint: { ignoreDuringBuilds: false }` y dejé solo `typescript: { ignoreBuildErrors: false }`. ESLint sigue ejecutándose vía `bun run lint` (configurado en package.json scripts).
   - El bloque `if (isFullyPaid) { create FinanceEntry }` en pay/route.ts NO tenía manejo de errores: si la creación fallaba, hacía rollback de toda la transacción (incluyendo el pago). Eliminarlo también mejora la robustez del endpoint de cobro (un fallo en FinanceEntry ya no bloquea el pago).
+
+---
+Task ID: v0.19-fase2-robustez
+Agent: full-stack-developer
+Task: Implementar 7 mejoras de la Fase 2 de la auditoría (FIX 14-25)
+
+Work Log:
+- FIX 14 — Permisos centralizados: creado `src/lib/permissions/permissions-v2.ts` con 17 constantes de permiso, matriz `ROLE_PERMISSIONS` (ADMIN hereda automáticamente todos vía `Object.values(PERMISSIONS)`), funciones `hasPerm(role, perm)` (lookup O(1) con Set pre-construido), `requirePerm(role, perm)` (lanza Error('SIN_PERMISO') con `code`/`perm`), `permsForRole(role)` y `PERMISSION_LABELS` (traducciones humanas). Sistema viejo en `permissions/index.ts` se mantiene intacto para no romper imports.
+- FIX 15-16 — Turnos: añadido modelo `WorkShift` al schema (userId, areaId?, startTime, endTime?, status OPEN/CLOSED, openingCash, closingCash?, observations?, timestamps; índices en userId/status/startTime). APIs: `POST /api/admin/turnos` (abrir, valida que no haya turno OPEN previo), `GET /api/admin/turnos` (filtros status/userId/from/to + paginación), `GET /api/admin/turnos/current` (turno OPEN del usuario), `PATCH /api/admin/turnos/[id]` (cerrar con closingCash/observations, valida ownership salvo ADMIN).
+- FIX 17 — Estados de mesa: añadido `status String @default("LIBRE")` al modelo `Table` (LIBRE/OCUPADA/RESERVADA/ESPERANDO_CUENTA/LIMPIEZA). `GET /api/mesero/tables` ahora expone `status`. `PATCH /api/mesero/tables/[id]` nueva (valida enum, audit log `TABLE_STATUS_CHANGE`). Frontend `nuevo-pedido/page.tsx` actualizado: dropdown deshabilita mesas no-LIBRE y muestra badges de conteo por estado con colores semánticos.
+- FIX 18 — División de cuenta: añadido `parentOrderId String?` con self-relation `OrderParent` al modelo `Order`. `POST /api/mesero/orders/[id]/split` nueva: recibe `items:[{itemId, quantity}]` y opcional `discountPct`/`notes`; transacción atómica que (a) reduce o elimina items del original, (b) crea pedido hijo con `parentOrderId` y los items movidos preservando status/targetAreaId/serveMode/notes/discount, (c) recalcula subtotal/discountAmount/total de ambos pedidos. Genera nuevo número atómico vía OrderSequence.
+- FIX 19 — Transferencia de mesa: `POST /api/mesero/orders/[id]/transfer-table` nueva. Recibe `tableId`, libera mesa anterior (LIBRE), marca destino OCUPADA, actualiza `order.tableId`. Valida misma área (salvo mesas globales), rechaza transferir a mesas ya OCUPADAS (salvo ADMIN), rechaza pedidos en estado terminal.
+- FIX 21-22 — Anulación financiera: añadidos a `FinanceEntry` los campos `status` (ACTIVE/ANNULLED), `annulledById?`, `annulledAt?`, `annulReason?`, `annulCompensationEntryId? @unique` con self-relación `FinanceAnnulCompensation` (1-a-1). Relación `annulledBy User?` vía `FinanceAnnulledBy` (onDelete: SetNull). `POST /api/admin/finanzas/entries/[id]/annul` nueva: recibe `reason` (3-500 chars obligatorio), crea entrada compensatoria (EGRESO si original era INGRESO/VENTA; INGRESO si era EGRESO/GASTO/SALARIO/MERMA/AJUSTE/COMPRA) con mismo monto/moneda/categoría/referencia, marca original como ANNULLED y las enlaza. Audit log `FINANCE_ENTRY_ANNUL`.
+- FIX 23-25 — Backup con checksum SHA-256: creado `src/lib/checksum.ts` con `fileSha256(filePath)` (crypto.createHash + readFile). Añadido campo `checksum String?` al modelo `Backup`. `POST /api/admin/respaldos` ahora calcula SHA-256 del archivo copiado y lo guarda. `POST /api/admin/respaldos/restore` recalcula el hash del archivo a restaurar y compara con el guardado; si no coincide retorna 400 con `{error:"Checksum SHA-256 no coincide...", details:{stored, actual}}` y audit log `BACKUP_RESTORE_CHECKSUM_FAIL` con result=FAILURE. Backups antiguos sin checksum se restauran con advertencia (backward compat). Auto-backup pre-restore también guarda checksum.
+
+Verificación:
+- `bun run db:push`: schema aplicado sin data-loss (WorkShift, Table.status, Order.parentOrderId+self-relation, FinanceEntry.status+annulledById+annulledAt+annulReason+annulCompensationEntryId+self-relation, Backup.checksum).
+- `bun run db:generate`: Prisma Client v6.19.2 regenerado.
+- `bun run lint`: 0 errores.
+- Servidor Next.js: HTTP 200 en `/` (puerto 3000) tras reinicio manual (necesario para que Turbopack recargue el Prisma client con `db.workShift`, `db.financeEntry.annulCompensationEntry`, etc.).
+- Tests de integración (curl con cookie admin):
+  - Turnos: abrir (201, openingCash:500) → GET current (200, status:OPEN) → PATCH cerrar (200, status:CLOSED, closingCash:480) → GET current (200, item:null). Sin auth → 401.
+  - Mesas: GET devuelve `status:"LIBRE"` en cada item; PATCH cambia a OCUPADA y persiste.
+  - Split: POST crea pedido #1023 (subtotal 480, 2 items qty 3+2) → split qty=1 del item1 → originalOrder.subtotal=420, childOrder.subtotal=60, childOrder.parentOrderId=original.id, childOrder.number=1024.
+  - Transfer-table: M01 LIBRE + M02 LIBRE → transfer a M02 → M02 OCUPADA, order.tableId=M02.
+  - Annul: INGRESO 100 ACTIVE → POST annul con reason → original.status=ANNULLED con annulReason/annulledAt/annulledById, compensation.type=EGRESO amount=100 ACTIVE con description="[Anulación] ...".
+  - Checksum: POST respaldos → 201 con checksum SHA-256 (64 hex). Restore por backupId → 200 checksumVerified:true. Tras corromper archivo (`echo "x" >> file.db`), restore por backupId → 400 con error y details {stored, actual}. Audit BACKUP_RESTORE_CHECKSUM_FAIL con result=FAILURE registrado.
+  - Regresión: GET /api/mesero/orders, GET /api/admin/dashboard, GET /api/admin/finanzas/entries — todos 200 y exponen automáticamente los nuevos campos (parentOrderId, status, etc.).
+
+Stage Summary:
+- Archivos creados (9):
+  - src/lib/permissions/permissions-v2.ts
+  - src/lib/checksum.ts
+  - src/app/api/admin/turnos/route.ts
+  - src/app/api/admin/turnos/current/route.ts
+  - src/app/api/admin/turnos/[id]/route.ts
+  - src/app/api/mesero/tables/[id]/route.ts
+  - src/app/api/mesero/orders/[id]/split/route.ts
+  - src/app/api/mesero/orders/[id]/transfer-table/route.ts
+  - src/app/api/admin/finanzas/entries/[id]/annul/route.ts
+- Archivos modificados (5):
+  - prisma/schema.prisma (WorkShift, Table.status, Order.parentOrderId+self-relation, FinanceEntry anulación+self-relation, Backup.checksum, relaciones inversas en User y Area)
+  - src/app/api/mesero/tables/route.ts (select incluye status)
+  - src/app/api/admin/respaldos/route.ts (checksum + hasPerm)
+  - src/app/api/admin/respaldos/restore/route.ts (verificación checksum + audit + hasPerm)
+  - src/app/mesero/nuevo-pedido/page.tsx (UI muestra estados de mesa)
+- Decisiones importantes:
+  - El sistema de permisos nuevo coexiste con el viejo: los endpoints nuevos usan `hasPerm`/`requirePerm` de `permissions-v2.ts`; el código existente sigue usando `permissions/index.ts` sin tocar. Migración incremental.
+  - ADMIN hereda automáticamente cualquier nuevo permiso añadido a `PERMISSIONS` vía `Object.values(PERMISSIONS)` — no requiere actualizar la matriz manualmente.
+  - La anulación financiera NO modifica el monto de la entrada original, solo cambia su `status` a ANNULLED. El efecto neto en los totales se logra con la entrada compensatoria EGRESO/INGRESO. Esto preserva el histórico auditable.
+  - Split de cuenta: el child hereda el status del parent y los items movidos preservan su status individual (PENDIENTE/EN_PREPARACION/LISTO/SERVIDO) para no romper el flujo de cocina ni obligar a re-preparar items ya listos.
+  - Transfer-table valida misma área (salvo mesas globales sin areaId).
+  - Checksum SHA-256 calculado con `crypto.createHash` sobre el buffer completo del archivo (suficientemente rápido para SQLite < 100MB).
+  - Backward compat en restore: si el registro tiene `checksum=null` (backups pre-fix), la restauración procede con advertencia. La verificación solo aplica cuando se restaura por `backupId` (que es el flujo recomendado desde el frontend); restaurar por `filename` no tiene checksum almacenado para comparar.
+- Problemas encontrados:
+  - Tras `bun run db:push`+`db:generate`, el dev server seguía usando el Prisma client antiguo en memoria (Turbopack cachea módulos de node_modules). Los nuevos endpoints devolvían 500 con "Cannot read properties of undefined (reading 'workShift')". Solución: `pkill -f "next dev"` + `pkill -f "bun run dev"` y reiniciar manualmente con `(nohup bun run dev > dev.log 2>&1 &)` para que Next.js recargue el Prisma client.
+

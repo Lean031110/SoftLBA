@@ -1,8 +1,10 @@
-// POST /api/admin/respaldos/restore - Restaurar desde archivo
+// POST /api/admin/respaldos/restore - Restaurar desde archivo (FIX 23-25: con verificación de checksum)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { hasPerm, PERMISSIONS } from '@/lib/permissions/permissions-v2'
+import { fileSha256 } from '@/lib/checksum'
 import { z } from 'zod'
 import { promises as fs } from 'fs'
 import path from 'path'
@@ -20,7 +22,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (user.role !== 'ADMIN') {
+    if (!hasPerm(user.role, PERMISSIONS.BACKUP_RESTORE)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
 
@@ -33,12 +35,14 @@ export async function POST(req: NextRequest) {
     const d = parsed.data
 
     let filename: string
+    let storedChecksum: string | null = null
     if (d.backupId) {
       const backup = await db.backup.findUnique({ where: { id: d.backupId } })
       if (!backup) {
         return NextResponse.json({ ok: false, error: 'Backup no encontrado' }, { status: 404 })
       }
       filename = backup.filename
+      storedChecksum = backup.checksum
     } else if (d.filename) {
       filename = d.filename
     } else {
@@ -82,6 +86,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Archivo de backup no encontrado en disco' }, { status: 404 })
     }
 
+    // FIX 23-25 — Verificación de checksum SHA-256.
+    //   Recalculamos el hash del archivo a restaurar y lo comparamos con el
+    //   guardado en el registro de Backup. Si el registro tiene checksum y
+    //   no coincide, rechazamos la restauración (archivo corrupto o manipulado).
+    //   Si el registro NO tiene checksum (backups antiguos creados antes de
+    //   este fix), se omite la verificación pero se loguea como advertencia.
+    let actualChecksum: string | null = null
+    try {
+      actualChecksum = await fileSha256(backupPath)
+    } catch (e) {
+      console.error('No se pudo calcular checksum del archivo de backup', e)
+      return NextResponse.json(
+        { ok: false, error: 'No se pudo calcular el checksum del archivo' },
+        { status: 500 },
+      )
+    }
+    if (storedChecksum) {
+      if (storedChecksum !== actualChecksum) {
+        await audit({
+          userId: user.id,
+          action: 'BACKUP_RESTORE_CHECKSUM_FAIL',
+          entity: 'backup',
+          after: {
+            filename,
+            storedChecksum,
+            actualChecksum,
+          },
+          result: 'FAILURE',
+        })
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Checksum SHA-256 no coincide. El archivo puede estar corrupto o manipulado.',
+            details: {
+              stored: storedChecksum,
+              actual: actualChecksum,
+            },
+          },
+          { status: 400 },
+        )
+      }
+    } else {
+      // Backward compat: backup sin checksum (anterior al fix). Loguear y continuar.
+      console.warn(`Backup ${filename} no tiene checksum guardado; omitiendo verificación.`)
+    }
+
     // Hacer un backup automático del estado actual antes de restaurar (por seguridad)
     const ts = new Date()
     const autoBackup = `pre-restore-${ts.getFullYear()}${ts.getMonth() + 1}${ts.getDate()}-${ts.getHours()}${ts.getMinutes()}${ts.getSeconds()}.db`
@@ -93,6 +143,8 @@ export async function POST(req: NextRequest) {
       } catch {}
       await fs.copyFile(DB_PATH, autoBackupPath)
       const stat = await fs.stat(autoBackupPath)
+      // FIX 23-25 — Guardar checksum del auto-backup pre-restore también
+      const autoChecksum = await fileSha256(autoBackupPath)
       await db.backup.create({
         data: {
           filename: autoBackup,
@@ -100,6 +152,7 @@ export async function POST(req: NextRequest) {
           type: 'auto-pre-restore',
           status: 'COMPLETED',
           notes: `Auto-backup previo a restaurar ${filename}`,
+          checksum: autoChecksum,
         },
       })
       // Checkpoint de nuevo para asegurar el registro en el archivo
@@ -125,10 +178,10 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       action: 'BACKUP_RESTORE',
       entity: 'backup',
-      after: { restoredFrom: filename },
+      after: { restoredFrom: filename, checksumVerified: !!storedChecksum, checksum: actualChecksum },
     })
 
-    return NextResponse.json({ ok: true, restoredFrom: filename })
+    return NextResponse.json({ ok: true, restoredFrom: filename, checksumVerified: !!storedChecksum })
   } catch (e: any) {
     console.error('POST /api/admin/respaldos/restore', e)
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })

@@ -1,9 +1,11 @@
 // GET /api/admin/respaldos - Lista de backups
-// POST /api/admin/respaldos - Crear backup manual
+// POST /api/admin/respaldos - Crear backup manual (FIX 23-25: con checksum SHA-256)
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { hasPerm, PERMISSIONS } from '@/lib/permissions/permissions-v2'
+import { fileSha256 } from '@/lib/checksum'
 import { z } from 'zod'
 import { promises as fs } from 'fs'
 import path from 'path'
@@ -28,7 +30,7 @@ export async function GET() {
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (user.role !== 'ADMIN') {
+    if (!hasPerm(user.role, PERMISSIONS.BACKUP_CREATE)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
 
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
-    if (user.role !== 'ADMIN') {
+    if (!hasPerm(user.role, PERMISSIONS.BACKUP_CREATE)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
 
@@ -85,6 +87,11 @@ export async function POST(req: NextRequest) {
 
     const stat = await fs.stat(target)
 
+    // FIX 23-25 — Calcular SHA-256 del archivo de backup recién copiado
+    // y guardarlo en el registro. Al restaurar, se comparará este checksum
+    // para detectar corrupción o manipulación del archivo.
+    const checksum = await fileSha256(target)
+
     const created = await db.backup.create({
       data: {
         filename,
@@ -92,6 +99,7 @@ export async function POST(req: NextRequest) {
         type: d.type || 'manual',
         status: 'COMPLETED',
         notes: d.notes || null,
+        checksum,
       },
     })
 
@@ -100,7 +108,7 @@ export async function POST(req: NextRequest) {
       action: 'BACKUP_CREATE',
       entity: 'backup',
       entityId: created.id,
-      after: { filename, size: stat.size },
+      after: { filename, size: stat.size, checksum },
     })
 
     return NextResponse.json({ ok: true, item: created })

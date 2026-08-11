@@ -53,7 +53,9 @@ model User {
   stockMovements   StockMovement[]
   physicalStocks   PhysicalStock[]
   financeEntries   FinanceEntry[]
+  annulledFinanceEntries FinanceEntry[] @relation("FinanceAnnulledBy")
   dailyCloses      DailyClose[]
+  workShifts       WorkShift[]
   notifications    Notification[]
 
   @@index([role])
@@ -157,6 +159,7 @@ model Area {
   physicalStocks PhysicalStock[]
   products   Product[]
   orderItems OrderItem[]
+  workShifts  WorkShift[]
 }
 
 // ============================================================
@@ -321,6 +324,9 @@ model Table {
   name        String
   areaId      String?
   capacity    Int      @default(4)
+  // FIX 17 — Estado visual de la mesa:
+  //   LIBRE, OCUPADA, RESERVADA, ESPERANDO_CUENTA, LIMPIEZA
+  status      String   @default("LIBRE")
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -342,6 +348,10 @@ model Order {
   total         Float      @default(0)
   notes         String?
   paymentStatus PaymentStatus @default(PENDIENTE)
+  // FIX 18 — División de cuenta:
+  //   Si este pedido fue dividido desde otro, parentOrderId apunta al
+  //   pedido original. El original tiene childOrders = [this].
+  parentOrderId String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   closedAt      DateTime?
@@ -349,6 +359,8 @@ model Order {
   user          User       @relation(fields: [userId], references: [id])
   area          Area       @relation(fields: [areaId], references: [id])
   table         Table?     @relation(fields: [tableId], references: [id])
+  parentOrder   Order?    @relation("OrderParent", fields: [parentOrderId], references: [id], onDelete: SetNull)
+  childOrders   Order[]   @relation("OrderParent")
   items         OrderItem[]
   payments      Payment[]
 
@@ -356,6 +368,7 @@ model Order {
   @@index([areaId])
   @@index([status])
   @@index([createdAt])
+  @@index([parentOrderId])
 }
 
 model OrderItem {
@@ -426,14 +439,31 @@ model FinanceEntry {
   userId      String
   orderId     String?
   dailyCloseId String?
+  // FIX 21-22 — Anulación financiera:
+  //   ACTIVE: entrada válida y contabilizada.
+  //   ANNULLED: entrada anulada; una entrada compensatoria EGRESO
+  //   con la misma magnitud fue creada y se enlaza vía `annulCompensationEntryId`.
+  status      String        @default("ACTIVE")
+  annulledById String?
+  annulledAt  DateTime?
+  annulReason String?
+  // Si esta entrada fue creada como compensación de otra anulada,
+  // apunta a la entrada original. La original mantiene `annulledBy`.
+  // @unique: garantiza relación 1-a-1 (una entrada es compensada por
+  // a lo sumo otra entrada).
+  annulCompensationEntryId String? @unique
   createdAt   DateTime      @default(now())
 
   user        User          @relation(fields: [userId], references: [id])
   dailyClose  DailyClose?   @relation(fields: [dailyCloseId], references: [id])
+  annulledBy  User?         @relation("FinanceAnnulledBy", fields: [annulledById], references: [id], onDelete: SetNull)
+  annulCompensationEntry   FinanceEntry? @relation("FinanceAnnulCompensation", fields: [annulCompensationEntryId], references: [id], onDelete: SetNull)
+  compensatedBy            FinanceEntry? @relation("FinanceAnnulCompensation")
 
   @@index([type])
   @@index([category])
   @@index([createdAt])
+  @@index([status])
 }
 
 // ============================================================
@@ -601,6 +631,10 @@ model Backup {
   size        Int
   type        String   @default("manual")
   status      String  @default("COMPLETED")
+  // FIX 23-25 — Checksum SHA-256 del archivo .db:
+  //   Al crear, se calcula el hash del archivo copiado y se guarda aquí.
+  //   Al restaurar, se recalcula y se compara. Si no coincide, se rechaza.
+  checksum    String?
   notes       String?
   createdAt   DateTime @default(now())
 
@@ -759,4 +793,33 @@ enum PromotionType {
   GENERAL
   CLIENTE
   PRODUCTO
+}
+
+// ============================================================
+// 9. TURNOS DE TRABAJO Y CAJA POR TURNO (FIX 15-16)
+// ============================================================
+// Cada usuario (mesero/cajero) abre un turno al iniciar su jornada:
+//   - Registra el fondo inicial (openingCash).
+//   - Al cerrar, registra el efectivo contado (closingCash) y observaciones.
+//   - Solo puede haber un turno OPEN por usuario a la vez.
+// El cierre diario puede consultar los turnos cerrados del día para
+// conciliar caja por turno.
+model WorkShift {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId       String?
+  area         Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  startTime    DateTime @default(now())
+  endTime      DateTime?
+  status       String   @default("OPEN") // OPEN, CLOSED
+  openingCash  Float    @default(0) // Fondo inicial
+  closingCash  Float?   // Efectivo contado al cerrar
+  observations String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([startTime])
 }

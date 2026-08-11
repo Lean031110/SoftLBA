@@ -636,3 +636,161 @@
    636→- Lint: 0 errores
    637→- Backup v0.6.0 a crear (solo código fuente)
    638→
+   639→---
+   640→Task ID: v0.18-core-fixes
+   641→Agent: fullstack-dev
+   642→Task: 5 correcciones críticas: state machine centralizado, targetAreaId en cocina/pizzería, consumeRecipe automático, blockNegativeStock configurable, generación atómica de número de pedido.
+   643→
+   644→Work Log:
+   645→- Leí worklog previo y schema.prisma (modelos Order, OrderItem, Product, Recipe, RecipeIngredient, AreaInventory, StockMovement). Confirmé que los endpoints de cocina/pizzería ya consultaban por targetAreaId en el listado (GET /orders), pero los endpoints PATCH /status y PATCH /items/[itemId]/status seguían validando por `order.area.code`.
+   646→- FIX 1 — Motor de estados centralizado (src/lib/order-state-machine.ts):
+   647→  - Definí ORDER_TRANSITIONS y ITEM_TRANSITIONS como mapas estrictamente tipados con `Record<OrderStatus, OrderStatus[]>` y `Record<OrderItemStatus, OrderItemStatus[]>`.
+   648→  - Funciones exportadas: `canTransitionOrder(from,to)`, `canTransitionItem(from,to)`, `getValidOrderTransitions(status)`, `getValidItemTransitions(status)`.
+   649→  - Reemplacé las constantes `VALID_TRANSITIONS` hardcodeadas en `cocina/orders/[id]/status/route.ts` y `pizzeria/orders/[id]/status/route.ts` por llamadas a `canTransitionOrder`.
+   650→  - Apliqué `canTransitionItem` en los endpoints `cocina/orders/[id]/items/[itemId]/status/route.ts` y `pizzeria/.../items/[itemId]/status/route.ts`. Ahora cualquier transición inválida (ej: SERVIDO→LISTO, CREADO→SERVIDO) es rechazada con 400 y mensaje claro.
+   651→- FIX 2 — Pizzería/cocina por targetAreaId:
+   652→  - Eliminé la verificación `order.area.code === 'PIZZERIA'` / `'SALON'` en los endpoints PATCH /status.
+   653→  - En su lugar, busco el área por código (`db.area.findUnique({ where: { code: 'PIZZERIA' } })`) y verifico que el pedido tenga al menos un item con `targetAreaId === area.id` y `status !== 'CANCELADO'`.
+   654→  - Esto corrige el bug donde un pedido creado en SALON pero con un item de PIZZERIA era rechazado por el endpoint de pizzería. Ahora ambos endpoints validan por targetAreaId (igual que ya lo hace el GET /orders de cada módulo).
+   655→- FIX 3 — Consumo de recetas automático:
+   656→  - Creé `src/lib/recipe-consumer.ts` con función `consumeRecipe(productId, quantity, areaId, orderId, orderItemId, userId)` que descuenta los ingredientes de la receta del inventario.
+   657→  - Idempotencia: usa `reference = recipe-sync:${orderItemId}` (formato nuevo especificado). Además verifica el formato legacy `recipe-sync:${orderId}:${orderItemId}` para mantener compatibilidad con items ya sincronizados por versiones anteriores.
+   658→  - Si no hay receta, crea un StockMovement "marcador" con quantity=0 y retorna `{ ok, noRecipe: true }` sin lanzar error.
+   659→  - Si no hay stock suficiente, descuenta igual (puede quedar negativo) y registra alerta en el resultado. No bloquea.
+   660→  - Fallback al inventario general si no existe AreaInventory del ingrediente en el área esperada.
+   661→  - Todo en una transacción Prisma.
+   662→  - Actualicé `consumeRecipe` para buscar `reference` en AMBOS formatos (nuevo y legacy), evitando doble-descuento cuando el endpoint admin sync-recipe se llama sobre un item ya auto-consumido.
+   663→  - Actualicé el endpoint admin `sync-recipe/route.ts` para usar el MISMO formato nuevo (`recipe-sync:${itemId}`) y verificar ambos formatos, garantizando idempotencia cross-endpoint.
+   664→  - Conecté `consumeRecipe` en los endpoints `cocina/orders/[id]/items/[itemId]/status/route.ts` y `pizzeria/.../items/[itemId]/status/route.ts`: cuando el item pasa a LISTO, se llama a `consumeRecipe` DESPUÉS de la transacción principal (fuera de ella para no bloquearla), se registra audit `SYNC_RECIPE` (result=SUCCESS o ALERT según si hubo alertas), y el resultado se devuelve en `recipeSync` del response.
+   665→  - En caso de fallo de consumeRecipe, se loguea el error pero NO se revierte el cambio de estado del item (la operación de inventario no debe bloquear el flujo de cocina).
+   666→- FIX 4 — Stock insuficiente configurable:
+   667→  - Añadí `blockNegativeStock Boolean @default(false)` al modelo RestaurantConfig en schema.prisma.
+   668→  - Apliqué schema con `bun run db:push` (sin data-loss) y `bun run db:generate`.
+   669→  - En el endpoint POST `/api/mesero/orders`, antes de crear el pedido, cargo `RestaurantConfig` y si `blockNegativeStock=true`, verifico stock suficiente para TODOS los items DIRECTO (los FINALES descuentan al prepararse vía receta, no acá).
+   670→  - Si el stock disponible (del área si tiene, o general) es menor al requerido, retorno 400 con mensaje "Stock insuficiente de "<producto>" (disponible: X, requerido: Y)".
+   671→  - Si blockNegativeStock=false (default), se mantiene el comportamiento actual (descuenta y permite stock negativo).
+   672→  - Actualicé el Zod schema de PATCH /api/admin/config para aceptar `blockNegativeStock: z.boolean().optional()` y permitir toggle desde el panel de configuración.
+   673→- FIX 5 — Generación segura de números de pedido:
+   674→  - Creé modelo `OrderSequence` en schema.prisma (singleton con id=1, `nextNumber Int @default(1001)`).
+   675→  - En POST `/api/mesero/orders`, reemplacé el patrón "buscar último + 1" (race condition) por una transacción atómica:
+   676→    ```ts
+   677→    const nextNumber = await db.$transaction(async (tx) => {
+   678→      const seq = await tx.orderSequence.upsert({
+   679→        where: { id: 1 },
+   680→        update: { nextNumber: { increment: 1 } },
+   681→        create: { id: 1, nextNumber: 1001 },
+   682→      })
+   683→      return seq.nextNumber - 1 // upsert ya incrementó
+   684→    })
+   685→    ```
+   686→  - Añadí fallback de seguridad: si por migración desde base anterior el número ya existe, busca `lastOrder.number + 1` (mantiene backward compat con pedidos pre-existentes).
+   687→
+   688→Verificación:
+   689→- `bun run db:push`: schema aplicado exitosamente (columnas `RestaurantConfig.blockNegativeStock` y tabla `OrderSequence`).
+   690→- `bun run db:generate`: Prisma Client regenerado (v6.19.2).
+   691→- `bun run lint`: 0 errores.
+   692→- Servidor: HTTP 200 en `/` (Next.js dev sigue corriendo en puerto 3000, sin errores de compilación).
+   693→- Tests de integración con curl/bun fetch:
+   694→  - FIX 1: PATCH /api/cocina/orders/[id]/status con transición inválida ENVIADO→SERVIDO → 400 "No se puede pasar de ENVIADO a SERVIDO" (state machine bloquea correctamente).
+   695→  - FIX 2: PATCH /api/pizzeria/orders/[id]/status sobre pedido creado en SALON (sin items pizzería) → 400 "Este pedido no tiene items para pizzería" (verifica por targetAreaId, no por area.code).
+   696→  - FIX 2: PATCH /api/cocina/orders/[id]/status sobre pedido SALON con items targetAreaId=SALON → 200 (acepta correctamente).
+   697→  - FIX 3: POST /api/mesero/orders (pizza margarita en PIZZERIA) → PATCH item EN_PREPARACION → 200, recipeSync=null (no se llama en EN_PREPARACION). PATCH item LISTO → 200, recipeSync.deductionsCount=1, masa stock 14→13 en área Pizzería. Audit log SYNC_RECIPE (result=SUCCESS) registrado.
+   698→  - FIX 3 idempotencia cross-endpoint: POST /api/admin/inventario/sync-recipe sobre el mismo item ya auto-consumido → 200 `{ alreadySynced: true, syncedAt }`. Stock masa se mantiene en 13 (no se descuenta dos veces). Fix de doble-descuento aplicado también al legacy `recipe-sync:${orderId}:${itemId}`.
+   699→  - FIX 4: PATCH /api/admin/config con `{ blockNegativeStock: true }` → 200 (campo añadido al Zod schema). POST /api/mesero/orders con qty=9999 de Agua Mineral (stock=34 en general) → 400 "Stock insuficiente de 'Agua Mineral 500ml' (disponible: 34, requerido: 9999)". Mismo escenario con blockNegativeStock=false → pedido creado (comportamiento actual preservado).
+   700→  - FIX 5: POST /api/mesero/orders → order #1017, #1018, #1019, #1020, #1021, #1022 creados consecutivamente (sequence atómica funciona). Verifiqué que `OrderSequence` existe con `nextNumber` incrementado.
+   701→
+   702→Stage Summary:
+   703→- Archivos creados (2):
+   704→  - src/lib/order-state-machine.ts (state machine centralizado, 4 funciones exportadas)
+   705→  - src/lib/recipe-consumer.ts (consumeRecipe: descuento idempotente de receta)
+   706→- Archivos modificados (7):
+   707→  - prisma/schema.prisma: añadidos `RestaurantConfig.blockNegativeStock` y modelo `OrderSequence`
+   708→  - src/app/api/cocina/orders/[id]/status/route.ts: usa canTransitionOrder + valida por targetAreaId=SALON
+   709→  - src/app/api/pizzeria/orders/[id]/status/route.ts: usa canTransitionOrder + valida por targetAreaId=PIZZERIA
+   710→  - src/app/api/cocina/orders/[id]/items/[itemId]/status/route.ts: usa canTransitionItem + llama consumeRecipe en LISTO
+   711→  - src/app/api/pizzeria/orders/[id]/items/[itemId]/status/route.ts: usa canTransitionItem + llama consumeRecipe en LISTO
+   712→  - src/app/api/admin/inventario/sync-recipe/route.ts: idempotencia cross-endpoint (nuevo formato + legacy)
+   713→  - src/app/api/admin/config/route.ts: Zod schema acepta `blockNegativeStock`
+   714→  - src/app/api/mesero/orders/route.ts: OrderSequence atómico + validación blockNegativeStock para items DIRECTO
+   715→- Decisiones importantes:
+   716→  - Idempotencia cross-endpoint: consumeRecipe y sync-recipe usan AMBOS formatos de `reference` para que un item auto-consumido no sea doble-descontado por el endpoint admin y viceversa. Formato nuevo `recipe-sync:${orderItemId}` (especificado en la tarea), formato legacy `recipe-sync:${orderId}:${orderItemId}` para items ya procesados por versiones anteriores.
+   717→  - consumeRecipe se ejecuta FUERA de la transacción de cambio de estado del item para no bloquearla si el inventario falla. Si consumeRecipe lanza excepción, se loguea pero no se revierte el estado LISTO (la operación de inventario no debe bloquear el flujo de cocina).
+   718→  - blockNegativeStock solo aplica a productos DIRECTO (los FINALES descuentan al prepararse vía receta, no al venderse).
+   719→  - OrderSequence: upsert atómico con `nextNumber: { increment: 1 }`. Fallback de seguridad si el número colisiona con un pedido pre-existente (backward compat).
+   720→  - Validación de transiciones en items individuales ahora también respeta el state machine (antes se podía hacer cualquier transición a EN_PREPARACION o LISTO).
+   721→- Problemas encontrados:
+   722→  - Al primer test de FIX 3, el endpoint admin sync-recipe estaba creando un StockMovement con formato `recipe-sync:${orderId}:${itemId}` distinto al nuevo `recipe-sync:${orderItemId}`, lo que causó doble-descuento al ejecutarlo sobre un item ya auto-consumido. Fix: ambos endpoints verifican AMBOS formatos de reference. Restauré masa inventory +1 para compensar el doble-descuento durante testing.
+   723→  - El PATCH /api/admin/config tenía Zod schema que NO incluía `blockNegativeStock`, así que la actualización silenciosamente ignoraba el campo. Fix: añadido `blockNegativeStock: z.boolean().optional()` al schema.
+   724→
+   725→---
+   726→Task ID: v0.18-security-finance
+   727→Agent: full-stack-developer
+   728→Task: Implementar 7 correcciones de seguridad y finanzas (FIX 6-12)
+   729→
+   730→Work Log:
+   731→- Inspeccioné schema.prisma, src/lib/auth/index.ts y token.ts, mini-services/realtime-service/index.ts, src/app/api/admin/finanzas/route.ts, cierre-diario/[id]/close/route.ts, restore/route.ts, next.config.ts, src/hooks/use-realtime.ts, src/app/api/mesero/orders/[id]/pay/route.ts y src/middleware.ts para entender el estado actual.
+   732→- FIX 6 — Sistema monetario CUP/USD con tasa de cambio:
+   733→  - Creé `src/lib/currency.ts` con funciones: `convertToCup(amount, currency, usdToCupRate)`, `convertFromCup(amount, targetCurrency, usdToCupRate)`, `convertCurrency(from, to, usdToCupRate)`, `getTotalInCurrency(payments, targetCurrency, usdToCupRate)`, `breakdownPayments(payments, usdToCupRate)` (devuelve totalCashCUP, totalCashUSD, totalTransferCUP, totalTransferUSD, totalOther, totalCUP, totalUSD, byMethod), `isCashMethod`, `isTransferMethod`, `currencyForMethod`, `formatCurrency`. Defensa contra tasas inválidas (fallback 320).
+   734→  - En `src/app/api/admin/cierre-diario/[id]/close/route.ts`: reemplacé el loop manual que sumaba pagos sin conversión por `breakdownPayments(payments, usdToCupRate)`. Ahora totalCash = totalCashCUP + totalCashUSD * usdToCupRate, totalTransfer = totalTransferCUP + totalTransferUSD * usdToCupRate, totalSales = breakdown.totalCUP. Carga la tasa de `RestaurantConfig.usdToCup` (default 320). El audit log ahora incluye los totales por moneda (totalCashCUP, totalCashUSD, totalTransferCUP, totalTransferUSD, usdToCupRate) para trazabilidad.
+   735→  - En `src/app/api/admin/dashboard/route.ts`: cambié el `db.payment.aggregate` por `db.payment.findMany({select: {amount, currency, method}})` y calculé `salesTodayCUP = getTotalInCurrency(payments, 'CUP', usdToCupRate)` y `salesTodayUSD = getTotalInCurrency(payments, 'USD', usdToCupRate)`. El `salesByMethod` ahora incluye `totalOriginal` (monto en moneda original) y `totalCUP` (equivalente en CUP). Stats incluye `usdToCupRate` para que el frontend muestre la tasa.
+   736→- FIX 7 — Eliminar doble contabilización financiera:
+   737→  - En `src/app/api/mesero/orders/[id]/pay/route.ts`: eliminé el bloque que creaba `FinanceEntry` con `type: 'VENTA'` al completar el pago (líneas 130-144 del original). El pago queda registrado solo en la tabla Payment. El cierre diario (close/route.ts) sigue creando FinanceEntry por método de pago al cerrar la caja, siendo ahora la ÚNICA fuente de verdad para finanzas. Comenté el código con NOTA explicativa.
+   738→- FIX 8 — Seguridad Socket.IO (verificar token):
+   739→  - En `src/hooks/use-realtime.ts`: añadí función `readCookie(name)` que lee cookies del navegador. En lugar de enviar `{userId, role, areaId}` ahora el hook envía `{token, areaId}` donde `token` es el contenido de la cookie `rc_session`. Sigue esperando `opts.userId/role` solo para saber cuándo intentar conectar (no se envían al servidor). Maneja evento `auth:fail` desconectando el socket para no reintentar con token caducado.
+   740→  - En `mini-services/realtime-service/index.ts`: añadí `verifySessionToken(token)` con la MISMA implementación Web Crypto API que `src/lib/auth/token.ts` (HMAC SHA-256 + comparación de firma + check de expiración). El evento `auth` ahora espera `{token, areaId?}` y extrae `userId/role` del token verificado. Si el token es inválido o expirado, emite `auth:fail` y NO marca el socket como autenticado. Añadí `requireAuth()` que se llama en cada evento de negocio (order:new, order:status, order:ready, payment:done, stock:low, notification, daily-close, message); si no autenticado, responde con `error: 'No autenticado'`. NO se confía en datos de identidad enviados por el cliente.
+   741→- FIX 9 — Eliminar secreto por defecto + ignoreBuildErrors:
+   742→  - En `src/lib/auth/token.ts` y `src/lib/auth/index.ts`: cambié `const SECRET = process.env.NEXTAUTH_SECRET || 'cuba-restaurante-secret-key-change-in-prod'` por `getSecret()` que: (a) retorna `NEXTAUTH_SECRET` si está definido y tiene >=16 chars; (b) en production lanza error explícito si falta; (c) solo en development usa el fallback hardcoded. La misma lógica se aplicó al realtime-service para mantener consistencia.
+   743→  - En `next.config.ts`: cambié `typescript.ignoreBuildErrors: true` a `false`. (Nota: el bloque `eslint` fue removido porque Next.js 16 ya no lo soporta como config en next.config.ts y genera warnings de "Unrecognized key").
+   744→- FIX 10 — Seguridad restore de backups (path traversal):
+   745→  - En `src/app/api/admin/respaldos/restore/route.ts`: añadí validación triple:
+   746→    1) Rechaza filenames que contengan `..`, `/` o `\\` (400 "Nombre de archivo inválido (caracteres prohibidos)").
+   747→    2) Usa `path.basename(filename)` y verifica que el resultado sea igual al input (defensa en profundidad).
+   748→    3) Construye `backupPath = path.resolve(BACKUP_DIR, safeName)` y verifica que empiece con `resolvedBackupDir + path.sep` (rechaza si la ruta resuelta cae fuera del directorio de backups).
+   749→  La verificación `fs.access(backupPath)` se mantiene después de la validación.
+   750→- FIX 11 — CORS Socket.IO restringido:
+   751→  - En `mini-services/realtime-service/index.ts`: cambié `origin: '*'` por una función validadora. Lista de orígenes permitidos: `http://localhost:3000`, `http://127.0.0.1:3000`, `http://localhost`, `http://127.0.0.1` + IPs IPv4 no internas detectadas con `os.networkInterfaces()` (ej: `http://21.0.9.216:3000`). Variable de entorno `ALLOWED_ORIGINS` (CSV) para añadir orígenes adicionales. Peticiones sin `Origin` header (mismo host / curl) se permiten. Orígenes rechazados se loguean con warn.
+   752→- FIX 12 — Eliminar modelo Session no usado:
+   753→  - En `prisma/schema.prisma`: eliminé el modelo `Session` completo y la relación `sessions Session[]` del modelo `User`. Añadí comentario explicativo: la autenticación se basa en cookies firmadas con HMAC (src/lib/auth/token.ts), no en una tabla de sesiones en DB. Verifiqué que ningún código fuente usa `db.session` (búsqueda grep confirmó 0 referencias).
+   754→  - Ejecuté `bun run db:push` (schema aplicado, sin data-loss) y `bun run db:generate` (Prisma Client v6.19.2 regenerado).
+   755→
+   756→Verificación:
+   757→- `bun run db:push`: schema aplicado exitosamente (modelo Session eliminado).
+   758→- `bun run db:generate`: Prisma Client regenerado (v6.19.2).
+   759→- `bun run lint`: 0 errores.
+   760→- Servidor Next.js: HTTP 200 en `/` (puerto 3000), reiniciado automáticamente tras cambio en next.config.ts sin warnings.
+   761→- Mini-servicio realtime: reiniciado con `pkill -f "bun --hot"`, vuelve a escuchar en puerto 3003 (HTTP 200 en `/socket.io/?EIO=4&transport=polling`).
+   762→- Tests de integración con curl/bun:
+   763→  - FIX 6: Set `usdToCup=400` vía PATCH /api/admin/config → 200. Dashboard refleja `usdToCupRate: 400` y `salesTodayCUP`, `salesTodayUSD`. POST pay con `EFECTIVO_USD currency=USD amount=1` → 200. Dashboard pasa a `salesToday: 400, salesTodayUSD: 1, salesTodayCUP: 400` (conversión USD→CUP funciona). `salesByMethod[0]` ahora incluye `totalCUP: 400` además de `total: 1` (original). Cierre diario `totalSales: 350` (1 USD × 350 tasa actual). FinanceEntry creada con `currency: 'USD'` y `amount: 1` (preserva moneda original).
+   764→  - FIX 7: Antes de pagar, FinanceEntry count today = 0. Después de pagar USD $1 → FinanceEntry count today = 0 (no se crea entrada al cobrar). Después de cerrar el cierre diario → FinanceEntry count today = 1 (creada por el cierre). Única fuente de verdad confirmada.
+   765→  - FIX 8: Conexión con token válido → `auth:ok userId=cmsl89ggo0004nvbgmd4srhbh role=ADMIN` (extraído del token, NO del cliente). Conexión con token falso → `auth:fail "Token inválido o expirado"`. Conexión con token vacío → `auth:fail "Token no proporcionado"`.
+   766→  - FIX 10: POST restore con `filename="../../../etc/passwd"` → 400 "Nombre de archivo inválido (caracteres prohibidos)". Con `filename="subdir/backup.db"` → 400. Con `filename="..\\..\\winnt\\system32"` → 400. Path traversal bloqueado.
+   767→  - FIX 11: Orígenes listados al arranque: `http://localhost:3000, http://127.0.0.1:3000, http://localhost, http://127.0.0.1, http://21.0.9.216:3000, http://21.0.9.216`. Peticiones same-origin (sin Origin header) se permiten. Peticiones cross-origin fuera de la lista se rechazan.
+   768→  - FIX 12: Prisma Client regenerado sin modelo Session. Schema aplicado sin errores. Login/cookies funcionan igual (basado en HMAC, no en DB).
+   769→
+   770→Stage Summary:
+   771→- Archivos creados (1):
+   772→  - src/lib/currency.ts (utilidades de conversión CUP/USD + breakdown de pagos por moneda)
+   773→- Archivos modificados (8):
+   774→  - prisma/schema.prisma: eliminado modelo Session y relación `sessions Session[]` de User
+   775→  - src/lib/auth/index.ts: getSecret() con error en production si falta NEXTAUTH_SECRET
+   776→  - src/lib/auth/token.ts: getSecret() con error en production si falta NEXTAUTH_SECRET
+   777→  - next.config.ts: typescript.ignoreBuildErrors: false (era true)
+   778→  - src/hooks/use-realtime.ts: envía token en lugar de userId/role, maneja auth:fail
+   779→  - mini-services/realtime-service/index.ts: verifySessionToken + CORS restringido + requireAuth() en eventos
+   780→  - src/app/api/admin/cierre-diario/[id]/close/route.ts: usa breakdownPayments, totales por moneda en audit
+   781→  - src/app/api/admin/dashboard/route.ts: ventas en CUP/USD equivalentes + usdToCupRate en stats
+   782→  - src/app/api/mesero/orders/[id]/pay/route.ts: eliminada creación de FinanceEntry al cobrar
+   783→  - src/app/api/admin/respaldos/restore/route.ts: validación triple anti path traversal
+   784→- Decisiones importantes:
+   785→  - currency.ts es agnóstico al tipo de Payment: usa `PaymentLike` con campos {amount, currency, method?}. Esto permite reusarlo con resultados de Prisma o con datos de testing.
+   786→  - breakdownPayments clasifica COMBINADO u otros métodos en totalOther (sin sumar a cash/transfer) PERO los suma al totalCUP en su moneda original para no perderlos en el total agregado. Si el método COMBINADO trae `currency: 'USD'` se cuenta como transfer USD (aproximación), si no, como transfer CUP.
+   787→  - El DailyClose sigue guardando `totalCash`, `totalTransfer`, `totalSales` como escalares (en CUP equivalente) para no romper la UI existente. Los totales por moneda original quedan registrados en el audit log para auditoría detallada.
+   788→  - El FinanceEntry creado al cerrar mantiene `currency: 'USD'` para USD y `currency: 'CUP'` para CUP (ya existía). FIX 6 no altera esto: cada FinanceEntry preserva su moneda original.
+   789→  - El realtime-service NO depende del módulo auth de Next.js (es un mini-servicio Bun separado). Se duplicó la lógica de verificación HMAC usando Web Crypto API (compatible con Bun). Si `src/lib/auth/token.ts` cambia el algoritmo, hay que actualizar también `mini-services/realtime-service/index.ts`.
+   790→  - CORS del realtime permite peticiones sin Origin (mismo host / curl) para no romper tests y administración local. En producción, ALLOWED_ORIGINS puede restringir más.
+   791→  - El código de verificación de token se mantiene idéntico entre middleware.ts, src/lib/auth/token.ts y mini-services/realtime-service/index.ts para que un token generado por uno sea válido para los tres. Si cambia el algoritmo en uno, hay que cambiarlo en los tres.
+   792→- Problemas encontrados:
+   793→  - El mini-servicio realtime moría al cerrar la sesión bash inicial, incluso con `setsid ... &` + `disown`. Solución: usar `(setsid bun index.ts > /tmp/realtime.log 2>&1 &)` con doble fork para que el proceso quede reparentado a init (PID 1). El servicio ahora sobrevive al shell que lo lanzó.
+   794→  - Next.js 16 ya no soporta `eslint` como key en `next.config.ts` (warning "Unrecognized key(s) in object: 'eslint'"). Eliminé el bloque `eslint: { ignoreDuringBuilds: false }` y dejé solo `typescript: { ignoreBuildErrors: false }`. ESLint sigue ejecutándose vía `bun run lint` (configurado en package.json scripts).
+   795→  - El bloque `if (isFullyPaid) { create FinanceEntry }` en pay/route.ts NO tenía manejo de errores: si la creación fallaba, hacía rollback de toda la transacción (incluyendo el pago). Eliminarlo también mejora la robustez del endpoint de cobro (un fallo en FinanceEntry ya no bloquea el pago).
+   796→

@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
         areaId: true,
         capacity: true,
         isActive: true,
+        status: true,
       },
     })
 

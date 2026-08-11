@@ -25,7 +25,14 @@ import { useRealtime } from '@/hooks/use-realtime'
 import { formatCurrency } from '@/lib/order-utils'
 
 type Area = { id: string; code: string; name: string }
-type Table = { id: string; code: string; name: string; areaId: string | null; capacity: number }
+type Table = {
+  id: string
+  code: string
+  name: string
+  areaId: string | null
+  capacity: number
+  status?: string // LIBRE | OCUPADA | RESERVADA | ESPERANDO_CUENTA | LIMPIEZA
+}
 type Product = {
   id: string
   code: string
@@ -245,11 +252,48 @@ export default function NuevoPedidoPage() {
                   <Select value={tableId} onValueChange={setTableId}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Sin mesa (para llevar)" /></SelectTrigger>
                     <SelectContent>
-                      {tables.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name} · {t.capacity} pers.</SelectItem>
-                      ))}
+                      {tables.map((t) => {
+                        // Estado de mesa (FIX 17): mostrar badge y bloquear si no está LIBRE
+                        const status = t.status || 'LIBRE'
+                        const isLibre = status === 'LIBRE'
+                        const label = `${t.name} · ${t.capacity} pers.${isLibre ? '' : ` · ${status}`}`
+                        return (
+                          <SelectItem
+                            key={t.id}
+                            value={t.id}
+                            disabled={!isLibre}
+                            className={isLibre ? '' : 'opacity-60'}
+                          >
+                            {label}
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
+                  {tables.length > 0 && (
+                    <div className="flex flex-wrap gap-1 text-[10px]">
+                      {(() => {
+                        const counts = tables.reduce<Record<string, number>>((acc, t) => {
+                          const s = t.status || 'LIBRE'
+                          acc[s] = (acc[s] || 0) + 1
+                          return acc
+                        }, {})
+                        const order = ['LIBRE', 'OCUPADA', 'RESERVADA', 'ESPERANDO_CUENTA', 'LIMPIEZA']
+                        const colors: Record<string, string> = {
+                          LIBRE: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+                          OCUPADA: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+                          RESERVADA: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+                          ESPERANDO_CUENTA: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                          LIMPIEZA: 'bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200',
+                        }
+                        return order.filter((s) => counts[s]).map((s) => (
+                          <span key={s} className={`px-1.5 py-0.5 rounded ${colors[s] || 'bg-stone-100 text-stone-800'}`}>
+                            {s}: {counts[s]}
+                          </span>
+                        ))
+                      })()}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Cliente (opcional)</Label>
