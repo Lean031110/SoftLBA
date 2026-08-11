@@ -9,7 +9,7 @@ import { verifySessionToken } from '@/lib/auth/token'
 const SESSION_COOKIE = 'rc_session'
 
 // Rutas públicas (no requieren auth)
-const PUBLIC_ROUTES = ['/', '/login', '/logout', '/api/auth', '/api/public', '/offline', '/manifest.json', '/sw.js']
+const PUBLIC_ROUTES = ['/', '/login', '/logout', '/api/auth', '/api/public', '/offline', '/manifest.json', '/sw.js', '/api/health']
 
 // Rutas autenticadas pero accesibles por cualquier rol
 const AUTH_COMMON_ROUTES = ['/primer-acceso', '/perfil', '/ayuda', '/api/notifications']
