@@ -80,10 +80,19 @@ export async function getCurrentUser() {
       lastName: true,
       avatarUrl: true,
       lastLoginAt: true,
+      authVersion: true,
     },
   })
 
   if (!user || !user.isActive) return null
+
+  // FASE 1: si authVersion del token es 0 (legacy) aceptamos.
+  // Si es >0 debe coincidir con el de la DB.
+  if (session.authVersion !== 0 && session.authVersion !== user.authVersion) {
+    // La sesión fue invalidada (cambio de rol, contraseña, o desactivación).
+    return null
+  }
+
   return user
 }
 
@@ -145,7 +154,8 @@ export async function login(username: string, password: string, ipAddress?: stri
     },
   })
 
-  const token = createSessionToken(user.id, user.role)
+  // FASE 1: incluir authVersion del usuario al crear el token.
+  const token = createSessionToken(user.id, user.role, user.authVersion)
   const cookieStore = await cookies()
   const expiresAt = Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000
   cookieStore.set(SESSION_COOKIE, token, {
@@ -205,4 +215,32 @@ export function generateRandomPassword(length = 10): string {
 export async function getCurrentUserFromRequest(req: Request) {
   // En API routes de Next.js también podemos usar cookies() server
   return getCurrentUser()
+}
+
+// ============================================================
+// bumpAuthVersion — Invalidar sesiones existentes (FASE 1)
+// ------------------------------------------------------------
+// Incrementa authVersion del usuario. Esto invalida TODAS las sesiones
+// existentes para ese usuario (su token del formato viejo será rechazado).
+//
+// Cuándo llamarlo:
+//   - Cambio de rol (ADMIN → MESERO, etc.)
+//   - Cambio de contraseña
+//   - Desactivación del usuario (isActive=false)
+//   - Reset de seguridad (logout global)
+// ============================================================
+export async function bumpAuthVersion(userId: string): Promise<void> {
+  await db.user.update({
+    where: { id: userId },
+    data: { authVersion: { increment: 1 } },
+  })
+  await db.auditLog.create({
+    data: {
+      userId,
+      action: 'AUTH_VERSION_BUMP',
+      entity: 'user',
+      entityId: userId,
+      result: 'SUCCESS',
+    },
+  }).catch(() => undefined)
 }

@@ -5,7 +5,6 @@ import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { z } from 'zod'
-import { breakdownPayments } from '@/lib/currency'
 
 const CloseSchema = z.object({
   action: z.enum(['close', 'lock']),
@@ -55,16 +54,69 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const config = await db.restaurantConfig.findFirst()
       const usdToCupRate = config?.usdToCup || 320
 
-      // Calcular ventas por método y moneda usando librería de conversión
-      const breakdown = breakdownPayments(payments, usdToCupRate)
-      const methodTotals: Record<string, number> = { ...breakdown.byMethod }
+      // v1.0-RC1-bloque2-3 (item 21): calcular totales por método/moneda usando
+      // `Payment.convertedAmount` (CUP equivalente snapshot al momento del pago).
+      // Para pagos antiguos sin convertedAmount, se calcula al vuelo con
+      // `amount * exchangeRate` o, si no hay snapshot, con la tasa actual.
+      //
+      // Estructura por método:
+      //   - amountOriginal: suma en moneda original (CUP para *_CUP, USD para *_USD/ZELLE/BANCARIA_USD)
+      //   - amountCup: suma en CUP usando convertedAmount
+      interface MethodBucket {
+        amountOriginal: number
+        amountCup: number
+        currency: 'CUP' | 'USD'
+      }
+      const byMethodMap = new Map<string, MethodBucket>()
+      let totalCashCUP = 0
+      let totalCashUSD = 0
+      let totalTransferCUP = 0
+      let totalTransferUSD = 0
+      let totalOtherCup = 0
+      let totalSalesCup = 0
+
+      for (const p of payments) {
+        const method = p.method
+        const cur = (p.currency || 'CUP').toUpperCase() as 'CUP' | 'USD'
+        // convertedAmount: usar el snapshot si existe; si no, recalcular
+        const cupValue =
+          p.convertedAmount != null && Number.isFinite(p.convertedAmount)
+            ? p.convertedAmount
+            : cur === 'USD'
+              ? p.amount * (p.exchangeRate ?? usdToCupRate)
+              : p.amount
+
+        const bucket = byMethodMap.get(method) || {
+          amountOriginal: 0,
+          amountCup: 0,
+          currency: cur,
+        }
+        bucket.amountOriginal += p.amount
+        bucket.amountCup += cupValue
+        bucket.currency = cur
+        byMethodMap.set(method, bucket)
+
+        // Clasificación efectivo/transferencia para DailyClose
+        if (method === 'EFECTIVO_CUP') totalCashCUP += p.amount
+        else if (method === 'EFECTIVO_USD') totalCashUSD += p.amount
+        else if (method.startsWith('TRANSFERENCIA')) {
+          if (cur === 'USD') totalTransferUSD += p.amount
+          else totalTransferCUP += p.amount
+        } else if (method === 'ZELLE' || method === 'BANCARIA_USD') {
+          totalTransferUSD += p.amount
+        } else {
+          // COMBINADO u otros
+          totalOtherCup += cupValue
+        }
+
+        totalSalesCup += cupValue
+      }
 
       // Totales agregados (en CUP equivalente) para persistir en DailyClose
-      const totalCash = breakdown.totalCashCUP + breakdown.totalCashUSD * usdToCupRate
-      const totalTransfer =
-        breakdown.totalTransferCUP + breakdown.totalTransferUSD * usdToCupRate
-      const totalOther = breakdown.totalOther
-      const totalSales = breakdown.totalCUP
+      const totalCash = totalCashCUP + totalCashUSD * usdToCupRate
+      const totalTransfer = totalTransferCUP + totalTransferUSD * usdToCupRate
+      const totalOther = totalOtherCup
+      const totalSales = totalSalesCup
 
       // Mermas del día
       const mermas = await db.financeEntry.findMany({
@@ -108,15 +160,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           COMBINADO: 'Ventas con Pago Combinado',
         }
 
-        for (const [method, amount] of Object.entries(methodTotals)) {
-          if (amount <= 0) continue
+        for (const [method, bucket] of byMethodMap.entries()) {
+          if (bucket.amountOriginal <= 0) continue
           await tx.financeEntry.create({
             data: {
               type: 'VENTA',
               category: method,
               description: `${methodLabels[method] || method} - Cierre del ${close.date.toLocaleDateString('es-CU')}`,
-              amount,
-              currency: method.includes('USD') ? 'USD' : 'CUP',
+              amount: bucket.amountOriginal,
+              currency: bucket.currency,
+              // v1.0-RC1-bloque2-3 (item 21): persistir snapshot de conversión
+              exchangeRate: usdToCupRate,
+              convertedAmount: bucket.amountCup,
+              baseCurrency: 'CUP',
               reference: id,
               userId: user.id,
               dailyCloseId: id,
@@ -133,6 +189,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
               description: `Total de mermas del día - Cierre del ${close.date.toLocaleDateString('es-CU')}`,
               amount: totalWaste,
               currency: 'CUP',
+              // v1.0-RC1-bloque2-3 (item 21): snapshot para mermas también
+              exchangeRate: usdToCupRate,
+              convertedAmount: totalWaste,
+              baseCurrency: 'CUP',
               reference: id,
               userId: user.id,
               dailyCloseId: id,
@@ -154,10 +214,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           totalCash,
           totalTransfer,
           totalWaste,
-          totalCashCUP: breakdown.totalCashCUP,
-          totalCashUSD: breakdown.totalCashUSD,
-          totalTransferCUP: breakdown.totalTransferCUP,
-          totalTransferUSD: breakdown.totalTransferUSD,
+          totalCashCUP,
+          totalCashUSD,
+          totalTransferCUP,
+          totalTransferUSD,
           usdToCupRate,
         },
       })

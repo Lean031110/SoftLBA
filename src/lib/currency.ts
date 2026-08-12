@@ -210,3 +210,88 @@ export function formatCurrency(amount: number, currency: string, symbol = '$'): 
   const rounded = Math.round(safe * 100) / 100
   return `${symbol}${rounded.toFixed(2)} ${cur}`
 }
+
+// ============================================================
+// v1.0-RC1-bloque2-3 (items 18-20) — Helpers para persistencia
+// ============================================================
+
+/**
+ * Calcula el monto convertido a CUP dado un pago y una tasa.
+ * - Si currency='CUP' → retorna `amount`.
+ * - Si currency='USD' → retorna `amount * usdToCupRate`.
+ * - Cualquier otra moneda se trata como CUP (defensivo).
+ *
+ * A diferencia de `convertToCup`, esta función también admite
+ * el caso en que `convertedAmount` ya esté precalculado (p.ej.
+ * al leer de la base de datos) para evitar reconvertir.
+ */
+export function computeConvertedAmount(
+  amount: number,
+  currency: string,
+  usdToCupRate: number,
+): number {
+  return convertToCup(amount, currency, usdToCupRate)
+}
+
+/**
+ * Suma los `convertedAmount` (CUP) de una lista de pagos.
+ * Si algún pago no tiene `convertedAmount` (p.ej. registros antiguos
+ * creados antes de v1.0-RC1-bloque2-3), lo calcula al vuelo usando
+ * `amount * exchangeRate` o, si no hay tasa, la tasa por defecto.
+ *
+ * Esto se usa para comparar el total pagado contra el total del pedido
+ * (que siempre está en CUP) sin mezclar monedas.
+ */
+export interface StoredPaymentLike {
+  amount: number
+  currency: string
+  exchangeRate?: number | null
+  convertedAmount?: number | null
+}
+
+export function sumConvertedToCup(
+  payments: StoredPaymentLike[],
+  fallbackRate: number,
+): number {
+  let total = 0
+  for (const p of payments) {
+    if (p.convertedAmount != null && Number.isFinite(p.convertedAmount)) {
+      total += p.convertedAmount
+      continue
+    }
+    const rate =
+      p.exchangeRate != null && p.exchangeRate > 0 ? p.exchangeRate : fallbackRate
+    total += convertToCup(p.amount, p.currency, rate)
+  }
+  return total
+}
+
+// ============================================================
+// v1.0-RC1-bloque2-3 (item 22) — Helpers para FinanceEntry
+// ============================================================
+
+export interface StoredFinanceEntryLike {
+  amount: number
+  currency: string
+  exchangeRate?: number | null
+  convertedAmount?: number | null
+}
+
+/**
+ * Retorna el valor en CUP de una FinanceEntry usando `convertedAmount`
+ * si está disponible; si no (entradas legacy), lo recalcula con
+ * `amount * exchangeRate` o, en último recurso, con la tasa actual.
+ */
+export function financeEntryToCup(
+  entry: StoredFinanceEntryLike,
+  fallbackRate: number,
+): number {
+  if (entry.convertedAmount != null && Number.isFinite(entry.convertedAmount)) {
+    return entry.convertedAmount
+  }
+  const rate =
+    entry.exchangeRate != null && entry.exchangeRate > 0
+      ? entry.exchangeRate
+      : fallbackRate
+  return convertToCup(entry.amount, entry.currency, rate)
+}

@@ -4,6 +4,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { decrementDirectoStock } from '@/lib/directo-stock'
+import { recalculateOrderStatus } from '@/lib/order-state-machine'
+import { sumConvertedToCup } from '@/lib/currency'
 import { z } from 'zod'
 
 // Estados considerados "activos" en el dashboard del mesero
@@ -50,8 +53,11 @@ export async function GET(req: NextRequest) {
     })
 
     // Calcular total pagado por pedido
+    // v1.0-RC1-bloque2-3 (item 22): en CUP usando convertedAmount snapshot.
+    const config = await db.restaurantConfig.findFirst({ where: { id: 'config-1' } })
+    const usdToCupRate = config?.usdToCup || 320
     const items = orders.map((o) => {
-      const paidTotal = o.payments.reduce((s, p) => s + p.amount, 0)
+      const paidTotal = sumConvertedToCup(o.payments, usdToCupRate)
       return {
         id: o.id,
         number: o.number,
@@ -97,9 +103,16 @@ const CreateOrderSchema = z.object({
   notes: z.string().max(500).optional().or(z.literal('')),
   discountPct: z.coerce.number().min(0).max(100).default(0),
   items: z.array(ItemSchema).min(1, 'Debes agregar al menos un producto'),
-  // Si true, el pedido se crea directamente como ENVIADO. Si false, como CREADO.
   sendToKitchen: z.boolean().default(true),
 })
+
+// Verificar permiso de descuento
+function checkDiscountPermission(role: string, discountPct: number): boolean {
+  if (discountPct === 0) return true
+  // Solo ADMIN puede aplicar descuentos > 0
+  // MESERO y MESERO_PRO no pueden sin permiso explícito
+  return role === 'ADMIN'
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -120,6 +133,11 @@ export async function POST(req: NextRequest) {
     }
     const d = parsed.data
 
+    // Verificar permiso de descuento (solo ADMIN puede aplicar descuentos > 0)
+    if (!checkDiscountPermission(user.role, d.discountPct)) {
+      return NextResponse.json({ ok: false, error: 'No tienes permiso para aplicar descuentos' }, { status: 403 })
+    }
+
     // Validar área
     const area = await db.area.findUnique({ where: { id: d.areaId } })
     if (!area || !area.isActive) {
@@ -134,8 +152,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Validar mesa (si viene)
-    let table: { id: string; areaId: string | null; name: string } | null = null
+    // Validar mesa (si viene). v1.0-RC1-bloque1-2 (item 13): verificar que esté LIBRE.
+    let table: { id: string; areaId: string | null; name: string; status: string } | null = null
     if (d.tableId) {
       table = await db.table.findUnique({ where: { id: d.tableId } })
       if (!table || !table.isActive) {
@@ -144,6 +162,13 @@ export async function POST(req: NextRequest) {
       if (table.areaId && table.areaId !== d.areaId) {
         return NextResponse.json(
           { ok: false, error: 'La mesa no pertenece al área seleccionada' },
+          { status: 400 },
+        )
+      }
+      // Item 13: prevenir doble asignación
+      if (table.status === 'OCUPADA' && user.role !== 'ADMIN') {
+        return NextResponse.json(
+          { ok: false, error: 'Mesa ya ocupada' },
           { status: 400 },
         )
       }
@@ -174,53 +199,67 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // FIX 4: Verificar stock suficiente si blockNegativeStock=true.
+    // FIX 4 / item 8: Verificar stock suficiente si blockNegativeStock=true.
     // Solo aplica a productos DIRECTO (los FINALES descuentan al prepararse vía receta).
     const config = await db.restaurantConfig.findFirst({ where: { id: 'config-1' } })
-    const blockNegative = !!config?.blockNegativeStock
+    const blockNegative = config?.blockNegativeStock ?? true
     if (blockNegative) {
-      // Cargar inventarios (área + general) en paralelo para validar stock suficiente
+      // Cargar inventarios de área (con migración automática implícita vía ensureAreaInventory
+      // al momento del decremento; aquí solo validamos para dar error temprano).
       const directItems = d.items.filter((i) => {
         const p = products.find((pp) => pp.id === i.productId)!
         return p.type === 'DIRECTO'
       })
-      const areaInvRows = await db.areaInventory.findMany({
-        where: {
-          areaId: d.areaId,
-          productId: { in: directItems.map((i) => i.productId) },
-        },
-      })
-      const generalInvRows = await db.inventoryItem.findMany({
-        where: { productId: { in: directItems.map((i) => i.productId) } },
-      })
-      // Sumar cantidades por producto (puede haber dos items del mismo producto)
-      const neededByProduct = new Map<string, number>()
-      for (const i of directItems) {
-        neededByProduct.set(i.productId, (neededByProduct.get(i.productId) || 0) + i.quantity)
-      }
-      for (const [pid, needed] of neededByProduct.entries()) {
-        const p = products.find((pp) => pp.id === pid)!
-        const areaInv = areaInvRows.find((r) => r.productId === pid)
-        const genInv = generalInvRows.find((r) => r.productId === pid)
-        // Si existe en el área, se descuenta del área; si no, del general.
-        const available = areaInv ? areaInv.stock : (genInv?.stock ?? 0)
-        if (available < needed) {
-          return NextResponse.json(
-            { ok: false, error: `Stock insuficiente de "${p.name}" (disponible: ${available}, requerido: ${needed})` },
-            { status: 400 },
-          )
+      if (directItems.length > 0) {
+        const areaInvRows = await db.areaInventory.findMany({
+          where: {
+            areaId: d.areaId,
+            productId: { in: directItems.map((i) => i.productId) },
+          },
+        })
+        const generalInvRows = await db.inventoryItem.findMany({
+          where: { productId: { in: directItems.map((i) => i.productId) } },
+        })
+        // Sumar cantidades por producto (puede haber dos items del mismo producto)
+        const neededByProduct = new Map<string, number>()
+        for (const i of directItems) {
+          neededByProduct.set(i.productId, (neededByProduct.get(i.productId) || 0) + i.quantity)
+        }
+        for (const [pid, needed] of neededByProduct.entries()) {
+          const p = products.find((pp) => pp.id === pid)!
+          const areaInv = areaInvRows.find((r) => r.productId === pid)
+          const genInv = generalInvRows.find((r) => r.productId === pid)
+          // Si existe en el área, se descuenta del área; si no, del general.
+          const available = areaInv ? areaInv.stock : (genInv?.stock ?? 0)
+          if (available < needed) {
+            return NextResponse.json(
+              { ok: false, error: `Stock insuficiente de "${p.name}" (disponible: ${available}, requerido: ${needed})` },
+              { status: 400 },
+            )
+          }
         }
       }
     }
 
-    // Calcular subtotal y asignar área de elaboración a cada item
+    // v1.0-RC1-bloque1-2 (item 14): buscar turno abierto del usuario para
+    // asociarlo al pedido. No es obligatorio: si no hay turno, shiftId=null.
+    const openShift = await db.workShift.findFirst({
+      where: { userId: user.id, status: 'OPEN' },
+      orderBy: { startTime: 'desc' },
+      select: { id: true },
+    })
+
+    // Calcular subtotal y asignar área de elaboración a cada item.
+    // v1.0-RC1-bloque1-2 (item 3):
+    //   - DIRECTO: targetAreaId = área del pedido (SALON), porque se despacha
+    //     inmediatamente desde Salón.
+    //   - FINAL: targetAreaId = product.areaId (área de elaboración del producto).
+    // v1.0-RC1-bloque1-2 (item 1): DIRECTO nace como SERVIDO (despachado inmediato).
     const itemLines = d.items.map((i) => {
       const p = products.find((pp) => pp.id === i.productId)!
       const lineTotal = p.price * i.quantity
-      // El área de elaboración (targetAreaId) se determina así:
-      // - Si el producto tiene areaId asignado, ese es el área de elaboración
-      // - Si no tiene areaId (null = global), el área de elaboración es el área del pedido
-      const targetAreaId = p.areaId || d.areaId
+      const isDirecto = p.type === 'DIRECTO'
+      const targetAreaId = isDirecto ? d.areaId : (p.areaId || d.areaId)
       return {
         productId: i.productId,
         quantity: i.quantity,
@@ -229,7 +268,8 @@ export async function POST(req: NextRequest) {
         notes: i.notes || null,
         lineTotal,
         targetAreaId,
-        serveMode: i.serveMode || (p.type === 'DIRECTO' ? 'now' : 'with_order'),
+        serveMode: i.serveMode || (isDirecto ? 'now' : 'with_order'),
+        isDirecto,
       }
     })
     const subtotal = itemLines.reduce((s, i) => s + i.lineTotal, 0)
@@ -255,7 +295,9 @@ export async function POST(req: NextRequest) {
       finalNumber = (lastOrder?.number || 1000) + 1
     }
 
-    // Crear pedido con transacción (incluye decrementar stock del área)
+    // v1.0-RC1-bloque1-2 (items 1, 3, 9, 10, 11, 14):
+    // Transacción principal que crea el pedido, decrementa stock de DIRECTO
+    // atómicamente, marca mesa como OCUPADA, y asocia turno.
     const order = await db.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
@@ -271,6 +313,7 @@ export async function POST(req: NextRequest) {
           total,
           notes: d.notes || null,
           paymentStatus: 'PENDIENTE',
+          shiftId: openShift?.id || null,
           items: {
             create: itemLines.map((l) => ({
               productId: l.productId,
@@ -278,76 +321,55 @@ export async function POST(req: NextRequest) {
               unitPrice: l.unitPrice,
               discount: l.discount,
               notes: l.notes,
-              status: 'PENDIENTE',
+              // Item 1: DIRECTO nace SERVIDO; FINAL nace PENDIENTE.
+              status: l.isDirecto ? 'SERVIDO' : 'PENDIENTE',
               targetAreaId: l.targetAreaId,
               serveMode: l.serveMode,
             })),
           },
         },
         include: {
-          items: { include: { product: { select: { id: true, name: true, code: true, price: true } } } },
+          items: { include: { product: { select: { id: true, name: true, code: true, price: true, type: true } } } },
           area: true,
           table: true,
         },
       })
 
-      // Decrementar stock del área correspondiente para productos DIRECTO
-      // Para productos FINALES, no decrementar stock aquí (lo hace cocina al preparar, vía receta).
+      // Item 11: marcar mesa como OCUPADA en la misma transacción.
+      if (table) {
+        await tx.table.update({
+          where: { id: table.id },
+          data: { status: 'OCUPADA' },
+        })
+      }
+
+      // Items 9, 10: decrementar stock atómicamente para productos DIRECTO.
+      // Para productos FINALES, no decrementar aquí (lo hace cocina al preparar, vía receta).
       for (const it of itemLines) {
+        if (!it.isDirecto) continue
         const p = products.find((pp) => pp.id === it.productId)!
-        if (p.type === 'DIRECTO') {
-          // Decrementar del inventario del área si existe; si no, del inventario general.
-          const areaInv = await tx.areaInventory.findUnique({
-            where: { areaId_productId: { areaId: d.areaId, productId: p.id } },
-          })
-          if (areaInv) {
-            const newStock = Math.max(0, areaInv.stock - it.quantity)
-            const newReserved = Math.max(0, areaInv.reserved - Math.min(areaInv.reserved, it.quantity))
-            await tx.areaInventory.update({
-              where: { id: areaInv.id },
-              data: { stock: newStock, reserved: newReserved },
-            })
-            await tx.stockMovement.create({
-              data: {
-                type: 'SALIDA',
-                productId: p.id,
-                areaId: d.areaId,
-                quantity: it.quantity,
-                unit: p.unit,
-                reason: `Pedido #${created.number}`,
-                reference: created.id,
-                userId: user.id,
-              },
-            })
-          } else {
-            // Intentar inventario general
-            const genInv = await tx.inventoryItem.findUnique({ where: { productId: p.id } })
-            if (genInv) {
-              const newStock = Math.max(0, genInv.stock - it.quantity)
-              const newReserved = Math.max(0, genInv.reserved - Math.min(genInv.reserved, it.quantity))
-              await tx.inventoryItem.update({
-                where: { id: genInv.id },
-                data: { stock: newStock, reserved: newReserved },
-              })
-              await tx.stockMovement.create({
-                data: {
-                  type: 'SALIDA',
-                  productId: p.id,
-                  areaId: null,
-                  quantity: it.quantity,
-                  unit: p.unit,
-                  reason: `Pedido #${created.number}`,
-                  reference: created.id,
-                  userId: user.id,
-                },
-              })
-            }
-          }
+        const result = await decrementDirectoStock(d.areaId, p.id, it.quantity, {
+          blockNegative,
+          orderNumber: created.number,
+          reference: created.id,
+          userId: user.id,
+          unit: p.unit,
+          tx,
+        })
+        if (!result.ok) {
+          // Lanzamos para revertir la transacción completa.
+          throw new Error(
+            `Stock insuficiente de "${p.name}": ${result.message || 'no se pudo descontar'}`,
+          )
         }
       }
 
       return created
     })
+
+    // Recalcular estado del pedido (item 6): si todos los items son DIRECTO y están SERVIDO,
+    // el pedido podría pasar a LISTO automáticamente.
+    const finalStatus = await recalculateOrderStatus(order.id).catch(() => order.status)
 
     await audit({
       userId: user.id,
@@ -364,12 +386,13 @@ export async function POST(req: NextRequest) {
         discountAmount,
         total,
         itemsCount: itemLines.length,
+        shiftId: openShift?.id || null,
       },
     })
 
     return NextResponse.json({
       ok: true,
-      item: order,
+      item: { ...order, status: finalStatus as any } ?? order,
       // Datos mínimos para emitir por WebSocket desde el cliente
       wsPayload: {
         orderId: order.id,
@@ -383,6 +406,10 @@ export async function POST(req: NextRequest) {
     })
   } catch (e: any) {
     console.error('POST /api/mesero/orders', e)
+    // Errores lanzados desde dentro de la transacción: mensaje útil al cliente.
+    if (e?.message?.startsWith('Stock insuficiente')) {
+      return NextResponse.json({ ok: false, error: e.message }, { status: 400 })
+    }
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }
 }

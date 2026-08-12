@@ -904,3 +904,97 @@ Stage Summary:
   InventoryService, url-validator, login-rate-limiter, auth-token.
 - Servicios críticos restaurados tras reset del proyecto.
 - Código guardado en download/salva/SoftLBA-v1.0.15-*.tar.gz (8.4MB, solo código).
+
+---
+Task ID: CONSOLIDACION-v1.0.16
+Agent: main (Super Z)
+Task: AUDITORÍA Y CONSOLIDACIÓN COMPLETA — v1.0.0-rc1 + v1.0.15 → v1.0.16
+
+Work Log:
+- EXTRAÍDO backup v1.0.0-rc1 desde upload/ para comparación.
+- AUDITORÍA FASE 0 completada. Encontrados errores críticos:
+
+ERRORES CRÍTICOS ENCONTRADOS:
+1. AUTH TOKEN MISMATCH: createSessionToken generaba 5-part tokens pero verifySessionToken
+   solo aceptaba 4-part → LOGIN ROTO.
+2. blockNegativeStock default cambiado de true a false (inseguro).
+3. Order.shiftId eliminado (perdida de trazabilidad de turnos).
+4. Payment.exchangeRate/convertedAmount/baseCurrency eliminados (perdida de conversión
+   monetaria histórica).
+5. FinanceEntry.exchangeRate/convertedAmount/baseCurrency eliminados.
+6. DESPACHADO eliminado del enum OrderItemStatus (rotura del flujo DIRECTO).
+7. directo-stock.ts faltante (gestión de stock de productos directos).
+8. finance-annul.ts faltante (lógica de anulación financiera).
+9. realtime-emitter.ts faltante (emisión de eventos realtime).
+10. internal/emit endpoint faltante (puente servidor→socket.io).
+11. currency.ts degradado (faltaban helpers de conversión).
+12. POST /api/mesero/orders degradado (faltaba validación de stock, permiso de descuento,
+    verificación de mesa ocupada, asociación de shiftId, conversión monetaria).
+13. POST /api/mesero/orders/[id]/pay degradado (faltaba conversión monetaria, DESPACHADO
+    en estados terminales).
+14. order-state-machine.ts degradado (faltaban transiciones con DESPACHADO).
+15. Endpoints de cocina/pizzería degradados (faltaba validación estricta de targetAreaId).
+
+CORRECCIONES APLICADAS:
+
+FASE 1 — AUTENTICACIÓN UNIFICADA:
+- token.ts actualizado para aceptar 5-part (userId.role.expiresAt.authVersion.signature)
+  Y 4-part legacy (authVersion=0).
+- User.authVersion Int @default(1) añadido al schema Prisma.
+- getCurrentUser() ahora compara authVersion del token con el de la DB.
+- createSessionToken() pasa user.authVersion al crear el token.
+- bumpAuthVersion(userId) helper creado para invalidar sesiones.
+- prisma db push aplicado exitosamente.
+
+FASE 2 — RESTAURACIÓN DE SCHEMA:
+- blockNegativeStock default restaurado a true (seguro).
+- Order.shiftId + relación con WorkShift restaurados.
+- Payment.exchangeRate/convertedAmount/baseCurrency restaurados.
+- FinanceEntry.exchangeRate/convertedAmount/baseCurrency restaurados.
+- DESPACHADO restaurado en enum OrderItemStatus.
+- WorkShift.orders Order[] relación inversa añadida.
+
+FASE 3 — RESTAURACIÓN DE ARCHIVOS CRÍTICOS:
+- directo-stock.ts restaurado desde rc1.
+- finance-annul.ts restaurado desde rc1.
+- realtime-emitter.ts restaurado desde rc1.
+- internal/emit/route.ts restaurado desde rc1.
+- currency.ts restaurado desde rc1 (con computeConvertedAmount, sumConvertedToCup, etc.).
+- recipe-consumer.ts restaurado desde rc1.
+
+FASE 4 — RESTAURACIÓN DE ENDPOINTS:
+- POST /api/mesero/orders restaurado (validación de stock, permiso de descuento,
+  verificación de mesa, shiftId, conversión monetaria, recalculateOrderStatus).
+- POST /api/mesero/orders/[id]/pay restaurado (conversión monetaria, DESPACHADO).
+- POST /api/mesero/orders/[id]/items restaurado (decremento de stock atómico).
+- POST /api/mesero/orders/[id]/cancel restaurado.
+- POST /api/mesero/orders/[id]/split restaurado.
+- POST /api/mesero/orders/[id]/transfer-table restaurado.
+- order-state-machine.ts restaurado (transiciones con DESPACHADO).
+- Endpoints de cocina y pizzería restaurados.
+- finanzas/entries/[id]/annul restaurado.
+- cierre-diario/[id]/close restaurado.
+
+MEJORAS CONSERVADAS DE v1.0.15:
+- InventoryService (inventory-service.ts) — conservado.
+- ProductAreaResolver (product-area-resolver.ts) — conservado.
+- TableService (table-service.ts) — conservado.
+- MoneyService (money-service.ts) — conservado.
+- url-validator.ts — conservado.
+- login-rate-limiter.ts — conservado.
+- 157 tests unitarios — todos pasan.
+
+VERIFICACIÓN:
+- Login: HTTP 200 OK (admin/admin123).
+- Crear pedido: HTTP 200 OK (Pedido #1043 creado con producto DIRECTO).
+- Producto DIRECTO nace como SERVIDO (comportamiento correcto de rc1).
+- 157 tests unitarios pasan (0 fallan).
+- prisma db push aplicado exitosamente.
+
+Stage Summary:
+- v1.0.16: consolidación completada.
+- Login roto → ARREGLADO.
+- 15 errores críticos encontrados y corregidos.
+- Archivos restaurados desde rc1: 15+ archivos.
+- Mejoras de v1.0.15 conservadas: 6 servicios + 157 tests.
+- Código guardado: download/salva/SoftLBA-v1.0.16-consolidacion-*.tar.gz (9.4MB).

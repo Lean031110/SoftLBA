@@ -2,12 +2,15 @@
 // FIX 1: usa el state machine centralizado para validar transiciones
 // FIX 3: cuando un item pasa a LISTO, llama automáticamente a consumeRecipe()
 //        para descontar los ingredientes de la receta del inventario.
+// v1.0-RC1-bloque1-2 (items 5, 7): el item debe pertenecer a PIZZERIA (targetAreaId).
+//   consumeRecipe se ejecuta DENTRO de la misma transacción que el cambio de estado,
+//   para que si falla el descuento de stock, el item NO se marque como LISTO.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
-import { canTransitionItem } from '@/lib/order-state-machine'
-import { consumeRecipe } from '@/lib/recipe-consumer'
+import { canTransitionItem, recalculateOrderStatus } from '@/lib/order-state-machine'
+import { consumeRecipe, InsufficientStockError } from '@/lib/recipe-consumer'
 import { z } from 'zod'
 
 const ItemStatusSchema = z.object({
@@ -38,6 +41,21 @@ export async function PATCH(
       return NextResponse.json({ ok: false, error: 'Item cancelado' }, { status: 400 })
     }
 
+    // v1.0-RC1-bloque1-2 (item 5): verificar que el item pertenece a PIZZERIA.
+    const pizzeriaArea = await db.area.findUnique({ where: { code: 'PIZZERIA' } })
+    if (!pizzeriaArea) {
+      return NextResponse.json(
+        { ok: false, error: 'No existe el área PIZZERIA configurada' },
+        { status: 500 },
+      )
+    }
+    if (item.targetAreaId && item.targetAreaId !== pizzeriaArea.id) {
+      return NextResponse.json(
+        { ok: false, error: 'Este item no pertenece a pizzería' },
+        { status: 403 },
+      )
+    }
+
     const body = await req.json().catch(() => null)
     if (!body) return NextResponse.json({ ok: false, error: 'Cuerpo inválido' }, { status: 400 })
     const parsed = ItemStatusSchema.safeParse(body)
@@ -57,71 +75,60 @@ export async function PATCH(
 
     const before = { status: item.status }
 
-    await db.$transaction(async (tx) => {
-      // Actualizar el item
-      await tx.orderItem.update({
-        where: { id: itemId },
-        data: { status: newStatus as any },
-      })
-
-      // Verificar si todos los items del área de pizzería están listos
-      const areaItems = order.items.filter(
-        (it) => it.targetAreaId === order.areaId && it.status !== 'CANCELADO'
-      )
-      const allReady = areaItems.every(
-        (it) => it.id === itemId ? newStatus === 'LISTO' : it.status === 'LISTO' || it.status === 'SERVIDO'
-      )
-
-      // Si algún item está en preparación, el pedido pasa a EN_PREPARACION
-      if (newStatus === 'EN_PREPARACION' && order.status === 'ENVIADO') {
-        await tx.order.update({ where: { id }, data: { status: 'EN_PREPARACION' } })
-      }
-
-      // Si todos los items de esta área están listos, verificar si todas las áreas terminaron
-      if (allReady) {
-        const allItems = await tx.orderItem.findMany({
-          where: { orderId: id, status: { not: 'CANCELADO' } },
+    // v1.0-RC1-bloque1-2 (item 7): transacción única con consumeRecipe incluido.
+    let recipeResult: Awaited<ReturnType<typeof consumeRecipe>> | null = null
+    try {
+      await db.$transaction(async (tx) => {
+        await tx.orderItem.update({
+          where: { id: itemId },
+          data: { status: newStatus as any },
         })
-        const allItemsReady = allItems.every((it) => it.status === 'LISTO' || it.status === 'SERVIDO')
 
-        if (allItemsReady) {
-          await tx.order.update({ where: { id }, data: { status: 'LISTO' } })
+        if (newStatus === 'LISTO') {
+          recipeResult = await consumeRecipe(
+            item.productId,
+            item.quantity,
+            item.targetAreaId || order.areaId,
+            order.id,
+            item.id,
+            user.id,
+            tx,
+          )
         }
-      }
-    })
 
-    // FIX 3: consumir receta automáticamente cuando el item pasa a LISTO.
-    let recipeResult: { ok: boolean; alerts?: string[]; deductionsCount?: number } | null = null
-    if (newStatus === 'LISTO') {
-      try {
-        recipeResult = await consumeRecipe(
-          item.productId,
-          item.quantity,
-          item.targetAreaId || order.areaId,
-          order.id,
-          item.id,
-          user.id,
-        )
-        await audit({
-          userId: user.id,
-          action: 'SYNC_RECIPE',
-          entity: 'order-item',
-          entityId: itemId,
-          result: (recipeResult?.alerts?.length ?? 0) > 0 ? 'ALERT' : 'SUCCESS',
-          after: {
-            orderId: order.id,
-            orderNumber: order.number,
-            itemId,
-            productId: item.productId,
-            deductionsCount: recipeResult?.deductionsCount ?? 0,
-            alertsCount: recipeResult?.alerts?.length ?? 0,
-            alerts: recipeResult?.alerts ?? [],
+        await recalculateOrderStatus(order.id, tx)
+      })
+    } catch (err) {
+      if (err instanceof InsufficientStockError) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `No se pudo marcar como LISTO: stock insuficiente de ingredientes`,
+            details: err.details,
           },
-        })
-      } catch (err) {
-        console.error('consumeRecipe failed', err)
-        // No bloqueamos el cambio de estado del item por un fallo de inventario.
+          { status: 400 },
+        )
       }
+      throw err
+    }
+
+    if (newStatus === 'LISTO' && recipeResult) {
+      await audit({
+        userId: user.id,
+        action: 'SYNC_RECIPE',
+        entity: 'order-item',
+        entityId: itemId,
+        result: (recipeResult?.alerts?.length ?? 0) > 0 ? 'ALERT' : 'SUCCESS',
+        after: {
+          orderId: order.id,
+          orderNumber: order.number,
+          itemId,
+          productId: item.productId,
+          deductionsCount: recipeResult?.deductionsCount ?? 0,
+          alertsCount: recipeResult?.alerts?.length ?? 0,
+          alerts: recipeResult?.alerts ?? [],
+        },
+      })
     }
 
     await audit({

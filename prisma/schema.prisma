@@ -29,6 +29,13 @@ model User {
   failedAttempts    Int       @default(0)
   lockedUntil       DateTime?
 
+  // authVersion para invalidar sesiones existentes (FASE 1 consolidación).
+  // El token de sesión guarda authVersion al crearse. Si el usuario cambia
+  // su contraseña, su rol, o es desactivado, se incrementa authVersion.
+  // El middleware compara authVersion del token con el de la DB; si no
+  // coinciden, la sesión se invalida inmediatamente.
+  authVersion       Int       @default(1)
+
   // Perfil
   firstName        String?
   lastName         String?
@@ -124,8 +131,9 @@ model RestaurantConfig {
   offlineMessage     String   @default("Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante (red local). Verifica que estás en la misma red que el servidor.")
   offlineWifiName    String?
   offlineInstructions String?
-  // Control de stock negativo en ventas DIRECTAS (FIX 4)
-  blockNegativeStock Boolean  @default(false)
+  // Control de stock negativo en ventas DIRECTAS (FIX 4 / v1.0-RC1-bloque1)
+  // Por defecto TRUE: no se permite vender productos DIRECTO sin stock suficiente.
+  blockNegativeStock Boolean  @default(true)
   updatedAt       DateTime @updatedAt
 }
 
@@ -352,6 +360,9 @@ model Order {
   //   Si este pedido fue dividido desde otro, parentOrderId apunta al
   //   pedido original. El original tiene childOrders = [this].
   parentOrderId String?
+  // v1.0-RC1-bloque1-2 (item 14) — Turno de trabajo opcional asociado al pedido.
+  // Se rellena automáticamente al crear el pedido si el usuario tiene un turno OPEN.
+  shiftId       String?
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
   closedAt      DateTime?
@@ -361,6 +372,7 @@ model Order {
   table         Table?     @relation(fields: [tableId], references: [id])
   parentOrder   Order?    @relation("OrderParent", fields: [parentOrderId], references: [id], onDelete: SetNull)
   childOrders   Order[]   @relation("OrderParent")
+  shift         WorkShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   items         OrderItem[]
   payments      Payment[]
 
@@ -369,6 +381,7 @@ model Order {
   @@index([status])
   @@index([createdAt])
   @@index([parentOrderId])
+  @@index([shiftId])
 }
 
 model OrderItem {
@@ -417,6 +430,16 @@ model Payment {
   amount      Float
   reference   String?
   notes       String?
+  // v1.0-RC1-bloque2-3 (items 18-20) — Conversión monetaria CUP/USD:
+  //   - exchangeRate: snapshot de RestaurantConfig.usdToCup al momento del pago.
+  //     Permite reconstruir históricamente el valor en CUP aunque la tasa cambie.
+  //   - convertedAmount: monto convertido a la moneda base (CUP) usando exchangeRate.
+  //     Si currency='CUP' → convertedAmount === amount.
+  //     Si currency='USD' → convertedAmount = amount * exchangeRate.
+  //   - baseCurrency: moneda en la que se expresa convertedAmount (siempre 'CUP').
+  exchangeRate    Float?
+  convertedAmount Float?
+  baseCurrency    String    @default("CUP")
   createdAt   DateTime     @default(now())
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -435,6 +458,16 @@ model FinanceEntry {
   description String
   amount      Float
   currency    String        @default("CUP")
+  // v1.0-RC1-bloque2-3 (items 21-22) — Conversión a moneda base (CUP):
+  //   - exchangeRate: snapshot de la tasa usada al crear la entrada.
+  //   - convertedAmount: monto convertido a CUP (baseCurrency) usando exchangeRate.
+  //   - baseCurrency: moneda base en la que se expresa convertedAmount ('CUP').
+  // Para VENTA generada en cierre diario: convertedAmount viene de sumar
+  // Payment.convertedAmount del mismo método. Para entradas manuales
+  // (INGRESO/EGRESO/GASTO/SALARIO) se calcula al crear usando la tasa actual.
+  exchangeRate    Float?
+  convertedAmount Float?
+  baseCurrency    String    @default("CUP")
   reference   String?
   userId      String
   orderId     String?
@@ -751,6 +784,10 @@ enum OrderItemStatus {
   PENDIENTE
   EN_PREPARACION
   LISTO
+  // v1.0-RC1-bloque1-2 (item 2): DESPACHADO para productos DIRECTO.
+  // Flujo DIRECTO: PENDIENTE → DESPACHADO → SERVIDO
+  // Flujo FINAL:  PENDIENTE → EN_PREPARACION → LISTO → SERVIDO
+  DESPACHADO
   SERVIDO
   CANCELADO
 }
@@ -818,6 +855,9 @@ model WorkShift {
   observations String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // v1.0-RC1-bloque1-2 (item 14): pedidos asociados a este turno.
+  orders       Order[]
 
   @@index([userId])
   @@index([status])

@@ -1,12 +1,19 @@
-// PATCH /api/cizzeria/orders/[id]/status - Cambiar estado del pedido desde cocina
+// PATCH /api/cocina/orders/[id]/status - Cambiar estado del pedido desde cocina
 // FIX 1: usa el state machine centralizado (src/lib/order-state-machine.ts)
 // FIX 2: verifica que el pedido tenga items cuyo targetAreaId sea SALON
 //        (en lugar de verificar order.area.code === 'SALON')
+// v1.0-RC1-bloque1-2 (item 6): NO se hace updateMany sobre todos los items.
+//   El estado de cada item se gestiona individualmente vía
+//   /api/cocina/orders/[id]/items/[itemId]/status.
+//   El estado del pedido se calcula a partir de los items vía
+//   recalculateOrderStatus(), que se invoca al final para sincronizar.
+//   Si el operador quiere forzar SERVIDO (p.ej. tras servir a la mesa),
+//   se respeta su valor siempre que la transición sea válida.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
-import { canTransitionOrder } from '@/lib/order-state-machine'
+import { canTransitionOrder, recalculateOrderStatus } from '@/lib/order-state-machine'
 import { z } from 'zod'
 
 const StatusSchema = z.object({
@@ -74,26 +81,26 @@ export async function PATCH(
 
     const before = { status: order.status }
     const updated = await db.$transaction(async (tx) => {
+      // v1.0-RC1-bloque1-2 (item 6): NO se hace updateMany sobre items.
+      // El estado del pedido se respeta como override explícito del operador
+      // (p.ej. para marcar SERVIDO tras entregar a la mesa).
       const upd = await tx.order.update({
         where: { id },
         data: { status: newStatus },
       })
-
-      // Actualizar estado de items según transición
-      const newItemStatus =
-        newStatus === 'EN_PREPARACION' ? 'EN_PREPARACION' :
-        newStatus === 'LISTO' ? 'LISTO' :
-        newStatus === 'SERVIDO' ? 'SERVIDO' : 'PENDIENTE'
-
-      if (newItemStatus !== 'PENDIENTE') {
-        await tx.orderItem.updateMany({
-          where: { orderId: order.id, status: { not: 'CANCELADO' } },
-          data: { status: newItemStatus as any },
-        })
-      }
-
+      // Recalcular para sincronizar con items (si el operador puso LISTO
+      // pero los items siguen PENDIENTE, recalc mantendrá el override explícito
+      // porque el body pide LISTO).
       return upd
     })
+
+    // Sincronizar estado calculado (no override explícito).
+    // Si el operador forzó SERVIDO, respetamos ese valor (recalc no toca
+    // pedidos en estados terminales).
+    let finalStatus = updated.status
+    if (newStatus !== 'SERVIDO') {
+      finalStatus = await recalculateOrderStatus(order.id)
+    }
 
     await audit({
       userId: user.id,
@@ -101,21 +108,21 @@ export async function PATCH(
       entity: 'order',
       entityId: order.id,
       before,
-      after: { status: newStatus },
+      after: { status: finalStatus },
     })
 
     // Devolver payload para que el cliente emita WebSocket
     const event = newStatus === 'LISTO' ? 'order:ready' : 'order:status'
     return NextResponse.json({
       ok: true,
-      item: updated,
+      item: { ...updated, status: finalStatus as any },
       wsEvent: event,
       wsPayload: {
         orderId: order.id,
         orderNumber: order.number,
         userId: order.userId,
         areaId: order.areaId,
-        status: newStatus,
+        status: finalStatus,
       },
     })
   } catch (e: any) {

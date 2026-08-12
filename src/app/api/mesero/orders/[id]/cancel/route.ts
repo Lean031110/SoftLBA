@@ -76,6 +76,14 @@ export async function POST(
         },
       })
 
+      // v1.0-RC1-bloque1-2 (item 12): liberar mesa asociada al pedido.
+      if (order.tableId) {
+        await tx.table.update({
+          where: { id: order.tableId },
+          data: { status: 'LIBRE' },
+        })
+      }
+
       // Devolver stock de productos DIRECTO al área correspondiente
       // Solo para items que no estaban cancelados ya
       for (const it of order.items) {

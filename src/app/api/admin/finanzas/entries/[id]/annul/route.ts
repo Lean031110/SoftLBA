@@ -2,7 +2,7 @@
 // ------------------------------------------------------------
 // Recibe:
 //   reason: string (motivo de anulación, obligatorio)
-// Efectos:
+// Efectos (ver `src/lib/finance-annul.ts`):
 //   - Marca la entrada original como status=ANNULLED, annulledById=<user>,
 //     annulledAt=now(), annulReason=<reason>.
 //   - Crea una entrada compensatoria (type EGRESO si original era INGRESO/VENTA,
@@ -11,24 +11,21 @@
 //   - Enlaza ambas entradas vía `annulCompensationEntryId` en la original y
 //     `compensatedBy` en la nueva.
 //   - Audit log con before/after de ambas entradas.
+//
+// v1.0-RC1-bloque2-3 (item 23): la lógica de anulación fue extraída al
+// helper `annulFinanceEntry` en `src/lib/finance-annul.ts` para que
+// DELETE /api/admin/finanzas/entries/[id] pueda reusarla.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { hasPerm, PERMISSIONS } from '@/lib/permissions/permissions-v2'
+import { annulFinanceEntry, AnnulError } from '@/lib/finance-annul'
 import { z } from 'zod'
 
 const AnnulSchema = z.object({
   reason: z.string().min(3, 'Motivo de anulación obligatorio (mínimo 3 caracteres)').max(500),
 })
-
-// Tipo opuesto para la entrada compensatoria:
-//   INGRESO/VENTA → EGRESO (devolución)
-//   EGRESO/GASTO/SALARIO/MERMA/AJUSTE/COMPRA → INGRESO (reembolso)
-function compensationType(t: string): 'INGRESO' | 'EGRESO' {
-  if (t === 'INGRESO' || t === 'VENTA') return 'EGRESO'
-  return 'INGRESO'
-}
 
 export async function POST(
   req: NextRequest,
@@ -46,9 +43,6 @@ export async function POST(
     if (!existing) {
       return NextResponse.json({ ok: false, error: 'Entrada no encontrada' }, { status: 404 })
     }
-    if (existing.status === 'ANNULLED') {
-      return NextResponse.json({ ok: false, error: 'La entrada ya está anulada' }, { status: 400 })
-    }
 
     const json = await req.json().catch(() => null)
     if (!json) return NextResponse.json({ ok: false, error: 'Cuerpo inválido' }, { status: 400 })
@@ -61,37 +55,7 @@ export async function POST(
     }
     const d = parsed.data
 
-    const compType = compensationType(existing.type)
-    const compDescription = `[Anulación] ${existing.description}`
-
-    // Transacción: anular original + crear compensatoria + enlazar
-    const [annulled, compensation] = await db.$transaction(async (tx) => {
-      const comp = await tx.financeEntry.create({
-        data: {
-          type: compType,
-          category: existing.category,
-          description: compDescription,
-          amount: existing.amount,
-          currency: existing.currency,
-          reference: existing.reference,
-          userId: user.id,
-          orderId: existing.orderId,
-          dailyCloseId: existing.dailyCloseId,
-          status: 'ACTIVE',
-        },
-      })
-      const ann = await tx.financeEntry.update({
-        where: { id },
-        data: {
-          status: 'ANNULLED',
-          annulledById: user.id,
-          annulledAt: new Date(),
-          annulReason: d.reason,
-          annulCompensationEntryId: comp.id,
-        },
-      })
-      return [ann, comp] as const
-    })
+    const { annulled, compensation } = await annulFinanceEntry(id, user.id, d.reason)
 
     await audit({
       userId: user.id,
@@ -120,6 +84,14 @@ export async function POST(
       compensation,
     })
   } catch (e: any) {
+    if (e instanceof AnnulError) {
+      if (e.code === 'NOT_FOUND') {
+        return NextResponse.json({ ok: false, error: e.message }, { status: 404 })
+      }
+      if (e.code === 'ALREADY_ANNULLED') {
+        return NextResponse.json({ ok: false, error: e.message }, { status: 400 })
+      }
+    }
     console.error('POST /api/admin/finanzas/entries/[id]/annul', e)
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }

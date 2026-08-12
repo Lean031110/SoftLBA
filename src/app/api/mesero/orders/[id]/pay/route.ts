@@ -1,8 +1,20 @@
 // POST /api/mesero/orders/[id]/pay - Registrar pago(s) contra un pedido
+//
+// v1.0-RC1-bloque2-3 (items 19-20) — Conversión monetaria CUP/USD:
+//   - Cada Payment persiste: exchangeRate (snapshot de RestaurantConfig.usdToCup),
+//     convertedAmount (monto en CUP usando exchangeRate) y baseCurrency='CUP'.
+//   - La comparación con `order.total` (que está en CUP) usa `convertedAmount`
+//     en lugar de `amount` crudo. Antes se mezclaban USD+CUP y un pago de 1 USD
+//     contaba como 1 contra el total en CUP.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import {
+  computeConvertedAmount,
+  sumConvertedToCup,
+  currencyForMethod,
+} from '@/lib/currency'
 import { z } from 'zod'
 
 const PAYMENT_METHODS = [
@@ -58,8 +70,13 @@ export async function POST(
     }
 
     // Verificar que todos los productos estén listos antes de cobrar
+    // v1.0-RC1-bloque1-2: incluir DESPACHADO como estado terminal válido.
     const pendingItems = order.items.filter(
-      (it) => it.status !== 'LISTO' && it.status !== 'CANCELADO' && it.status !== 'SERVIDO'
+      (it) =>
+        it.status !== 'LISTO' &&
+        it.status !== 'DESPACHADO' &&
+        it.status !== 'CANCELADO' &&
+        it.status !== 'SERVIDO',
     )
     if (pendingItems.length > 0) {
       return NextResponse.json(
@@ -79,16 +96,37 @@ export async function POST(
     }
     const d = parsed.data
 
-    // Total ya pagado
-    const alreadyPaid = order.payments.reduce((s, p) => s + p.amount, 0)
-    const totalPaid = d.payments.reduce((s, p) => s + p.amount, 0) + alreadyPaid
+    // v1.0-RC1-bloque2-3 (items 19-20): cargar la tasa USD→CUP configurada para
+    // snapshot en cada pago y para conversión al comparar con el total (CUP).
+    const config = await db.restaurantConfig.findFirst({ where: { id: 'config-1' } })
+    const usdToCupRate = config?.usdToCup || 320
 
-    // Permitir pagar hasta el total. Si excede, devolver error.
-    if (totalPaid > order.total + 0.01) {
+    // Normalizar moneda de cada pago según el método (defensivo: si el cliente
+    // manda currency='CUP' para un método *_USD, lo sobreescribimos a 'USD').
+    const normalizedPayments = d.payments.map((p) => {
+      const methodCurrency = currencyForMethod(p.method)
+      // Si el método determina una moneda explícita, esa gana.
+      const currency =
+        p.method === 'COMBINADO'
+          ? (p.currency || 'CUP').toUpperCase()
+          : methodCurrency
+      const convertedAmount = computeConvertedAmount(p.amount, currency, usdToCupRate)
+      return { ...p, currency, convertedAmount, exchangeRate: usdToCupRate }
+    })
+
+    // Total ya pagado (en CUP equivalente usando convertedAmount almacenado)
+    const alreadyPaidCup = sumConvertedToCup(order.payments, usdToCupRate)
+    // Total de los nuevos pagos (en CUP equivalente)
+    const newPaidCup = normalizedPayments.reduce((s, p) => s + p.convertedAmount, 0)
+    const totalPaidCup = alreadyPaidCup + newPaidCup
+
+    // v1.0-RC1-bloque2-3 (item 20): comparar contra order.total (en CUP) usando
+    // el equivalente en CUP, no la suma cruda de montos en distintas monedas.
+    if (totalPaidCup > order.total + 0.01) {
       return NextResponse.json(
         {
           ok: false,
-          error: `El monto total (${totalPaid.toFixed(2)}) excede el total del pedido (${order.total.toFixed(2)})`,
+          error: `El monto total (${totalPaidCup.toFixed(2)} CUP) excede el total del pedido (${order.total.toFixed(2)} CUP)`,
         },
         { status: 400 },
       )
@@ -97,7 +135,7 @@ export async function POST(
     // Crear los pagos en transacción
     const result = await db.$transaction(async (tx) => {
       const createdPayments = []
-      for (const p of d.payments) {
+      for (const p of normalizedPayments) {
         const payment = await tx.payment.create({
           data: {
             orderId: order.id,
@@ -107,13 +145,17 @@ export async function POST(
             amount: p.amount,
             reference: p.reference || null,
             notes: p.notes || null,
+            // v1.0-RC1-bloque2-3 (item 19): persistir snapshot de conversión
+            exchangeRate: p.exchangeRate,
+            convertedAmount: p.convertedAmount,
+            baseCurrency: 'CUP',
           },
         })
         createdPayments.push(payment)
       }
 
       // Actualizar estado del pedido
-      const newPaidTotal = totalPaid
+      const newPaidTotal = totalPaidCup
       const isFullyPaid = newPaidTotal >= order.total - 0.01
       const newPaymentStatus = isFullyPaid ? 'PAGADO' : 'PARCIAL'
       const newOrderStatus = isFullyPaid ? 'COBRADO' : order.status
@@ -126,6 +168,15 @@ export async function POST(
           closedAt: isFullyPaid ? new Date() : order.closedAt,
         },
       })
+
+      // v1.0-RC1-bloque1-2 (item 12): al cobrar completamente, marcar mesa como
+      // ESPERANDO_CUENTA (el cliente aún está terminando / esperando comprobante).
+      if (isFullyPaid && order.tableId) {
+        await tx.table.update({
+          where: { id: order.tableId },
+          data: { status: 'ESPERANDO_CUENTA' },
+        })
+      }
 
       // NOTA: No se crea FinanceEntry aquí. La única fuente de verdad para finanzas
       // es el cierre diario (close/route.ts), que crea un FinanceEntry VENTA por cada
@@ -147,6 +198,9 @@ export async function POST(
           method: p.method,
           currency: p.currency,
           amount: p.amount,
+          exchangeRate: p.exchangeRate,
+          convertedAmount: p.convertedAmount,
+          baseCurrency: p.baseCurrency,
           reference: p.reference,
         },
       })
@@ -161,6 +215,7 @@ export async function POST(
         status: result.updated.status,
         paymentStatus: result.updated.paymentStatus,
         paidTotal: result.newPaidTotal,
+        paidTotalCup: totalPaidCup,
         fullyPaid: result.isFullyPaid,
       },
     })
@@ -215,7 +270,7 @@ export async function POST(
         orderNumber: order.number,
         userId: order.userId,
         areaId: order.areaId,
-        amount: totalPaid,
+        amount: totalPaidCup,
       },
     })
   } catch (e: any) {
