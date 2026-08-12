@@ -1,7 +1,9 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ============================================================
+# SoftLBA — .gitignore
+# ============================================================
 
-# dependencies
-node_modules
+# Dependencies
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -10,45 +12,67 @@ node_modules
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# Testing
 /coverage
+*.lcov
 
-# next.js
+# Next.js
 /.next/
 /out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
-
-# env files (can opt-in for committing if needed)
-.env*
-
-# vercel
-.vercel
-
-
-# typescript
-*.tsbuildinfo
 next-env.d.ts
-local-*
-.claude
-.z-ai-config
+
+# Production
+/build/
+/dist/
+
+# Environment variables — NUNCA subir secretos
+.env
+.env.*
+!.env.example
+
+# Database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+/db/custom.db*
+
+# Logs
 *.log
 dev.log
-dev.out.log
-test
-prompt
-
 server.log
-# Skills directory
+
+# Backups
+/backups/
+/backups/snapshots/
+
+# Download/Upload — artefactos de trabajo
+/download/
+/upload/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Agent context (temporal)
+/agent-ctx/
+/tool-results/
+/.zscripts/
+
+# Skills (internas del entorno de desarrollo)
 /skills/
+
+# Examples (no parte del core)
+/examples/
+tsconfig.tsbuildinfo

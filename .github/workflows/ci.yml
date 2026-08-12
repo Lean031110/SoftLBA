@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Generate Prisma client
+        run: bun run db:generate
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: bun run lint
+        continue-on-error: true
+
+      - name: Run tests
+        run: npx vitest run
+        env:
+          DATABASE_URL: file:./db/test.db
+          NEXTAUTH_SECRET: ci-test-secret-min-16-chars
+          REALTIME_SECRET: ci-realtime-secret-min-16-chars
