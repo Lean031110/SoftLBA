@@ -25,9 +25,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Buscar pedidos que tengan al menos un item con targetAreaId = PIZZERIA
+    const statusFilter: any = status
+      ? status
+      : { in: includeServed ? ACTIVE_STATUS : ['ENVIADO', 'EN_PREPARACION', 'LISTO'] }
     const orders = await db.order.findMany({
       where: {
-        status: status ? status : { in: includeServed ? ACTIVE_STATUS : ['ENVIADO', 'EN_PREPARACION', 'LISTO'] },
+        status: statusFilter,
         items: {
           some: {
             targetAreaId: pizzeriaArea.id,

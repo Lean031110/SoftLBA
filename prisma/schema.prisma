@@ -166,6 +166,8 @@ model Area {
   stockMovements StockMovement[]
   physicalStocks PhysicalStock[]
   products   Product[]
+  productsForSale       Product[] @relation("ProductSaleArea")
+  productsForProduction Product[] @relation("ProductProductionArea")
   orderItems OrderItem[]
   workShifts  WorkShift[]
 }
@@ -190,11 +192,17 @@ model Product {
   imageUrl      String?
   notes         String?
   areaId        String?      // Área a la que pertenece (null = todos los áreas pueden venderlo)
+  // v1.0.18: campos para resolución de áreas (ProductAreaResolver).
+  saleAreaId      String?
+  productionAreaId String?
+  dispatchMode    String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
   // Relaciones
   area          Area?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  saleArea      Area?       @relation("ProductSaleArea", fields: [saleAreaId], references: [id], onDelete: SetNull)
+  productionArea Area?      @relation("ProductProductionArea", fields: [productionAreaId], references: [id], onDelete: SetNull)
   recipe        Recipe?
   recipeItems   RecipeIngredient[]
   orderItems    OrderItem[]
@@ -336,10 +344,13 @@ model Table {
   //   LIBRE, OCUPADA, RESERVADA, ESPERANDO_CUENTA, LIMPIEZA
   status      String   @default("LIBRE")
   isActive    Boolean  @default(true)
+  // v1.0.18: pedido actualmente activo en la mesa (TableService ownership).
+  currentOrderId String? @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   orders      Order[]
+  currentOrder Order? @relation("TableCurrentOrder", fields: [currentOrderId], references: [id], onDelete: SetNull)
 }
 
 model Order {
@@ -370,6 +381,7 @@ model Order {
   user          User       @relation(fields: [userId], references: [id])
   area          Area       @relation(fields: [areaId], references: [id])
   table         Table?     @relation(fields: [tableId], references: [id])
+  tableAsCurrent Table?   @relation("TableCurrentOrder")
   parentOrder   Order?    @relation("OrderParent", fields: [parentOrderId], references: [id], onDelete: SetNull)
   childOrders   Order[]   @relation("OrderParent")
   shift         WorkShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)

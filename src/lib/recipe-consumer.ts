@@ -47,8 +47,8 @@ export interface ConsumeRecipeResult {
  * Permite al llamador distinguir este caso y devolver un mensaje útil al cliente.
  */
 export class InsufficientStockError extends Error {
-  constructor(public readonly details: ConsumeRecipeResult['deductions']) {
-    const messages = details.map(
+  constructor(public readonly details: NonNullable<ConsumeRecipeResult['deductions']>) {
+    const messages = (details || []).map(
       (d) => `${d.productName} (área ${d.areaName}): disponible ${d.stockBefore ?? 0}, requerido ${d.quantityNeeded} ${d.unit}`,
     )
     super(`Stock insuficiente: ${messages.join('; ')}`)

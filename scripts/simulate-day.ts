@@ -42,9 +42,9 @@ function authHeaders(name) {
   return c['rc_session'] ? { Cookie: `rc_session=${c['rc_session']}` } : {}
 }
 
-async function api(name, method, path, body) {
+async function api(name: string, method: string, path: string, body?: any) {
   const headers = { ...authHeaders(name), 'Content-Type': 'application/json' }
-  const opts = { method, headers }
+  const opts: any = { method, headers }
   if (body) opts.body = JSON.stringify(body)
   const res = await fetch(`${BASE}${path}`, opts)
   const data = await res.json().catch(() => ({ ok: false, error: 'Invalid JSON' }))

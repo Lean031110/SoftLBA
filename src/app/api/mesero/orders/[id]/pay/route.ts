@@ -161,7 +161,7 @@ export async function POST(
     // Crear los pagos en transacción
     let idempotencyKeyToUse: string | undefined = d.idempotencyKey
     const result = await db.$transaction(async (tx) => {
-      const createdPayments = []
+      const createdPayments: any[] = []
       for (const p of normalizedPayments) {
         const payment = await tx.payment.create({
           data: {

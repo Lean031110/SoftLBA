@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validar mesa (si viene). v1.0-RC1-bloque1-2 (item 13): verificar que esté LIBRE.
-    let table: { id: string; areaId: string | null; name: string; status: string } | null = null
+    let table: { id: string; areaId: string | null; name: string; status: string; isActive: boolean } | null = null
     if (d.tableId) {
       table = await db.table.findUnique({ where: { id: d.tableId } })
       if (!table || !table.isActive) {
@@ -406,7 +406,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      item: { ...order, status: finalStatus as any } ?? order,
+      item: { ...order, status: finalStatus as any },
       wsPayload: {
         orderId: order.id,
         orderNumber: order.number,

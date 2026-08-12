@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
       },
       include: {
         user: { select: { id: true, firstName: true, lastName: true, username: true } },
+        area: { select: { id: true, name: true } },
         items: {
           where: { status: { not: 'CANCELADO' } },
           include: {

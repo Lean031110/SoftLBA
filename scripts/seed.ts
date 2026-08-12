@@ -244,8 +244,8 @@ async function main() {
   for (const p of products) {
     await prisma.product.upsert({
       where: { code: p.code },
-      update: { areaId: p.areaId },
-      create: p,
+      update: { areaId: p.areaId ?? null },
+      create: { ...p, areaId: p.areaId ?? null, type: p.type as any },
     })
   }
 

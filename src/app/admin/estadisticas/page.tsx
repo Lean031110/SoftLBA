@@ -256,6 +256,8 @@ export default function EstadisticasPage() {
                     <PieChart>
                       <Pie
                         data={stats.methods.map((m) => ({ name: METHOD_LABELS[m.method] || m.method, value: m.total }))}
+                        dataKey="value"
+                        nameKey="name"
                         cx="50%" cy="50%" outerRadius={80}
                         label={(entry) => `${entry.name}: $${entry.value.toFixed(0)}`}
                         labelLine={false}

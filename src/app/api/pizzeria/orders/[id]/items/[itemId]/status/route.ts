@@ -11,6 +11,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { canTransitionItem, recalculateOrderStatus } from '@/lib/order-state-machine'
 import { consumeRecipe, InsufficientStockError } from '@/lib/recipe-consumer'
+import type { ConsumeRecipeResult } from '@/lib/recipe-consumer'
 import { z } from 'zod'
 
 const ItemStatusSchema = z.object({
@@ -76,7 +77,7 @@ export async function PATCH(
     const before = { status: item.status }
 
     // v1.0-RC1-bloque1-2 (item 7): transacción única con consumeRecipe incluido.
-    let recipeResult: Awaited<ReturnType<typeof consumeRecipe>> | null = null
+    let recipeResult: ConsumeRecipeResult | null = null as any
     try {
       await db.$transaction(async (tx) => {
         await tx.orderItem.update({

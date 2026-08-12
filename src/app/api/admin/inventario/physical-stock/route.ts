@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     // Crear los registros de PhysicalStock
     const created = await db.$transaction(async (tx) => {
-      const items = []
+      const items: any[] = []
       for (const it of d.items) {
         const current = await tx.areaInventory.findUnique({
           where: { areaId_productId: { areaId: d.areaId, productId: it.productId } },

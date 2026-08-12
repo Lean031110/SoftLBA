@@ -39,12 +39,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         createdAt: true,
         updatedAt: true,
         profile: true,
-        sessions: {
-          where: { expiresAt: { gt: new Date() } },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          select: { id: true, ipAddress: true, userAgent: true, createdAt: true, expiresAt: true },
-        },
       },
     })
     if (!found) return NextResponse.json({ ok: false, error: 'No encontrado' }, { status: 404 })

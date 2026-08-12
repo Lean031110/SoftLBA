@@ -32,8 +32,10 @@ type Product = {
   name: string
   unit: string
   cost: number
+  price: number
   type: string
   category?: string | null
+  isActive: boolean
 }
 
 type Ingredient = {

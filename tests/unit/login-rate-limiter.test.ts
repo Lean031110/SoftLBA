@@ -49,7 +49,7 @@ describe('LoginRateLimiter — recordFailedAttempt', () => {
     const r2 = recordFailedAttempt(testIp)
     expect(r2.ok).toBe(true)
     // El remaining debe ser menor o igual (puede ser igual si el cálculo es distinto).
-    expect(r2.remaining).toBeLessThanOrEqual(r1.remaining)
+    expect(r2.remaining ?? 0).toBeLessThanOrEqual(r1.remaining ?? 0)
   })
 
   it('bloquea IP tras llegar al límite', () => {

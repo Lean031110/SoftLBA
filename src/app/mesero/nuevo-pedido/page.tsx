@@ -520,7 +520,7 @@ function CartContent({
                             size="icon"
                             variant="ghost"
                             className="h-7 w-7 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => removeItem(it.product.id)}
+                            onClick={() => onRemove(it.product.id)}
                             aria-label="Quitar"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -529,18 +529,18 @@ function CartContent({
                         {/* Cantidad + subtotal */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(it.product.id, -1)}>
+                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => onUpdateQty(it.product.id, -1)}>
                               <Minus className="h-3 w-3" />
                             </Button>
                             <Input
                               type="number"
                               value={it.quantity}
-                              onChange={(e) => setQuantity(it.product.id, Number(e.target.value))}
+                              onChange={(e) => onSetQty(it.product.id, Number(e.target.value))}
                               className="h-7 w-14 text-center px-1 font-medium"
                               min={0}
                               step={it.product.unit === 'ml' || it.product.unit === 'kg' ? 0.5 : 1}
                             />
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => updateQuantity(it.product.id, 1)}>
+                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => onUpdateQty(it.product.id, 1)}>
                               <Plus className="h-3 w-3" />
                             </Button>
                           </div>
@@ -554,7 +554,7 @@ function CartContent({
                         {/* Notas del item */}
                         <Input
                           value={it.notes}
-                          onChange={(e) => updateItemNotes(it.product.id, e.target.value)}
+                          onChange={(e) => onUpdateNotes(it.product.id, e.target.value)}
                           placeholder="Notas (ej: sin cebolla)"
                           className="h-8 text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                           maxLength={300}

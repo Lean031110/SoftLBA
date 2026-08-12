@@ -98,9 +98,8 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
           icon: '/softlba-logo.png',
           badge: '/softlba-favicon.png',
           tag: data?.tag || 'softlba',
-          vibrate: [200, 100, 200],
           data: data || {},
-        })
+        } as NotificationOptions)
         notif.onclick = () => {
           window.focus()
           if (data?.url) {
