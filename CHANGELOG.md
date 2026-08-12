@@ -7,6 +7,22 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.19] — 2026-08-13
+
+### CI/CD y Tests
+- **CI corregido**: `mini-services` y `scripts` excluidos del `tsconfig.json` (servicio separado con su propio `package.json`).
+- **CI mejorado**: workflow actualizado a `setup-bun@v2`, job de `build` separado, variables de entorno de test.
+- **110 tests nuevos** (267 total, todos pasando):
+  - `auth-integration.test.ts`: login, token 5-part, authVersion, password generation.
+  - `state-machine-complete.test.ts`: OrderStatus, OrderItemStatus con DESPACHADO, transiciones válidas/inválidas.
+  - `finance-complete.test.ts`: conversión CUP/USD, exchangeRate, snapshot histórico, redondeo bancario.
+  - `inventory-concurrency.test.ts`: última unidad, doble consumo, stock negativo bloqueado, transferencia atómica.
+  - `tables-payments-concurrency.test.ts`: doble asignación de mesa, transferencia atómica, idempotencia.
+- **Build de producción verificado**: `next build` completado exitosamente.
+- **0 errores TypeScript** (`npx tsc --noEmit`).
+
+---
+
 ## [1.0.18] — 2026-08-12
 
 ### Estabilización
