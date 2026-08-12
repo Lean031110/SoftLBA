@@ -850,3 +850,57 @@ Stage Summary:
 - Problemas encontrados:
   - Tras `bun run db:push`+`db:generate`, el dev server seguía usando el Prisma client antiguo en memoria (Turbopack cachea módulos de node_modules). Los nuevos endpoints devolvían 500 con "Cannot read properties of undefined (reading 'workShift')". Solución: `pkill -f "next dev"` + `pkill -f "bun run dev"` y reiniciar manualmente con `(nohup bun run dev > dev.log 2>&1 &)` para que Next.js recargue el Prisma client.
 
+
+---
+Task ID: HARDENING-FASE-14
+Agent: main (Super Z)
+Task: FASE 14 — Tests Vitest (issues #84-#87) → v1.0.15
+
+Work Log:
+- VERIFICACIÓN DE ESTADO: El proyecto se había reseteado a v0.2.0. Todos los cambios
+  de las FASES 1-12 se perdieron (InventoryService, ProductAreaResolver, TableService,
+  MoneyService, directo-stock fix, parches en endpoints, etc.). Solo quedaron los docs
+  en worklog.md.
+- RESTAURACIÓN: Recreados los 4 servicios críticos desde el worklog:
+  * src/lib/inventory/inventory-service.ts (FASE 1 — issues #1, #15, #16, #17)
+  * src/lib/products/product-area-resolver.ts (FASE 2 — issue #2)
+  * src/lib/tables/table-service.ts (FASE 4 — issues #18, #19, #20)
+  * src/lib/money/money-service.ts (FASE 8 — issues #30, #31, #32, #33)
+  * src/lib/security/url-validator.ts (FASE 12 — issue #95)
+  * src/lib/security/login-rate-limiter.ts (FASE 12 — issue #47)
+- TESTS CREADOS (7 archivos nuevos, 157 tests totales):
+  * tests/unit/money-service.test.ts (28 tests): roundHalfToEven, addMoney, subtractMoney,
+    multiplyMoney, usdToCup, cupToUsd, toBaseCurrency, formatMoney, calculateChange,
+    validateCurrency, isValidCurrency, isCombinedMethod, isValidPaymentMethod,
+    expectedCurrencyForMethod, requiresCashInfo.
+  * tests/unit/product-area-resolver.test.ts (24 tests): resolveProductAreas (fallback legacy),
+    resolveTargetArea, resolveSaleArea, canSellInArea, requiresProduction, isDirectNow.
+  * tests/unit/table-service.test.ts (15 tests): takeTable (atómico), releaseTable (ownership),
+    transferTable (atómico origen+destino), canTakeTable. Con mocks de db.
+  * tests/unit/inventory-service.test.ts (varios tests): ensureAreaInventory (crea con stock=0),
+    consume (valida stock suficiente), returnStock, transfer (atómico), auditDuplicatedStock.
+  * tests/unit/url-validator.test.ts (19 tests): validateUrl (acepta http/https, rechaza
+    javascript:, data:, vbscript:, file:), validateUrls, sanitizeUrl.
+  * tests/unit/login-rate-limiter.test.ts (11 tests): checkRateLimit, recordFailedAttempt
+    (bloquea IP tras 20 intentos, device tras 10), recordSuccessfulAttempt, getRateLimitStats.
+  * tests/unit/auth-token.test.ts (varios tests): formato 5 partes con authVersion,
+    compatibilidad legacy 4 partes, rechazo de tokens inválidos.
+- TESTS PRE-EXISTENTES (4 archivos, 38 tests):
+  * tests/unit/order-state-machine.test.ts (14 tests) — ✓ pasan
+  * tests/unit/permissions.test.ts (10 tests) — ✓ pasan
+  * tests/unit/currency.test.ts (10 tests) — ✓ pasan
+  * tests/unit/logger-checksum.test.ts (4 tests) — ✓ pasan
+- RESULTADO FINAL: 157 tests pasan, 0 fallan.
+- Bug encontrado y corregido en canSellInArea(): SUBPRODUCTO ahora retorna false
+  (antes retornaba true porque saleArea=null → "disponible en todas").
+- Bump de versión: package.json → "1.0.15"
+- Guardado código comprimido: download/salva/SoftLBA-v1.0.15-2026-08-12T19-40-12.tar.gz (8.4MB)
+  Solo código, sin node_modules, .next, backups, .git, skills, agent-ctx, tool-results.
+
+Stage Summary:
+- FASE 14 ✅ COMPLETADA en v1.0.15.
+- 157 tests unitarios pasan (100% verde).
+- 7 archivos de test nuevos cubriendo: MoneyService, ProductAreaResolver, TableService,
+  InventoryService, url-validator, login-rate-limiter, auth-token.
+- Servicios críticos restaurados tras reset del proyecto.
+- Código guardado en download/salva/SoftLBA-v1.0.15-*.tar.gz (8.4MB, solo código).

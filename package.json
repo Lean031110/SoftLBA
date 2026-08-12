@@ -1,6 +1,6 @@
 {
   "name": "softlba",
-  "version": "0.2.0",
+  "version": "1.0.15",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",

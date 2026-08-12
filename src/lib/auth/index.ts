@@ -42,9 +42,11 @@ function sign(payload: string): string {
   return createHmac('sha256', SECRET).update(payload).digest('hex')
 }
 
-export function createSessionToken(userId: string, role: UserRole): string {
+export function createSessionToken(userId: string, role: UserRole, authVersion: number = 1): string {
   const expiresAt = Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000
-  const payload = `${userId}.${role}.${expiresAt}`
+  // v1.0.13 (issue #46): incluir authVersion en el payload firmado.
+  // Si authVersion cambia en la DB, este token se invalida.
+  const payload = `${userId}.${role}.${expiresAt}.${authVersion}`
   const signature = sign(payload)
   return `${payload}.${signature}`
 }
