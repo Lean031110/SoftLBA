@@ -1,10 +1,14 @@
 // POST /api/mesero/orders/[id]/cancel - Cancelar pedido
 // Reglas: se puede cancelar si ningún item está en preparación o más avanzado
 //         lo cancelado se guarda como cancelado (trazabilidad)
+//
+// v1.0.17 (CONSOLIDACIÓN): usa InventoryService.returnStock() para devolver
+// stock de productos DIRECTO. Ya no hay lógica de inventario inline.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { InventoryService } from '@/lib/inventory/inventory-service'
 import { z } from 'zod'
 
 const CancelSchema = z.object({
@@ -25,7 +29,7 @@ export async function POST(
 
     const order = await db.order.findUnique({
       where: { id },
-      include: { items: true, area: true },
+      include: { items: { include: { product: true } }, area: true },
     })
     if (!order) {
       return NextResponse.json({ ok: false, error: 'Pedido no encontrado' }, { status: 404 })
@@ -84,56 +88,24 @@ export async function POST(
         })
       }
 
-      // Devolver stock de productos DIRECTO al área correspondiente
-      // Solo para items que no estaban cancelados ya
+      // v1.0.17: usar InventoryService.returnStock() para devolver stock DIRECTO.
+      // Ya no hay lógica inline de inventario.
       for (const it of order.items) {
         if (it.status === 'CANCELADO') continue
-        const product = await tx.product.findUnique({ where: { id: it.productId } })
-        if (!product || product.type !== 'DIRECTO') continue
+        if (it.product.type !== 'DIRECTO') continue
 
-        // Buscar en el área primero
-        const areaInv = await tx.areaInventory.findUnique({
-          where: { areaId_productId: { areaId: order.areaId, productId: product.id } },
+        await InventoryService.returnStock({
+          areaId: order.areaId,
+          productId: it.productId,
+          quantity: it.quantity,
+          options: {
+            orderNumber: order.number,
+            reference: order.id,
+            userId: user.id,
+            unit: it.product.unit,
+          },
+          tx,
         })
-        if (areaInv) {
-          await tx.areaInventory.update({
-            where: { id: areaInv.id },
-            data: { stock: areaInv.stock + it.quantity },
-          })
-          await tx.stockMovement.create({
-            data: {
-              type: 'ENTRADA',
-              productId: product.id,
-              areaId: order.areaId,
-              quantity: it.quantity,
-              unit: product.unit,
-              reason: `Devolución por cancelación de pedido #${order.number}`,
-              reference: order.id,
-              userId: user.id,
-            },
-          })
-        } else {
-          // Sino al inventario general
-          const genInv = await tx.inventoryItem.findUnique({ where: { productId: product.id } })
-          if (genInv) {
-            await tx.inventoryItem.update({
-              where: { id: genInv.id },
-              data: { stock: genInv.stock + it.quantity },
-            })
-            await tx.stockMovement.create({
-              data: {
-                type: 'ENTRADA',
-                productId: product.id,
-                areaId: null,
-                quantity: it.quantity,
-                unit: product.unit,
-                reason: `Devolución por cancelación de pedido #${order.number}`,
-                reference: order.id,
-                userId: user.id,
-              },
-            })
-          }
-        }
 
         // Marcar item como cancelado
         await tx.orderItem.update({

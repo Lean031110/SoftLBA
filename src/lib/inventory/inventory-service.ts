@@ -112,8 +112,10 @@ export async function consume(params: {
   }
   const opts = params.options
   const blockNegative = opts.blockNegative ?? true
-  return db.$transaction(async (tx) => {
-    const t = params.tx ?? tx
+
+  // v1.0.17: si se pasa tx, usarlo directamente (no crear nueva transacción).
+  // Si no se pasa tx, crear una nueva.
+  const exec = async (t: TxClient): Promise<OperationResult> => {
     await ensureAreaInventory(params.areaId, params.productId, t)
     const before = await t.areaInventory.findUnique({
       where: { areaId_productId: { areaId: params.areaId, productId: params.productId } },
@@ -142,7 +144,10 @@ export async function consume(params: {
       },
     })
     return { ok: true, source: 'area', areaId: params.areaId, stockBefore, stockAfter: reloaded?.stock ?? null, insufficient: false }
-  })
+  }
+
+  if (params.tx) return exec(params.tx)
+  return db.$transaction(exec)
 }
 
 export async function returnStock(params: {
@@ -153,8 +158,7 @@ export async function returnStock(params: {
     return { ok: true, source: 'area', areaId: params.areaId, stockBefore: null, stockAfter: null, insufficient: false, idempotent: true }
   }
   const opts = params.options
-  return db.$transaction(async (tx) => {
-    const t = params.tx ?? tx
+  const exec = async (t: TxClient): Promise<OperationResult> => {
     await ensureAreaInventory(params.areaId, params.productId, t)
     const before = await t.areaInventory.findUnique({
       where: { areaId_productId: { areaId: params.areaId, productId: params.productId } },
@@ -174,7 +178,9 @@ export async function returnStock(params: {
       },
     })
     return { ok: true, source: 'area', areaId: params.areaId, stockBefore, stockAfter: updated.stock, insufficient: false }
-  })
+  }
+  if (params.tx) return exec(params.tx)
+  return db.$transaction(exec)
 }
 
 export async function auditDuplicatedStock(tx?: TxClient) {

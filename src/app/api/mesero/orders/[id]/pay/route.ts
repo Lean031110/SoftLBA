@@ -15,6 +15,7 @@ import {
   sumConvertedToCup,
   currencyForMethod,
 } from '@/lib/currency'
+import { emitPaymentDone } from '@/lib/realtime-emitter'
 import { z } from 'zod'
 
 const PAYMENT_METHODS = [
@@ -37,6 +38,8 @@ const PaymentItemSchema = z.object({
 
 const PaySchema = z.object({
   payments: z.array(PaymentItemSchema).min(1, 'Agrega al menos un pago'),
+  // v1.0.17: idempotencyKey para prevenir doble pago por reintento.
+  idempotencyKey: z.string().min(8).max(120).optional(),
 })
 
 export async function POST(
@@ -96,6 +99,29 @@ export async function POST(
     }
     const d = parsed.data
 
+    // v1.0.17: idempotencia — si llega idempotencyKey, verificar si ya existe.
+    if (d.idempotencyKey) {
+      const existing = await db.payment.findFirst({
+        where: { idempotencyKey: d.idempotencyKey },
+        include: { order: { select: { id: true, number: true } } },
+      })
+      if (existing) {
+        if (existing.orderId !== order.id) {
+          return NextResponse.json(
+            { ok: false, error: 'idempotencyKey ya usado para otro pedido' },
+            { status: 409 },
+          )
+        }
+        // Retornar resultado anterior (idempotencia).
+        return NextResponse.json({
+          ok: true,
+          idempotent: true,
+          message: 'Pago ya procesado anteriormente con este idempotencyKey',
+          orderId: order.id,
+        })
+      }
+    }
+
     // v1.0-RC1-bloque2-3 (items 19-20): cargar la tasa USD→CUP configurada para
     // snapshot en cada pago y para conversión al comparar con el total (CUP).
     const config = await db.restaurantConfig.findFirst({ where: { id: 'config-1' } })
@@ -133,6 +159,7 @@ export async function POST(
     }
 
     // Crear los pagos en transacción
+    let idempotencyKeyToUse: string | undefined = d.idempotencyKey
     const result = await db.$transaction(async (tx) => {
       const createdPayments = []
       for (const p of normalizedPayments) {
@@ -145,13 +172,15 @@ export async function POST(
             amount: p.amount,
             reference: p.reference || null,
             notes: p.notes || null,
-            // v1.0-RC1-bloque2-3 (item 19): persistir snapshot de conversión
             exchangeRate: p.exchangeRate,
             convertedAmount: p.convertedAmount,
             baseCurrency: 'CUP',
+            // v1.0.17: persistir idempotencyKey solo en el primer pago.
+            idempotencyKey: idempotencyKeyToUse,
           },
         })
         createdPayments.push(payment)
+        idempotencyKeyToUse = undefined
       }
 
       // Actualizar estado del pedido
@@ -256,6 +285,16 @@ export async function POST(
       } catch (e) {
         console.error('Error creando comprobante automático:', e)
       }
+    }
+
+    // v1.0.17: emitir payment:done DESPUÉS del DB COMMIT.
+    if (result.isFullyPaid) {
+      await emitPaymentDone({
+        orderId: order.id,
+        orderNumber: order.number,
+        amount: totalPaidCup,
+        userId: order.userId,
+      })
     }
 
     return NextResponse.json({

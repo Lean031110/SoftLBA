@@ -440,6 +440,9 @@ model Payment {
   exchangeRate    Float?
   convertedAmount Float?
   baseCurrency    String    @default("CUP")
+  // v1.0.17: idempotencia de pagos. Si el cliente reenvía con el mismo
+  // idempotencyKey, se retorna el resultado anterior sin crear duplicados.
+  idempotencyKey  String?   @unique
   createdAt   DateTime     @default(now())
 
   order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)

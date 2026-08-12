@@ -7,6 +7,7 @@ import { audit } from '@/lib/audit'
 import { decrementDirectoStock } from '@/lib/directo-stock'
 import { recalculateOrderStatus } from '@/lib/order-state-machine'
 import { sumConvertedToCup } from '@/lib/currency'
+import { emitOrderNew } from '@/lib/realtime-emitter'
 import { z } from 'zod'
 
 // Estados considerados "activos" en el dashboard del mesero
@@ -390,10 +391,22 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // v1.0.17: emitir order:new DESPUÉS del DB COMMIT, desde el servidor.
+    // El frontend ya NO emite eventos de negocio.
+    if (d.sendToKitchen) {
+      await emitOrderNew({
+        orderId: order.id,
+        orderNumber: order.number,
+        areaId: order.areaId,
+        userId: user.id,
+        tableId: order.tableId || undefined,
+        total,
+      })
+    }
+
     return NextResponse.json({
       ok: true,
       item: { ...order, status: finalStatus as any } ?? order,
-      // Datos mínimos para emitir por WebSocket desde el cliente
       wsPayload: {
         orderId: order.id,
         orderNumber: order.number,
