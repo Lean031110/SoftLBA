@@ -15,7 +15,9 @@
     "backup": "bun run scripts/backup.ts",
     "logo": "bun run scripts/generate-logo.ts",
     "simulate": "bun run scripts/simulate-day.ts",
-    "realtime": "bun run mini-services/realtime-service/index.ts"
+    "realtime": "bun run mini-services/realtime-service/index.ts",
+    "test:unit": "vitest run tests/unit/",
+    "test:integration": "echo 'Starting server...' && npx next dev -p 3099 & sleep 5 && INTEGRATION_BASE_URL=http://127.0.0.1:3099 npx vitest run tests/integration/; kill %1 2>/dev/null"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

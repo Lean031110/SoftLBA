@@ -1,19 +1,17 @@
 import { defineConfig } from 'vitest/config'
 import path from 'path'
 
-// Vitest configuration
-// Unit tests: fast, no server needed
-// Integration tests: need server (run separately with --config)
-
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/unit/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       include: ['src/lib/**/*.ts'],
     },
+    hookTimeout: 60000,
+    testTimeout: 30000,
   },
   resolve: {
     alias: {

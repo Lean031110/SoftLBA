@@ -1,6 +1,5 @@
 // tests/integration/concurrency.test.ts
-// Tests de concurrencia contra servidor real.
-// P3: Asserts concretos — no aceptar [200, 400, 409] indiscriminadamente.
+// B: Tests de concurrencia con asserts concretos.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupServer, teardownServer, BASE_URL } from './setup'
 
@@ -35,7 +34,6 @@ maybeDescribe('Concurrency Tests', () => {
   beforeAll(async () => {
     BASE = await setupServer()
     cookie = await login('admin', 'admin123')
-    // P2: fixture obligatorio — si falla, el test falla
     expect(cookie).toBeTruthy()
 
     const areasRes = await api(cookie, 'GET', '/api/mesero/areas')
@@ -48,84 +46,59 @@ maybeDescribe('Concurrency Tests', () => {
     const productsData = await productsRes.json()
     expect(productsData.items.length).toBeGreaterThan(0)
     productId = productsData.items[0].id
-  }, 120000)
+  }, 60000)
 
   afterAll(async () => {
     await teardownServer()
   })
 
-  it('dos pedidos simultáneos tienen números diferentes', async () => {
+  it('dos pedidos simultáneos tienen números diferentes con diff=1', async () => {
     const [res1, res2] = await Promise.all([
       api(cookie, 'POST', '/api/mesero/orders', {
-        areaId: salonAreaId,
-        items: [{ productId, quantity: 1 }],
-        sendToKitchen: false,
+        areaId: salonAreaId, items: [{ productId, quantity: 1 }], sendToKitchen: false,
       }),
       api(cookie, 'POST', '/api/mesero/orders', {
-        areaId: salonAreaId,
-        items: [{ productId, quantity: 2 }],
-        sendToKitchen: false,
+        areaId: salonAreaId, items: [{ productId, quantity: 2 }], sendToKitchen: false,
       }),
     ])
-
     const data1 = await res1.json()
     const data2 = await res2.json()
-
-    // Ambos deben tener éxito
     expect(data1.ok).toBe(true)
     expect(data2.ok).toBe(true)
-
-    // Los números deben ser diferentes
     expect(data1.item.number).not.toBe(data2.item.number)
-
-    // La diferencia debe ser exactamente 1 (números secuenciales)
-    const diff = Math.abs(data1.item.number - data2.item.number)
-    expect(diff).toBe(1)
+    expect(Math.abs(data1.item.number - data2.item.number)).toBe(1)
   })
 
-  it('pago con idempotencyKey: primer pago 200, segundo pago idempotente o ya cobrado', async () => {
-    // Crear pedido
+  it('pago con idempotencyKey: segundo pago no duplica', async () => {
     const createRes = await api(cookie, 'POST', '/api/mesero/orders', {
-      areaId: salonAreaId,
-      items: [{ productId, quantity: 1 }],
-      sendToKitchen: false,
+      areaId: salonAreaId, items: [{ productId, quantity: 1 }], sendToKitchen: false,
     })
     const createData = await createRes.json()
     expect(createData.ok).toBe(true)
     const orderId = createData.item.id
     const total = createData.item.total
+    const key = `test-idem-${Date.now()}`
 
-    // Primer pago con idempotencyKey
-    const key = `test-concurrency-${Date.now()}`
     const payRes1 = await api(cookie, 'POST', `/api/mesero/orders/${orderId}/pay`, {
       payments: [{ method: 'EFECTIVO_CUP', amount: total }],
       idempotencyKey: key,
     })
-    const payData1 = await payRes1.json()
 
-    // El primer pago debe ser exitoso (200) o rechazado por items pendientes (400)
-    // Si el producto es DIRECTO, nace SERVIDO y se puede cobrar → 200
-    // Si el producto es FINAL, nace PENDIENTE y no se puede cobrar → 400
     if (payRes1.status === 200) {
-      expect(payData1.ok).toBe(true)
-
-      // Segundo pago con mismo key → debe ser idempotente (200 con idempotent=true) o ya cobrado (400)
+      // Producto DIRECTO: pago exitoso
+      // Segundo pago con mismo key → debe ser idempotente (200 con idempotent=true)
       const payRes2 = await api(cookie, 'POST', `/api/mesero/orders/${orderId}/pay`, {
         payments: [{ method: 'EFECTIVO_CUP', amount: total }],
         idempotencyKey: key,
       })
+      expect(payRes2.status).toBe(200)
       const payData2 = await payRes2.json()
-      // Si devuelve 200, debe ser idempotente
-      // Si devuelve 400, debe decir "ya está cobrado"
-      expect([200, 400]).toContain(payRes2.status)
-      if (payRes2.status === 200) {
-        expect(payData2.idempotent).toBe(true)
-      }
-    } else if (payRes1.status === 400) {
-      // Producto FINAL con items pendientes — comportamiento correcto
-      expect(payData1.error).toContain('listos')
+      expect(payData2.idempotent).toBe(true)
     } else {
-      // No se esperan otros códigos
+      // Producto FINAL: no se puede cobrar (items pendientes)
+      expect(payRes1.status).toBe(400)
+      const payData1 = await payRes1.json()
+      expect(payData1.error).toContain('listos')
     }
   })
 })
