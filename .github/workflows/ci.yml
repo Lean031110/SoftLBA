@@ -65,7 +65,7 @@ jobs:
         run: bun run db:seed || true
 
       - name: Run unit tests
-        run: npx vitest run tests/unit/
+        run: npx vitest run
 
   realtime-service:
     runs-on: ubuntu-latest
@@ -107,14 +107,8 @@ jobs:
       - name: Generate Prisma client
         run: bun run db:generate
 
-      - name: Push integration database
-        run: bun run db:push
-
-      - name: Seed integration database
-        run: bun run db:seed || true
-
-      - name: Run integration tests
-        run: npx vitest run tests/integration/ --maxWorkers=1
+      - name: Run integration tests (with global server setup)
+        run: npx vitest run --config tests/integration/vitest.config.ts
         timeout-minutes: 10
 
   build:

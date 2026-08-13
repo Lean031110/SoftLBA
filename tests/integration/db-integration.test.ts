@@ -7,7 +7,7 @@ import { InventoryService } from '../../src/lib/inventory/inventory-service'
 import { TableService } from '../../src/lib/tables/table-service'
 import { resolve } from 'path'
 
-const TEST_DB_PATH = resolve(process.cwd(), 'db', 'test-integration.db')
+const TEST_DB_PATH = process.env.INTEGRATION_TEST_DB || resolve(process.cwd(), 'db', 'test-integration.db')
 const prisma = new PrismaClient({
   datasources: { db: { url: `file:${TEST_DB_PATH}` } },
 })
