@@ -8,6 +8,7 @@
 import { spawn, type ChildProcess, execSync } from 'child_process'
 import { mkdirSync, existsSync, rmSync, unlinkSync } from 'fs'
 import { join, resolve } from 'path'
+import * as http from 'http'
 
 const PORT = 3099
 const BASE_URL = `http://localhost:${PORT}`
@@ -17,22 +18,32 @@ let serverProcess: ChildProcess | null = null
 let serverStderr: string[] = []
 let serverStdout: string[] = []
 
-async function waitForServer(url: string, timeoutMs = 120000): Promise<void> {
+async function waitForServer(baseUrl: string, timeoutMs = 120000): Promise<void> {
   const start = Date.now()
-  // Try both localhost and 127.0.0.1
-  const urls = [url, url.replace('localhost', '127.0.0.1')]
+  // On CI runners, localhost may resolve to IPv6 (::1) which fetch can't reach.
+  // Try multiple hostnames.
+  const hosts = ['127.0.0.1', 'localhost', '0.0.0.0']
+
   while (Date.now() - start < timeoutMs) {
-    for (const u of urls) {
+    for (const host of hosts) {
+      const url = `http://${host}:${PORT}`
       try {
-        const res = await fetch(`${u}/api/health`)
-        if (res.ok || res.status === 404) {
-          console.log(`[global-setup] Server responded at ${u}`)
-          // Update BASE_URL to the working URL
-          process.env.INTEGRATION_BASE_URL = u
+        // Use http.get instead of fetch for better IPv4/IPv6 compat
+        const ok = await new Promise<boolean>((resolve) => {
+          const req = http.get(`${url}/api/health`, (res: any) => {
+            res.resume()
+            resolve(res.statusCode === 200 || res.statusCode === 404)
+          })
+          req.on('error', () => resolve(false))
+          req.setTimeout(3000, () => { req.destroy(); resolve(false) })
+        })
+        if (ok) {
+          console.log(`[global-setup] Server responded at ${url}`)
+          process.env.INTEGRATION_BASE_URL = url
           return
         }
       } catch {
-        // Not ready yet
+        // Not ready
       }
     }
     await new Promise((r) => setTimeout(r, 2000))
@@ -40,7 +51,7 @@ async function waitForServer(url: string, timeoutMs = 120000): Promise<void> {
   const stderrLog = serverStderr.join('\n')
   const stdoutLog = serverStdout.join('\n')
   throw new Error(
-    `Server at ${url} did not start within ${timeoutMs}ms.\n` +
+    `Server at ${baseUrl} did not start within ${timeoutMs}ms.\n` +
     `=== STDOUT (últimas 20 líneas) ===\n${stdoutLog.split('\n').slice(-20).join('\n')}\n` +
     `=== STDERR (últimas 30 líneas) ===\n${stderrLog.split('\n').slice(-30).join('\n')}`
   )
