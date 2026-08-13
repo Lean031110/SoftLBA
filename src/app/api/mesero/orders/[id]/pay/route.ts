@@ -253,14 +253,14 @@ export async function POST(
     if (result.isFullyPaid) {
       try {
         const config = await db.restaurantConfig.findFirst()
-        const receiptDir = '/home/z/my-project/download/comprobantes'
         const fs = await import('fs')
-        const path = await import('path')
+        const nodePath = await import('path')
+        const receiptDir = nodePath.join(process.cwd(), 'download', 'comprobantes')
         if (!fs.existsSync(receiptDir)) {
           fs.mkdirSync(receiptDir, { recursive: true })
         }
         const filename = `comprobante-${order.number}-${Date.now()}.json`
-        const filePath = path.join(receiptDir, filename)
+        const filePath = nodePath.join(receiptDir, filename)
         const receiptData = {
           orderNumber: order.number,
           orderId: order.id,

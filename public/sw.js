@@ -1,5 +1,5 @@
 // ============================================================
-// Service Worker - SoftLBA PWA v0.17.0
+// Service Worker - SoftLBA PWA v1.0.19.5
 // ============================================================
 // Estrategias:
 //  - Network-first  → páginas de navegación (HTML)
@@ -9,7 +9,7 @@
 //  - Push notifications → avisa de pedidos nuevos aunque la app esté cerrada
 // ============================================================
 
-const SW_VERSION = 'softlba-v0.17.0'
+const SW_VERSION = 'softlba-v1.0.19.5'
 const OFFLINE_URL = '/offline'
 
 // Caches separados para invalidación granular
@@ -165,13 +165,27 @@ self.addEventListener('fetch', (event) => {
 
   // Solo GET
   if (request.method !== 'GET') {
-    // Para POST/PUT/DELETE → intentar Background Sync (si está soportado)
-    if (
+    // v1.0.19.5: NO interceptar POSTs a rutas de autenticación, auth, ni API internas.
+    // Estas rutas deben llegar directamente al servidor (login, logout, socket-token).
+    // Si las encolamos, el usuario no puede iniciar sesión.
+    const SKIP_BG_SYNC_PATHS = [
+      '/api/auth/login',
+      '/api/auth/logout',
+      '/api/auth/socket-token',
+      '/api/auth/me',
+      '/api/auth/change-password',
+      '/api/internal/',
+    ]
+    const shouldSkipBgSync = SKIP_BG_SYNC_PATHS.some(p => url.pathname.startsWith(p))
+
+    if (!shouldSkipBgSync &&
       'sync' in self.registration &&
       (request.method === 'POST' ||
         request.method === 'PUT' ||
         request.method === 'DELETE')
     ) {
+      // Para POST/PUT/DELETE de negocio → intentar Background Sync
+      // PERO solo si ya estamos autenticados (si no, dejar pasar directo)
       event.respondWith(handleBackgroundSyncRequest(event))
     }
     return

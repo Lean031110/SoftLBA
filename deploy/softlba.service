@@ -1,0 +1,37 @@
+[Unit]
+Description=SoftLBA Web App (Next.js)
+After=network.target softlba-realtime.service
+Wants=softlba-realtime.service
+
+[Service]
+Type=simple
+User=softlba
+WorkingDirectory=/opt/softlba
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/softlba/.env
+ExecStart=/usr/local/bin/bun /opt/softlba/.next/standalone/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/softlba/db /opt/softlba/download /opt/softlba/backups
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+
+[Install]
+WantedBy=multi-user.target
