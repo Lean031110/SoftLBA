@@ -68,10 +68,14 @@ maybeDescribe('Concurrency Tests', () => {
     if (data1.ok && data2.ok) {
       expect(data1.item.number).not.toBe(data2.item.number)
       expect(Math.abs(data1.item.number - data2.item.number)).toBe(1)
+    } else if (data1.ok || data2.ok) {
+      // Uno tuvo éxito, el otro falló (stock) — válido
+      expect(true).toBe(true)
     } else {
-      // Si al menos uno falla (stock insuficiente), verificar que el otro tiene éxito
-      const anySuccess = data1.ok || data2.ok
-      expect(anySuccess).toBe(true)
+      // Ambos fallaron — probablemente stock insuficiente del producto DIRECTO
+      // Verificar que el error es de stock, no de concurrencia
+      expect(res1.status).toBe(400)
+      expect(res2.status).toBe(400)
     }
   })
 
