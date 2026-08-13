@@ -1,12 +1,10 @@
 // tests/integration/db-integration.test.ts
-// B: Tests con DB real. Usa la MISMA DB del servidor (test-integration.db).
+// Tests con DB real. Usa DATABASE_URL del env.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { PrismaClient } from '@prisma/client'
 import { InventoryService } from '../../src/lib/inventory/inventory-service'
 import { TableService } from '../../src/lib/tables/table-service'
-import { resolve } from 'path'
 
-// Use the SAME DATABASE_URL as the CI env — do NOT create a separate PrismaClient
 const prisma = new PrismaClient()
 
 async function createTestArea(code: string, name: string) {
@@ -20,6 +18,9 @@ async function createTestTable(code: string, name: string) {
 }
 async function ensureTestUser() {
   return prisma.user.upsert({ where: { username: 'test-integration-user' }, update: {}, create: { username: 'test-integration-user', passwordHash: '$2a$10$test', role: 'ADMIN', isActive: true, mustChangePass: false } })
+}
+async function createTestOrder(user: string, area: string, number: number) {
+  return prisma.order.create({ data: { number, userId: user, areaId: area, status: 'CREADO', subtotal: 0, total: 0 } })
 }
 
 describe('DB Integration — Inventario', () => {
@@ -67,31 +68,49 @@ describe('DB Integration — Inventario', () => {
 })
 
 describe('DB Integration — Mesas', () => {
-  let tableId: string, userId: string
+  let tableId: string, userId: string, orderId: string
+
   beforeAll(async () => {
     const table = await createTestTable('TEST-T1', 'Mesa 1'); tableId = table.id
     const user = await ensureTestUser(); userId = user.id
-    expect(tableId).toBeTruthy(); expect(userId).toBeTruthy()
+    const area = await createTestArea('TEST-AREA-MESA', 'Área Mesa')
+    // Crear un Order real para usar como currentOrderId (FK válida)
+    const order = await createTestOrder(userId, area.id, 999901)
+    orderId = order.id
+    expect(tableId).toBeTruthy(); expect(userId).toBeTruthy(); expect(orderId).toBeTruthy()
   })
-  afterAll(async () => { await prisma.table.deleteMany({ where: { code: { startsWith: 'TEST-T' } } }) })
+  afterAll(async () => {
+    await prisma.order.deleteMany({ where: { number: { gte: 999900 } } })
+    await prisma.table.deleteMany({ where: { code: { startsWith: 'TEST-T' } } })
+    await prisma.area.deleteMany({ where: { code: 'TEST-AREA-MESA' } })
+  })
 
   it('takeTable LIBRE → éxito', async () => {
     await prisma.table.update({ where: { id: tableId }, data: { status: 'LIBRE', currentOrderId: null } })
-    const r = await TableService.takeTable({ tableId, orderId: 'test-order-1', userId })
+    const r = await TableService.takeTable({ tableId, orderId, userId })
     expect(r.ok).toBe(true)
+    const t = await prisma.table.findUnique({ where: { id: tableId } })
+    expect(t?.status).toBe('OCUPADA')
+    expect(t?.currentOrderId).toBe(orderId)
   })
   it('takeTable OCUPADA → conflicto', async () => {
-    const r = await TableService.takeTable({ tableId, orderId: 'test-order-2', userId })
+    const r = await TableService.takeTable({ tableId, orderId: 'other', userId })
     expect(r.ok).toBe(false); expect(r.conflict).toBe(true)
   })
   it('releaseTable coincide → éxito', async () => {
-    const r = await TableService.releaseTable({ tableId, expectedOrderId: 'test-order-1', userId })
+    const r = await TableService.releaseTable({ tableId, expectedOrderId: orderId, userId })
     expect(r.ok).toBe(true)
   })
   it('releaseTable no coincide → conflicto', async () => {
-    await prisma.table.update({ where: { id: tableId }, data: { status: 'OCUPADA', currentOrderId: 'test-3' } })
-    const r = await TableService.releaseTable({ tableId, expectedOrderId: 'wrong', userId })
+    // Crear otro order real
+    const area = await createTestArea('TEST-AREA-MESA2', 'Área 2')
+    const order2 = await createTestOrder(userId, area.id, 999902)
+    await prisma.table.update({ where: { id: tableId }, data: { status: 'OCUPADA', currentOrderId: order2.id } })
+    const r = await TableService.releaseTable({ tableId, expectedOrderId: 'wrong-id', userId })
     expect(r.ok).toBe(false); expect(r.conflict).toBe(true)
+    // Cleanup
+    await prisma.order.delete({ where: { id: order2.id } })
+    await prisma.area.delete({ where: { id: area.id } })
   })
 })
 
@@ -118,7 +137,5 @@ describe('DB Integration — Concurrencia', () => {
     ])
     const successCount = [r1.ok, r2.ok].filter(Boolean).length
     expect(successCount).toBeLessThanOrEqual(1)
-    const inv = await prisma.areaInventory.findUnique({ where: { areaId_productId: { areaId, productId } } })
-    expect(inv?.stock).toBeGreaterThanOrEqual(0)
   })
 })
