@@ -1,13 +1,28 @@
 // GET /api/public/config - Configuración pública del restaurante
+// ------------------------------------------------------------
+// v1.0.19.4 (FASE 29): NO expone datos operacionales.
+// Solo datos públicos visibles para clientes anónimos.
+// ============================================================
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
+// v1.0.19.4: DEMO_USERS controla si los usuarios demo son visibles.
+function isDemoUsersEnabled(): boolean {
+  const env = process.env.DEMO_USERS
+  if (env === 'true') return true
+  if (env === 'false') return false
+  return process.env.NODE_ENV !== 'production'
+}
+
 export async function GET() {
   const config = await db.restaurantConfig.findFirst()
+  const demoUsersEnabled = isDemoUsersEnabled()
+
   return NextResponse.json({
     ok: true,
     config: config
       ? {
+          // Solo datos públicos (NO operacionales)
           name: config.name,
           slogan: config.slogan,
           address: config.address,
@@ -18,16 +33,9 @@ export async function GET() {
           currency: config.currency,
           currencySymbol: config.currencySymbol,
           welcomeText: config.welcomeText,
-          showDemoUsers: config.showDemoUsers,
-          usdToCup: config.usdToCup,
-          lastRateUpdate: config.lastRateUpdate,
-          offlineTitle: config.offlineTitle,
-          offlineMessage: config.offlineMessage,
-          offlineWifiName: config.offlineWifiName,
-          offlineInstructions: config.offlineInstructions,
+          showDemoUsers: demoUsersEnabled,
         }
       : {
-          // Configuración por defecto si no existe
           name: 'Restaurante',
           slogan: null,
           address: null,
@@ -38,7 +46,7 @@ export async function GET() {
           currency: 'CUP',
           currencySymbol: '$',
           welcomeText: null,
-          showDemoUsers: true,
+          showDemoUsers: demoUsersEnabled,
         },
   })
 }

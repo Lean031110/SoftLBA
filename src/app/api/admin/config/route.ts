@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { validateUrls } from '@/lib/security/url-validator'
 import { z } from 'zod'
 
 const CONFIG_ID = 'config-1'
@@ -99,6 +100,21 @@ export async function PATCH(req: NextRequest) {
         data[k] = v
       }
     }
+    // v1.0.19.4 (FASE 29): validar URLs para prevenir XSS stored.
+    const urlError = validateUrls({
+      website: data.website,
+      facebook: data.facebook,
+      instagram: data.instagram,
+      telegram: data.telegram,
+      logo: data.logo,
+    })
+    if (urlError) {
+      return NextResponse.json(
+        { ok: false, error: `URL inválida en '${urlError.field}': ${urlError.error}` },
+        { status: 400 },
+      )
+    }
+
     // Si se actualiza la tasa, registrar la fecha
     if (data.usdToCup !== undefined) {
       data.lastRateUpdate = new Date()
