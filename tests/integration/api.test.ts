@@ -1,13 +1,14 @@
 // tests/integration/api.test.ts
-// FASE 20: Tests de integración contra servidor Next.js real.
-// El servidor se arranca en setup.ts antes de los tests.
+// Tests de integración contra servidor Next.js real.
+// P2: NO usar `return` para salir de tests — si falta un fixture, el test DEBE FALLAR.
+// P3: Asserts concretos — no aceptar [200, 400, 409] indiscriminadamente.
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { setupServer, teardownServer, BASE_URL } from './setup'
 
 let BASE = BASE_URL
-let cookieHeader = ''
-let meseroCookie = ''
 let adminCookie = ''
+let salonAreaId = ''
+let productId = ''
 
 async function login(username: string, password: string): Promise<string> {
   const res = await fetch(`${BASE}/api/auth/login`, {
@@ -23,37 +24,33 @@ async function login(username: string, password: string): Promise<string> {
 async function api(cookie: string, method: string, path: string, body?: any) {
   const opts: any = {
     method,
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookie,
-    },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
   }
   if (body) opts.body = JSON.stringify(body)
   return fetch(`${BASE}${path}`, opts)
 }
 
-// Skip all integration tests if no server available (CI without server setup)
 const maybeDescribe = process.env.SKIP_INTEGRATION === 'true' ? describe.skip : describe
 
 maybeDescribe('Integration Tests', () => {
-  let salonAreaId = ''
-  let productId = ''
-
   beforeAll(async () => {
     BASE = await setupServer()
     adminCookie = await login('admin', 'admin123')
+    // P2: si no hay cookie, el fixture falla — NO hacemos return
     expect(adminCookie).toBeTruthy()
 
-    // Get SALON area
     const areasRes = await api(adminCookie, 'GET', '/api/mesero/areas')
     const areasData = await areasRes.json()
     const salon = areasData.items?.find((a: any) => a.code === 'SALON')
-    if (salon) salonAreaId = salon.id
+    expect(salon).toBeDefined()
+    salonAreaId = salon.id
+    expect(salonAreaId).toBeTruthy()
 
-    // Get a product
     const productsRes = await api(adminCookie, 'GET', `/api/mesero/products?areaId=${salonAreaId}`)
     const productsData = await productsRes.json()
-    if (productsData.items?.length > 0) productId = productsData.items[0].id
+    expect(productsData.items.length).toBeGreaterThan(0)
+    productId = productsData.items[0].id
+    expect(productId).toBeTruthy()
   }, 120000)
 
   afterAll(async () => {
@@ -61,14 +58,14 @@ maybeDescribe('Integration Tests', () => {
   })
 
   describe('Health', () => {
-    it('GET /api/health responde', async () => {
+    it('GET /api/health responde 200', async () => {
       const res = await fetch(`${BASE}/api/health`)
       expect(res.status).toBe(200)
     })
   })
 
   describe('Auth', () => {
-    it('login con credenciales válidas', async () => {
+    it('login con credenciales válidas devuelve 200', async () => {
       const res = await fetch(`${BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -80,7 +77,7 @@ maybeDescribe('Integration Tests', () => {
       expect(data.user.username).toBe('admin')
     })
 
-    it('login con credenciales inválidas', async () => {
+    it('login con credenciales inválidas devuelve 401', async () => {
       const res = await fetch(`${BASE}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -89,21 +86,21 @@ maybeDescribe('Integration Tests', () => {
       expect(res.status).toBe(401)
     })
 
-    it('GET /api/auth/me con cookie válida', async () => {
+    it('GET /api/auth/me con cookie válida devuelve 200', async () => {
       const res = await api(adminCookie, 'GET', '/api/auth/me')
       const data = await res.json()
       expect(res.status).toBe(200)
       expect(data.ok).toBe(true)
     })
 
-    it('GET /api/auth/me sin cookie', async () => {
+    it('GET /api/auth/me sin cookie devuelve 401', async () => {
       const res = await fetch(`${BASE}/api/auth/me`)
       expect(res.status).toBe(401)
     })
   })
 
   describe('Flujo de pedidos', () => {
-    it('listar áreas', async () => {
+    it('listar áreas devuelve 200 con items', async () => {
       const res = await api(adminCookie, 'GET', '/api/mesero/areas')
       const data = await res.json()
       expect(res.status).toBe(200)
@@ -111,15 +108,15 @@ maybeDescribe('Integration Tests', () => {
       expect(data.items.length).toBeGreaterThan(0)
     })
 
-    it('listar productos', async () => {
+    it('listar productos devuelve 200 con items', async () => {
       const res = await api(adminCookie, 'GET', `/api/mesero/products?areaId=${salonAreaId}`)
       const data = await res.json()
       expect(res.status).toBe(200)
       expect(data.ok).toBe(true)
+      expect(data.items.length).toBeGreaterThan(0)
     })
 
-    it('crear pedido', async () => {
-      if (!productId) return
+    it('crear pedido devuelve 200 con número', async () => {
       const res = await api(adminCookie, 'POST', '/api/mesero/orders', {
         areaId: salonAreaId,
         items: [{ productId, quantity: 1 }],
@@ -131,7 +128,7 @@ maybeDescribe('Integration Tests', () => {
       expect(data.item.number).toBeGreaterThan(0)
     })
 
-    it('crear pedido sin items → error', async () => {
+    it('crear pedido sin items devuelve 400', async () => {
       const res = await api(adminCookie, 'POST', '/api/mesero/orders', {
         areaId: salonAreaId,
         items: [],
@@ -140,31 +137,7 @@ maybeDescribe('Integration Tests', () => {
       expect(res.status).toBe(400)
     })
 
-    it('no se puede cobrar con items pendientes', async () => {
-      if (!productId) return
-      // Crear pedido con sendToKitchen=false (items quedan pendientes)
-      const createRes = await api(adminCookie, 'POST', '/api/mesero/orders', {
-        areaId: salonAreaId,
-        items: [{ productId, quantity: 1 }],
-        sendToKitchen: false,
-      })
-      const createData = await createRes.json()
-      if (!createData.ok) return
-      const orderId = createData.item.id
-
-      // Intentar pagar (debe fallar porque hay items pendientes si es FINAL)
-      // Para productos DIRECTO nacen SERVIDO, así que pueden pagar.
-      // Para FINAL nacen PENDIENTE, no se puede cobrar.
-      const payRes = await api(adminCookie, 'POST', `/api/mesero/orders/${orderId}/pay`, {
-        payments: [{ method: 'EFECTIVO_CUP', amount: 100 }],
-      })
-      // Si es DIRECTO, el pago puede pasar (200). Si es FINAL, debe fallar (400).
-      // Aceptamos ambos casos — lo importante es que el sistema responde.
-      expect([200, 400, 409]).toContain(payRes.status)
-    })
-
-    it('mesero puede cancelar pedido', async () => {
-      if (!productId) return
+    it('crear pedido y cancelarlo devuelve 200', async () => {
       // Crear pedido
       const createRes = await api(adminCookie, 'POST', '/api/mesero/orders', {
         areaId: salonAreaId,
@@ -172,50 +145,51 @@ maybeDescribe('Integration Tests', () => {
         sendToKitchen: false,
       })
       const createData = await createRes.json()
-      if (!createData.ok) return
+      expect(createRes.status).toBe(200)
+      expect(createData.ok).toBe(true)
       const orderId = createData.item.id
 
       // Cancelar
       const cancelRes = await api(adminCookie, 'POST', `/api/mesero/orders/${orderId}/cancel`, {
         reason: 'Test de cancelación',
       })
-      const cancelData = await cancelRes.json()
       expect(cancelRes.status).toBe(200)
+      const cancelData = await cancelRes.json()
       expect(cancelData.ok).toBe(true)
     })
   })
 
   describe('Configuración pública', () => {
-    it('GET /api/public/config', async () => {
+    it('GET /api/public/config devuelve 200 sin datos operacionales', async () => {
       const res = await fetch(`${BASE}/api/public/config`)
       const data = await res.json()
       expect(res.status).toBe(200)
       expect(data.ok).toBe(true)
-      // No debe exponer datos operacionales
+      // P3: No debe exponer datos operacionales
       expect(data.config.usdToCup).toBeUndefined()
       expect(data.config.offlineWifiName).toBeUndefined()
     })
   })
 
   describe('Cocina', () => {
-    it('GET /api/cocina/orders requiere auth', async () => {
+    it('GET /api/cocina/orders sin auth devuelve 401', async () => {
       const res = await fetch(`${BASE}/api/cocina/orders`)
       expect(res.status).toBe(401)
     })
 
-    it('GET /api/cocina/orders con admin', async () => {
+    it('GET /api/cocina/orders con admin devuelve 200', async () => {
       const res = await api(adminCookie, 'GET', '/api/cocina/orders')
       expect(res.status).toBe(200)
     })
   })
 
   describe('Pizzería', () => {
-    it('GET /api/pizzeria/orders requiere auth', async () => {
+    it('GET /api/pizzeria/orders sin auth devuelve 401', async () => {
       const res = await fetch(`${BASE}/api/pizzeria/orders`)
       expect(res.status).toBe(401)
     })
 
-    it('GET /api/pizzeria/orders con admin', async () => {
+    it('GET /api/pizzeria/orders con admin devuelve 200', async () => {
       const res = await api(adminCookie, 'GET', '/api/pizzeria/orders')
       expect(res.status).toBe(200)
     })
