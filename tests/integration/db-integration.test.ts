@@ -6,10 +6,8 @@ import { InventoryService } from '../../src/lib/inventory/inventory-service'
 import { TableService } from '../../src/lib/tables/table-service'
 import { resolve } from 'path'
 
-const TEST_DB_PATH = process.env.INTEGRATION_TEST_DB || resolve(process.cwd(), 'db', 'test-integration.db')
-const prisma = new PrismaClient({
-  datasources: { db: { url: `file:${TEST_DB_PATH}` } },
-})
+// Use the SAME DATABASE_URL as the CI env — do NOT create a separate PrismaClient
+const prisma = new PrismaClient()
 
 async function createTestArea(code: string, name: string) {
   return prisma.area.upsert({ where: { code }, update: {}, create: { code, name, isActive: true } })
