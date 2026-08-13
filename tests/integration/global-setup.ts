@@ -107,8 +107,9 @@ export async function setup() {
   serverStderr = []
   serverStdout = []
 
-  serverProcess = spawn('npx', ['next', 'dev', '-p', String(PORT), '-H', '0.0.0.0'], {
-    env: testEnv as any,
+  // Use bun to run next dev — more reliable in CI
+  serverProcess = spawn('bun', ['run', 'dev', '--', '-p', String(PORT)], {
+    env: { ...testEnv, PORT: String(PORT) } as any,
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: process.cwd(),
     shell: true,
