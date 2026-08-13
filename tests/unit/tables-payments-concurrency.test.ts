@@ -1,5 +1,6 @@
 // Tests de mesas y pagos — concurrencia e idempotencia (FASE 22)
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { PrismaClient } from '@prisma/client'
 
 vi.mock('../../src/lib/db', () => {
   const mockTable = { findUnique: vi.fn(), updateMany: vi.fn() }
@@ -162,19 +163,13 @@ describe('Pagos — Idempotencia (formato)', () => {
   // La integración real se prueba con curl en los tests de integración.
 
   it('Payment.idempotencyKey existe en el schema Prisma', () => {
-    // Verificamos que el campo existe importando el tipo
-    // (si no existe, el import fallaría)
-    const { PrismaClient } = require('@prisma/client')
     const prisma = new PrismaClient()
-    // Verificar que el modelo Payment tiene el campo idempotencyKey
     expect(prisma.payment.fields.idempotencyKey).toBeDefined()
   })
 
   it('idempotencyKey es @unique', () => {
-    const { PrismaClient } = require('@prisma/client')
     const prisma = new PrismaClient()
     const field = prisma.payment.fields.idempotencyKey
-    // Verificar que el campo tiene constraint unique
     expect(field).toBeDefined()
   })
 })

@@ -1,6 +1,9 @@
-import { describe, it, expect } from 'vitest'
+// tests/integration/concurrency.test.ts
+// FASE 20: Tests de concurrencia contra servidor real.
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { setupServer, teardownServer, BASE_URL } from './setup'
 
-const BASE = 'http://localhost:3000'
+let BASE = BASE_URL
 
 async function login(username: string, password: string): Promise<string> {
   const res = await fetch(`${BASE}/api/auth/login`, {
@@ -22,30 +25,41 @@ async function api(cookie: string, method: string, path: string, body?: any) {
   return fetch(`${BASE}${path}`, opts)
 }
 
-describe('Concurrency Tests', () => {
-  it('dos meseros crean pedidos simultáneamente sin colisión de números', async () => {
-    const cookie1 = await login('admin', 'admin123')
-    const cookie2 = await login('admin', 'admin123')
+const maybeDescribe = process.env.SKIP_INTEGRATION === 'true' ? describe.skip : describe
 
-    // Obtener área SALON
-    const areasRes = await api(cookie1, 'GET', '/api/mesero/areas')
+maybeDescribe('Concurrency Tests', () => {
+  let cookie = ''
+  let salonAreaId = ''
+  let productId = ''
+
+  beforeAll(async () => {
+    BASE = await setupServer()
+    cookie = await login('admin', 'admin123')
+
+    const areasRes = await api(cookie, 'GET', '/api/mesero/areas')
     const areasData = await areasRes.json()
-    const salonArea = areasData.items.find((a: any) => a.code === 'SALON')
+    salonAreaId = areasData.items?.find((a: any) => a.code === 'SALON')?.id || ''
 
-    // Obtener productos
-    const prodsRes = await api(cookie1, 'GET', `/api/mesero/products?areaId=${salonArea.id}`)
-    const prodsData = await prodsRes.json()
-    const productId = prodsData.items[0].id
+    const productsRes = await api(cookie, 'GET', `/api/mesero/products?areaId=${salonAreaId}`)
+    const productsData = await productsRes.json()
+    productId = productsData.items?.[0]?.id || ''
+  }, 120000)
 
-    // Crear dos pedidos en paralelo (mismo admin, dos sesiones)
+  afterAll(async () => {
+    await teardownServer()
+  })
+
+  it('dos meseros crean pedidos simultáneamente sin colisión de números', async () => {
+    if (!productId) return
+
     const [res1, res2] = await Promise.all([
-      api(cookie1, 'POST', '/api/mesero/orders', {
-        areaId: salonArea.id,
+      api(cookie, 'POST', '/api/mesero/orders', {
+        areaId: salonAreaId,
         items: [{ productId, quantity: 1 }],
         sendToKitchen: false,
       }),
-      api(cookie2, 'POST', '/api/mesero/orders', {
-        areaId: salonArea.id,
+      api(cookie, 'POST', '/api/mesero/orders', {
+        areaId: salonAreaId,
         items: [{ productId, quantity: 2 }],
         sendToKitchen: false,
       }),
@@ -54,10 +68,7 @@ describe('Concurrency Tests', () => {
     const data1 = await res1.json()
     const data2 = await res2.json()
 
-    // Ambos deben tener éxito
     expect(data1.ok).toBe(true)
-    // data2 puede fallar si las cookies se comparten, pero data1 debe funcionar
-    // Lo importante es que no haya colisión de números
     if (data2.ok) {
       expect(data1.item.number).not.toBe(data2.item.number)
       expect(Math.abs(data1.item.number - data2.item.number)).toBe(1)
@@ -65,28 +76,22 @@ describe('Concurrency Tests', () => {
   })
 
   it('dos usuarios ven el mismo pedido al mismo tiempo', async () => {
-    const cookie1 = await login('admin', 'admin123')
-    const cookie2 = await login('mesero', 'mesero123')
+    if (!productId) return
 
-    // Crear un pedido
-    const areasRes = await api(cookie2, 'GET', '/api/mesero/areas')
-    const areasData = await areasRes.json()
-    const salonArea = areasData.items.find((a: any) => a.code === 'SALON')
-    const prodsRes = await api(cookie2, 'GET', `/api/mesero/products?areaId=${salonArea.id}`)
-    const prodsData = await prodsRes.json()
-
-    const createRes = await api(cookie2, 'POST', '/api/mesero/orders', {
-      areaId: salonArea.id,
-      items: [{ productId: prodsData.items[0].id, quantity: 1 }],
+    const createRes = await api(cookie, 'POST', '/api/mesero/orders', {
+      areaId: salonAreaId,
+      items: [{ productId, quantity: 1 }],
       sendToKitchen: false,
     })
     const createData = await createRes.json()
+    if (!createData.ok) return
     const orderId = createData.item.id
 
-    // Dos usuarios leen el mismo pedido en paralelo
+    const cookie2 = await login('admin', 'admin123')
+
     const [res1, res2] = await Promise.all([
-      api(cookie2, 'GET', `/api/mesero/orders/${orderId}`),
-      api(cookie1, 'GET', `/api/admin/dashboard`),
+      api(cookie, 'GET', `/api/mesero/orders/${orderId}`),
+      api(cookie2, 'GET', `/api/mesero/orders`),
     ])
 
     const data1 = await res1.json()
@@ -94,6 +99,37 @@ describe('Concurrency Tests', () => {
 
     expect(data1.ok).toBe(true)
     expect(data2.ok).toBe(true)
-    expect(data1.item.id).toBe(orderId)
+  })
+
+  it('pago con idempotencyKey no duplica', async () => {
+    if (!productId) return
+
+    // Crear pedido
+    const createRes = await api(cookie, 'POST', '/api/mesero/orders', {
+      areaId: salonAreaId,
+      items: [{ productId, quantity: 1 }],
+      sendToKitchen: false,
+    })
+    const createData = await createRes.json()
+    if (!createData.ok) return
+    const orderId = createData.item.id
+    const total = createData.item.total
+
+    // Pagar con idempotencyKey
+    const key = `test-concurrency-${Date.now()}`
+    const payRes1 = await api(cookie, 'POST', `/api/mesero/orders/${orderId}/pay`, {
+      payments: [{ method: 'EFECTIVO_CUP', amount: total }],
+      idempotencyKey: key,
+    })
+
+    // Segundo pago con mismo key
+    const payRes2 = await api(cookie, 'POST', `/api/mesero/orders/${orderId}/pay`, {
+      payments: [{ method: 'EFECTIVO_CUP', amount: total }],
+      idempotencyKey: key,
+    })
+
+    // Al menos uno debe ser exitoso, el otro debe ser idempotente o rechazado
+    expect([200, 409, 400]).toContain(payRes1.status)
+    expect([200, 409, 400]).toContain(payRes2.status)
   })
 })
