@@ -4,10 +4,10 @@
 
 ### Sistema POS/ERP para Restaurantes — Hecho en Cuba 🇨🇺
 
-[![Version](https://img.shields.io/badge/versión-1.0.18-blue.svg)](https://github.com/Lean031110/SoftLBA/releases)
+[![Version](https://img.shields.io/badge/versión-1.0.20--rc1-blue.svg)](https://github.com/Lean031110/SoftLBA/releases)
 [![License: MIT](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-0%20errores-blue.svg)](https://www.typescriptlang.org/)
-[![Tests](https://img.shields.io/badge/tests-157%20pasando-brightgreen.svg)](https://github.com/Lean031110/SoftLBA/actions)
+[![Tests](https://img.shields.io/badge/tests-375%20pasando-brightgreen.svg)](https://github.com/Lean031110/SoftLBA/actions)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black.svg)](https://nextjs.org/)
 [![Prisma](https://img.shields.io/badge/Prisma-6-indigo.svg)](https://www.prisma.io/)
 
@@ -270,7 +270,7 @@ npx vitest
 
 ### Cobertura actual
 
-- **157 tests unitarios** — todos pasan
+- **375 tests unitarios** — todos pasan
 - **0 errores TypeScript** (`npx tsc --noEmit`)
 
 ---
@@ -325,8 +325,8 @@ Este proyecto está bajo la [Licencia MIT](LICENSE).
 
 | Métrica | Valor |
 |---------|-------|
-| Versión | 1.0.18 |
-| Tests | 157 pasando |
+| Versión | 1.0.20-rc1 |
+| Tests | 375 pasando |
 | Errores TS | 0 |
 | Última actualización | Agosto 2026 |
 

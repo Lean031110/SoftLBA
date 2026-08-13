@@ -67,6 +67,23 @@ jobs:
       - name: Run unit tests
         run: npx vitest run tests/unit/
 
+  realtime-service:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install realtime dependencies
+        run: cd mini-services/realtime-service && bun install
+
+      - name: Realtime TypeScript check
+        run: cd mini-services/realtime-service && npx tsc --noEmit
+
   integration-tests:
     runs-on: ubuntu-latest
     env:
@@ -102,7 +119,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: [quality, unit-tests]
+    needs: [quality, unit-tests, realtime-service]
     env:
       DATABASE_URL: file:./db/build.db
       NEXTAUTH_SECRET: build-secret-minimum-16-chars-long

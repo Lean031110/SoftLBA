@@ -7,6 +7,98 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [1.0.20-rc1] — 2026-08-13
+
+### Release Candidate
+
+Versión candidata a producción tras completar las FASES 20-38 del roadmap de estabilización.
+
+#### Estabilización completada
+- **FASE 20**: CI reparado con tests de integración reales (servidor arrancado).
+- **FASE 21-23**: Realtime unificado (token 5-part con authVersion), eventos del cliente rechazados, endpoint `/api/auth/socket-token`.
+- **FASE 24-28**: Tests de integración con SQLite real, auditoría de inventario/pedidos/producción/finanzas.
+- **FASE 29-31**: Seguridad (datos operacionales ocultos, URL validation, rate limiting), PWA y DB auditadas.
+- **FASE 32-33**: Instalación limpia verificada, backup/restore auditados.
+- **FASE 34-36**: Documentación corregida, CI con 5 jobs separados (quality, unit-tests, realtime-service, integration-tests, build).
+- **Bug crítico**: Login `offline-queued` corregido (SW no intercepta rutas de auth).
+
+#### Métricas del RC
+- **375 tests** pasando (0 failed, 0 skipped).
+- **0 errores TypeScript** (principal + realtime service).
+- **0 errores lint**.
+- **Build de producción** exitoso.
+- **CI** con 5 jobs independientes.
+
+#### Archivos clave
+- `src/lib/auth/token.ts` — Token 5-part con authVersion.
+- `src/lib/inventory/inventory-service.ts` — Fuente única de inventario.
+- `src/lib/tables/table-service.ts` — Mesas atómicas con currentOrderId.
+- `src/lib/money/money-service.ts` — Redondeo bancario y conversión.
+- `mini-services/realtime-service/index.ts` — Realtime con token 5-part + eventos prohibidos.
+- `public/sw.js` — Service Worker con rutas de auth excluidas de Background Sync.
+
+---
+
+## [1.0.19.5] — 2026-08-13
+
+### Bug crítico corregido
+- **Login `offline-queued`**: El Service Worker interceptaba POST `/api/auth/login` y lo encolaba en Background Sync sin enviarlo al servidor. Las rutas `/api/auth/*` y `/api/internal/*` ahora se excluyen del Background Sync.
+- **Ruta hardcodeada**: `/home/z/my-project/download/comprobantes` en `pay/route.ts` reemplazada por `process.cwd()`.
+- **`deploy/` perdido**: systemd services recreados (`softlba.service`, `softlba-realtime.service`).
+
+### Tests
+- 375 tests pasando (22 nuevos de instalación y backup).
+
+---
+
+## [1.0.19.4] — 2026-08-13
+
+### Seguridad
+- `/api/public/config` ya no expone datos operacionales (`usdToCup`, `offlineWifiName`, etc.).
+- `showDemoUsers` controlado por env `DEMO_USERS` (no por DB).
+- `validateUrl` añadido a admin/config (anti-XSS stored).
+
+### Tests
+- 353 tests pasando (33 nuevos de seguridad, PWA y DB).
+
+---
+
+## [1.0.19.3] — 2026-08-13
+
+### Tests de integración con DB real
+- Inventario, mesas y concurrencia con SQLite real.
+- Auditoría de negocio: inventario, pedidos, producción, finanzas.
+
+### Tests
+- 320 tests pasando (33 nuevos).
+
+---
+
+## [1.0.19.2] — 2026-08-13
+
+### Realtime unificado y seguro
+- Token unificado a 5 partes con `authVersion` + compatibilidad legacy.
+- Servidor deriva áreas del rol, NO del cliente.
+- Eventos de negocio del cliente RECHAZADOS.
+- `useRealtime` reescrito: fetch `/api/auth/socket-token` (no `document.cookie`).
+- Realtime service con `tsconfig.json` propio, typecheck independiente.
+
+### Tests
+- 287 tests pasando (20 nuevos de realtime).
+
+---
+
+## [1.0.19.1] — 2026-08-13
+
+### CI reparado
+- Tests de integración arrancan servidor Next.js real.
+- CI separado en 4 jobs: quality, unit-tests, integration-tests, build.
+
+### Tests
+- 267 tests pasando, 0 skipped.
+
+---
+
 ## [1.0.19] — 2026-08-13
 
 ### CI/CD y Tests
