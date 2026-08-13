@@ -107,7 +107,7 @@ export async function setup() {
   serverStderr = []
   serverStdout = []
 
-  serverProcess = spawn('npx', ['next', 'dev', '-p', String(PORT)], {
+  serverProcess = spawn('npx', ['next', 'dev', '-p', String(PORT), '-H', '0.0.0.0'], {
     env: testEnv as any,
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd: process.cwd(),
