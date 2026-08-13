@@ -19,12 +19,21 @@ let serverStdout: string[] = []
 
 async function waitForServer(url: string, timeoutMs = 120000): Promise<void> {
   const start = Date.now()
+  // Try both localhost and 127.0.0.1
+  const urls = [url, url.replace('localhost', '127.0.0.1')]
   while (Date.now() - start < timeoutMs) {
-    try {
-      const res = await fetch(`${url}/api/health`)
-      if (res.ok || res.status === 404) return
-    } catch {
-      // Server not ready yet
+    for (const u of urls) {
+      try {
+        const res = await fetch(`${u}/api/health`)
+        if (res.ok || res.status === 404) {
+          console.log(`[global-setup] Server responded at ${u}`)
+          // Update BASE_URL to the working URL
+          process.env.INTEGRATION_BASE_URL = u
+          return
+        }
+      } catch {
+        // Not ready yet
+      }
     }
     await new Promise((r) => setTimeout(r, 2000))
   }
