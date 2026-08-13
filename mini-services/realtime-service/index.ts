@@ -3,39 +3,27 @@
 // ============================================================
 // Puerto: 3003 (configurado en Caddyfile para proxy)
 //
-// Seguridad (FIX 8):
-//   - El cliente envía unicamente { token, areaId? } en el evento 'auth'.
-//   - El token se verifica con la MISMA función HMAC SHA-256 que el
-//     middleware de Next.js (Web Crypto API).
-//   - userId y role se extraen del token verificado. NUNCA se confía
-//     en userId/role enviados directamente por el cliente.
-//   - Si el token es inválido o ha expirado, se rechaza la conexión.
+// v1.0.19.2 (FASE 22-23 del roadmap):
+//   - Token unificado a 5 partes: userId.role.expiresAt.authVersion.signature
+//   - Compatibilidad con tokens legacy de 4 partes (authVersion=0)
+//   - El servidor deriva áreas del rol, NO del cliente
+//   - Eventos de negocio del cliente RECHAZADOS (solo el backend emite)
+//   - Endpoint HTTP /emit para que el backend emita eventos
+//   - Endpoint HTTP /health para health checks
 //
-// CORS (FIX 11):
-//   - Lista de orígenes permitidos configurable.
-//   - Por defecto: localhost, 127.0.0.1 e IP del servidor.
-//   - Variable de entorno ALLOWED_ORIGINS (CSV) para añadir más.
-//
-// Eventos soportados:
-//   - order:new          (a cocina/pizzería)
-//   - order:status       (a mesero)
-//   - order:ready        (a mesero)
-//   - stock:low          (broadcast)
-//   - notification       (a usuario específico)
-//   - daily-close        (broadcast)
+// Arquitectura:
+//   API → DB COMMIT → /api/internal/emit → este servicio → clientes
+//   El cliente SOLO RECIBE. El servidor DECIDE y EMITE.
 // ============================================================
 
-import { createServer } from 'http'
-import { Server as SocketIOServer } from 'socket.io'
+import { createServer, IncomingMessage, ServerResponse } from 'http'
+import { Server as SocketIOServer, Socket } from 'socket.io'
 import { networkInterfaces } from 'os'
 
-const PORT = 3003
-const SESSION_COOKIE = 'rc_session'
+const PORT = parseInt(process.env.REALTIME_PORT || '3003', 10)
 
 // ============================================================
-// Secreto de firma (FIX 9):
-//   - En production: debe venir de NEXTAUTH_SECRET (error si falta).
-//   - En development: fallback a un valor por defecto (solo tests).
+// Secreto de firma
 // ============================================================
 function getSecret(): string {
   const envSecret = process.env.NEXTAUTH_SECRET
@@ -52,7 +40,9 @@ const SECRET = getSecret()
 
 // ============================================================
 // Verificación de token HMAC SHA-256 (Web Crypto API).
-// Réplica exacta de src/lib/auth/token.ts para usar el mismo algoritmo.
+// v1.0.19.2: UNIFICADO con src/lib/auth/token.ts
+// Acepta 5 partes (userId.role.expiresAt.authVersion.signature)
+// y 4 partes legacy (authVersion=0)
 // ============================================================
 function bytesToHex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes))
@@ -78,28 +68,47 @@ interface VerifiedSession {
   userId: string
   role: string
   expiresAt: number
+  authVersion: number
 }
 
 async function verifySessionToken(token: string): Promise<VerifiedSession | null> {
   try {
     const parts = token.split('.')
-    if (parts.length !== 4) return null
-    const [userId, role, expiresAtStr, signature] = parts
-    const payload = `${userId}.${role}.${expiresAtStr}`
+    // Aceptar 4 (legacy) y 5 (con authVersion)
+    if (parts.length !== 4 && parts.length !== 5) return null
+
+    const [userId, role, expiresAtStr, signatureOrAuthVer, maybeSignature] = parts
+
+    let authVersion: number
+    let signature: string
+    let payload: string
+
+    if (parts.length === 5) {
+      // Formato unificado: userId.role.expiresAt.authVersion.signature
+      authVersion = parseInt(signatureOrAuthVer, 10)
+      signature = maybeSignature
+      payload = `${userId}.${role}.${expiresAtStr}.${signatureOrAuthVer}`
+    } else {
+      // Legacy: userId.role.expiresAt.signature
+      authVersion = 0
+      signature = signatureOrAuthVer
+      payload = `${userId}.${role}.${expiresAtStr}`
+    }
+
     const expectedSig = await computeHmac(payload)
     if (signature !== expectedSig) return null
 
     const expiresAt = parseInt(expiresAtStr, 10)
     if (Date.now() > expiresAt) return null
 
-    return { userId, role, expiresAt }
+    return { userId, role, expiresAt, authVersion }
   } catch {
     return null
   }
 }
 
 // ============================================================
-// CORS (FIX 11): Lista de orígenes permitidos.
+// CORS
 // ============================================================
 function getAllowedOrigins(): string[] {
   const origins = new Set<string>([
@@ -109,7 +118,6 @@ function getAllowedOrigins(): string[] {
     'http://127.0.0.1',
   ])
 
-  // IP(s) del servidor detectadas dinámicamente
   try {
     const nets = networkInterfaces()
     for (const name of Object.keys(nets)) {
@@ -121,10 +129,9 @@ function getAllowedOrigins(): string[] {
       }
     }
   } catch {
-    // Ignorar errores al detectar IP
+    // Ignorar
   }
 
-  // Variable de entorno: lista CSV
   const envOrigins = process.env.ALLOWED_ORIGINS
   if (envOrigins) {
     for (const o of envOrigins.split(',').map((s) => s.trim()).filter(Boolean)) {
@@ -138,16 +145,214 @@ function getAllowedOrigins(): string[] {
 const ALLOWED_ORIGINS = getAllowedOrigins()
 console.log('[cors] Orígenes permitidos:', ALLOWED_ORIGINS.join(', '))
 
-const httpServer = createServer()
+// ============================================================
+// Secreto compartido para endpoint /emit interno
+// ============================================================
+const INTERNAL_SECRET = process.env.REALTIME_SECRET || 'dev-internal-secret-change-in-prod'
+
+// ============================================================
+// Mapa rol → áreas permitidas
+// El servidor deriva áreas del rol, NO del cliente.
+// ============================================================
+const ROLE_TO_AREAS: Record<string, string[]> = {
+  ADMIN: [], // ADMIN se une a todas las áreas dinámicamente
+  MESERO: [],
+  MESERO_PRO: [],
+  COCINA: [],
+  PIZZERIA: [],
+  CAJERO: [],
+}
+
+// ============================================================
+// Tipos de salas y clientes
+// ============================================================
+interface ClientInfo {
+  userId?: string
+  role?: string
+  authenticated: boolean
+  authVersion: number
+  connectedAt: number
+}
+
+const clients = new Map<string, ClientInfo>()
+
+// ============================================================
+// Validación de rooms
+// ============================================================
+function isValidRoom(room: string): boolean {
+  if (!room || typeof room !== 'string') return false
+  if (room === 'broadcast') return true
+  if (room.startsWith('role:')) {
+    const role = room.slice(5)
+    return ['ADMIN', 'MESERO', 'MESERO_PRO', 'COCINA', 'PIZZERIA', 'CAJERO'].includes(role)
+  }
+  if (room.startsWith('user:')) {
+    return room.slice(5).length > 0
+  }
+  if (room.startsWith('area:')) {
+    return room.slice(5).length > 0
+  }
+  return false
+}
+
+// ============================================================
+// Validación de payload por evento
+// ============================================================
+function validateEventPayload(event: string, data: any): { ok: boolean; error?: string } {
+  if (!data || typeof data !== 'object') {
+    return { ok: false, error: 'Payload vacío o inválido' }
+  }
+  switch (event) {
+    case 'order:new':
+      if (!data.orderId) return { ok: false, error: 'orderId requerido' }
+      if (!data.areaId) return { ok: false, error: 'areaId requerido' }
+      break
+    case 'order:status':
+      if (!data.orderId) return { ok: false, error: 'orderId requerido' }
+      if (!data.status) return { ok: false, error: 'status requerido' }
+      break
+    case 'order:ready':
+      if (!data.orderId) return { ok: false, error: 'orderId requerido' }
+      break
+    case 'payment:done':
+      if (!data.orderId) return { ok: false, error: 'orderId requerido' }
+      if (typeof data.amount !== 'number') return { ok: false, error: 'amount (number) requerido' }
+      break
+    case 'stock:low':
+      if (!data.productId) return { ok: false, error: 'productId requerido' }
+      break
+    case 'notification':
+      if (!data.title || !data.message) return { ok: false, error: 'title y message requeridos' }
+      break
+    case 'daily-close':
+      if (!data.date) return { ok: false, error: 'date requerido' }
+      break
+    default:
+      return { ok: false, error: `Evento no soportado: ${event}` }
+  }
+  return { ok: true }
+}
+
+// ============================================================
+// Emisión interna (usada por el endpoint HTTP /emit)
+// ============================================================
+function emitToRoom(room: string, event: string, data: any): { ok: boolean; delivered: number } {
+  if (room === 'broadcast') {
+    io.emit(event, data)
+    return { ok: true, delivered: io.engine.clientsCount }
+  }
+  io.to(room).emit(event, data)
+  return { ok: true, delivered: -1 }
+}
+
+// ============================================================
+// Servidor HTTP (endpoint /emit interno + health)
+// ============================================================
+const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  // CORS para el endpoint HTTP
+  const origin = req.headers.origin
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Internal-Secret')
+  }
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204)
+    res.end()
+    return
+  }
+
+  // Endpoint /emit: solo accesible desde localhost + secret
+  if (req.url === '/emit' && req.method === 'POST') {
+    const remoteIp =
+      (req.headers['x-forwarded-for']?.toString().split(',')[0] || '').trim() ||
+      req.socket.remoteAddress ||
+      ''
+    const isLocal =
+      remoteIp === '127.0.0.1' || remoteIp === '::1' || remoteIp === '::ffff:127.0.0.1' || remoteIp === ''
+
+    if (!isLocal) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: 'FORBIDDEN: solo localhost' }))
+      return
+    }
+
+    const secret = req.headers['x-internal-secret'] as string | undefined
+    if (!secret || secret !== INTERNAL_SECRET) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: 'FORBIDDEN: secreto inválido' }))
+      return
+    }
+
+    // Leer body
+    let body = ''
+    for await (const chunk of req) {
+      body += chunk
+      if (body.length > 1_000_000) break
+    }
+    let parsed: any
+    try {
+      parsed = JSON.parse(body)
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: 'JSON inválido' }))
+      return
+    }
+
+    const { room, event, data, clientOperationId } = parsed || {}
+    if (typeof room !== 'string' || typeof event !== 'string' || typeof data !== 'object') {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: 'Parámetros inválidos: { room, event, data }' }))
+      return
+    }
+
+    if (!isValidRoom(room)) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: `Sala inválida: ${room}` }))
+      return
+    }
+
+    const validation = validateEventPayload(event, data)
+    if (!validation.ok) {
+      res.writeHead(400, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: false, error: `Payload inválido: ${validation.error}` }))
+      return
+    }
+
+    const result = emitToRoom(room, event, data)
+    console.log(`[emit] room=${room} event=${event} delivered=${result.delivered}`)
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ ok: true, delivered: result.delivered }))
+    return
+  }
+
+  // Health check
+  if (req.url === '/health' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      ok: true,
+      service: 'realtime',
+      port: PORT,
+      clients: clients.size,
+      uptime: process.uptime(),
+    }))
+    return
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ ok: false, error: 'Not found' }))
+})
+
+// ============================================================
+// Socket.IO server
+// ============================================================
 const io = new SocketIOServer(httpServer, {
   path: '/',
   cors: {
     origin: (origin, callback) => {
-      // Permitir peticiones sin origin (mismo host / curl / Postman)
       if (!origin) return callback(null, true)
-      if (ALLOWED_ORIGINS.includes(origin)) {
-        return callback(null, true)
-      }
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true)
       console.warn(`[cors] Origen rechazado: ${origin}`)
       return callback(null, false)
     },
@@ -158,166 +363,61 @@ const io = new SocketIOServer(httpServer, {
   pingInterval: 25000,
 })
 
-// Tipos de salas
-// - role:admin, role:mesero, role:cocina, role:pizzeria, role:cajero
-// - user:<userId>
-// - area:<areaId>
+// ============================================================
+// Eventos del cliente que están PROHIBIDOS
+// El cliente SOLO RECIBE. El servidor DECIDE y EMITE.
+// ============================================================
+const CLIENT_FORBIDDEN_EVENTS = [
+  'order:new',
+  'order:status',
+  'order:ready',
+  'payment:done',
+  'stock:low',
+  'notification',
+  'daily-close',
+  'message',
+]
 
-interface ClientInfo {
-  userId?: string
-  role?: string
-  areaId?: string
-  authenticated: boolean
-}
-
-const clients = new Map<string, ClientInfo>()
-
-io.on('connection', (socket) => {
+// ============================================================
+// Conexión de sockets
+// ============================================================
+io.on('connection', (socket: Socket) => {
   console.log(`[+] ${socket.id} conectado`)
-  clients.set(socket.id, { authenticated: false })
+  clients.set(socket.id, { authenticated: false, authVersion: 0, connectedAt: Date.now() })
 
-  // ============================================================
-  // Autenticación del socket (FIX 8):
-  //   El cliente envía { token, areaId? }.
-  //   Verificamos el token y extraemos userId/role firmados.
-  //   Rechazamos si el token es inválido o ha expirado.
-  // ============================================================
-  socket.on('auth', async (payload: { token?: string; areaId?: string }) => {
+  // Autenticación: el cliente envía { token } en el handshake o en 'auth'
+  // El token se verifica y se extrae userId/role del mismo.
+  // NO se confía en userId/role enviados por el cliente.
+  const tokenFromQuery = socket.handshake.query.token as string | undefined
+  const tokenFromAuth = socket.handshake.auth?.token as string | undefined
+  const token = tokenFromQuery || tokenFromAuth
+
+  if (token) {
+    // Autenticación desde handshake (preferida)
+    authenticateSocket(socket, token)
+  }
+
+  // Evento 'auth' para autenticación posterior o reautenticación
+  socket.on('auth', async (payload: { token?: string }) => {
     if (!payload || !payload.token) {
       socket.emit('auth:fail', { message: 'Token no proporcionado' })
       return
     }
-
-    const session = await verifySessionToken(payload.token)
-    if (!session) {
-      console.warn(`[auth] ${socket.id} token inválido o expirado`)
-      socket.emit('auth:fail', { message: 'Token inválido o expirado' })
-      // No desconectamos inmediatamente para que el cliente pueda reintentar
-      // (reautenticación tras refresh), pero marcamos como no autenticado.
-      return
-    }
-
-    const info: ClientInfo = {
-      userId: session.userId,
-      role: session.role,
-      areaId: payload.areaId,
-      authenticated: true,
-    }
-    clients.set(socket.id, info)
-    socket.join(`role:${session.role}`)
-    socket.join(`user:${session.userId}`)
-    if (payload.areaId) {
-      socket.join(`area:${payload.areaId}`)
-    }
-    console.log(
-      `[auth] ${socket.id} → user=${session.userId} role=${session.role} areaId=${payload.areaId || '-'}`,
-    )
-    socket.emit('auth:ok', { userId: session.userId, role: session.role })
+    await authenticateSocket(socket, payload.token)
   })
 
-  // ============================================================
-  // Verificación de autenticación para eventos sensibles
-  // ============================================================
-  function requireAuth(): ClientInfo | null {
-    const info = clients.get(socket.id)
-    if (!info || !info.authenticated || !info.userId || !info.role) return null
-    return info
+  // Rechazar TODOS los eventos de negocio del cliente
+  for (const ev of CLIENT_FORBIDDEN_EVENTS) {
+    socket.on(ev, () => {
+      console.warn(`[forbidden] ${socket.id} intentó emitir '${ev}' (rechazado)`)
+      socket.emit('error', {
+        message: `Los eventos de negocio solo pueden ser emitidos por el servidor.`,
+        event: ev,
+      })
+    })
   }
 
-  // === Eventos de pedidos ===
-
-  // Nuevo pedido creado por mesero
-  socket.on('order:new', (data: { orderId: string; userId: string; areaId: string; tableId?: string; items: any[] }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    console.log(`[order:new] order=${data.orderId} area=${data.areaId}`)
-    io.to(`area:${data.areaId}`).emit('order:new', data)
-    io.to('role:ADMIN').emit('order:new', data)
-  })
-
-  // Cambio de estado del pedido (de cocina)
-  socket.on('order:status', (data: { orderId: string; status: string; userId: string }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    console.log(`[order:status] order=${data.orderId} status=${data.status}`)
-    io.to(`user:${data.userId}`).emit('order:status', data)
-    io.to('role:ADMIN').emit('order:status', data)
-  })
-
-  // Pedido listo (sonido + vibración al mesero)
-  socket.on('order:ready', (data: { orderId: string; userId: string; orderNumber: number }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    console.log(`[order:ready] order=${data.orderId}`)
-    io.to(`user:${data.userId}`).emit('order:ready', data)
-    io.to('role:ADMIN').emit('order:ready', data)
-  })
-
-  // Cobro registrado
-  socket.on('payment:done', (data: { orderId: string; userId: string; amount: number }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    console.log(`[payment:done] order=${data.orderId} amount=${data.amount}`)
-    io.to('role:ADMIN').emit('payment:done', data)
-    io.to('role:CAJERO').emit('payment:done', data)
-  })
-
-  // === Stock ===
-  socket.on('stock:low', (data: { productId: string; productName: string; areaId?: string }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    console.log(`[stock:low] product=${data.productName}`)
-    io.to('role:ADMIN').emit('stock:low', data)
-    if (data.areaId) {
-      io.to(`area:${data.areaId}`).emit('stock:low', data)
-    }
-  })
-
-  // === Notificaciones ===
-  socket.on('notification', (data: { userId?: string; role?: string; title: string; message: string; type?: string }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    if (data.userId) {
-      io.to(`user:${data.userId}`).emit('notification', data)
-    } else if (data.role) {
-      io.to(`role:${data.role}`).emit('notification', data)
-    } else {
-      io.emit('notification', data)
-    }
-  })
-
-  // === Cierre diario ===
-  socket.on('daily-close', (data: { date: string; status: string; total?: number }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    console.log(`[daily-close] date=${data.date} status=${data.status}`)
-    io.emit('daily-close', data)
-  })
-
-  // === Mensajería interna ===
-  socket.on('message', (data: { to: string; from: string; message: string }) => {
-    if (!requireAuth()) {
-      socket.emit('error', { message: 'No autenticado' })
-      return
-    }
-    io.to(`user:${data.to}`).emit('message', data)
-  })
-
-  // === Ping/Pong ===
+  // Ping/Pong (utility, permitido)
   socket.on('ping', () => {
     socket.emit('pong', { time: Date.now() })
   })
@@ -332,8 +432,54 @@ io.on('connection', (socket) => {
   })
 })
 
+// ============================================================
+// Autenticar socket con token
+// ============================================================
+async function authenticateSocket(socket: Socket, token: string) {
+  const session = await verifySessionToken(token)
+  if (!session) {
+    console.warn(`[auth] ${socket.id} token inválido o expirado`)
+    socket.emit('auth:fail', { message: 'Token inválido o expirado' })
+    return
+  }
+
+  const info: ClientInfo = {
+    userId: session.userId,
+    role: session.role,
+    authenticated: true,
+    authVersion: session.authVersion,
+    connectedAt: Date.now(),
+  }
+  clients.set(socket.id, info)
+
+  // Unir a salas basadas en el ROL (derivado del token, NO del cliente)
+  socket.join(`role:${session.role}`)
+  socket.join(`user:${session.userId}`)
+
+  // ADMIN se une a todas las salas de rol
+  if (session.role === 'ADMIN') {
+    for (const role of ['MESERO', 'MESERO_PRO', 'COCINA', 'PIZZERIA', 'CAJERO']) {
+      socket.join(`role:${role}`)
+    }
+  }
+
+  console.log(
+    `[auth] ${socket.id} → user=${session.userId} role=${session.role} authVersion=${session.authVersion}`,
+  )
+  socket.emit('auth:ok', {
+    userId: session.userId,
+    role: session.role,
+    authVersion: session.authVersion,
+  })
+}
+
+// ============================================================
+// Iniciar servidor
+// ============================================================
 httpServer.listen(PORT, () => {
   console.log(`🔌 Realtime service corriendo en puerto ${PORT}`)
+  console.log(`   Endpoint HTTP interno: POST http://localhost:${PORT}/emit (localhost + secret)`)
+  console.log(`   Health check: GET http://localhost:${PORT}/health`)
 })
 
 // Graceful shutdown
@@ -345,3 +491,14 @@ process.on('SIGTERM', () => {
     })
   })
 })
+
+process.on('SIGINT', () => {
+  console.log('Cerrando servidor...')
+  io.close(() => {
+    httpServer.close(() => {
+      process.exit(0)
+    })
+  })
+})
+
+export { verifySessionToken, validateEventPayload, isValidRoom }

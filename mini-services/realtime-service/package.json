@@ -1,12 +1,17 @@
 {
   "name": "realtime-service",
-  "version": "0.1.0",
+  "version": "1.0.19.2",
   "private": true,
   "scripts": {
-    "dev": "bun --hot index.ts"
+    "dev": "bun --hot index.ts",
+    "start": "bun run index.ts",
+    "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {
-    "socket.io": "^4.7.5",
-    "cors": "^2.8.5"
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
   }
 }

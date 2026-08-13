@@ -4,13 +4,14 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 
 // ============================================================
-// Hook useRealtime - Maneja conexión Socket.IO (segura)
+// Hook useRealtime — Conexión Socket.IO segura
 // ============================================================
-// - En lugar de enviar userId/role (que el cliente podría falsificar),
-//   envía el token de sesión (cookie rc_session) firmado por HMAC.
-// - El mini-servicio realtime verifica el token con la misma función
-//   que el middleware de Next.js y extrae userId/role del token.
-// - No confiamos en datos de identidad enviados por el cliente.
+// v1.0.19.2 (FASE 22):
+//   - NO lee document.cookie (la cookie rc_session es HttpOnly).
+//   - Obtiene el token desde /api/auth/socket-token (server-side).
+//   - El token se envía en handshake.auth.token.
+//   - El frontend SOLO ESCUCHA eventos. NO emite eventos de negocio.
+//   - El servidor deriva userId/role/áreas del token, NO del cliente.
 // ============================================================
 
 export type NotificationData = {
@@ -23,15 +24,28 @@ export type NotificationData = {
   data?: any
 }
 
-const SESSION_COOKIE = 'rc_session'
+// Cache en memoria del token de socket
+interface CachedToken {
+  token: string
+  expiresAt: number
+}
+let tokenCache: CachedToken | null = null
 
-/**
- * Lee el valor de una cookie por su nombre en el navegador.
- */
-function readCookie(name: string): string | null {
-  if (typeof document === 'undefined') return null
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1') + '=([^;]*)'))
-  return match ? decodeURIComponent(match[1]) : null
+async function fetchSocketToken(): Promise<string | null> {
+  if (tokenCache && Date.now() < tokenCache.expiresAt - 60_000) {
+    return tokenCache.token
+  }
+  try {
+    const res = await fetch('/api/auth/socket-token', { credentials: 'same-origin' })
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!data.ok || !data.token) return null
+    tokenCache = { token: data.token, expiresAt: data.expiresAt }
+    return data.token as string
+  } catch (e) {
+    console.error('[realtime] Error fetching socket token:', e)
+    return null
+  }
 }
 
 export function useRealtime(opts: {
@@ -53,36 +67,32 @@ export function useRealtime(opts: {
     handlersRef.current = opts
   })
 
-  const connect = useCallback(() => {
-    // Seguimos requiriendo userId/role para saber cuándo intentar conectar,
-    // pero NO se envían al servidor para autenticación; el servidor extrae
-    // esos datos del token firmado.
+  const connect = useCallback(async () => {
     if (!opts.userId || !opts.role) return
     if (socketRef.current?.connected) return
 
-    const token = readCookie(SESSION_COOKIE)
+    // Obtener token desde endpoint server-side (cookie HttpOnly)
+    const token = await fetchSocketToken()
     if (!token) {
-      console.warn('[realtime] No se encontró cookie rc_session; no se conecta')
+      console.warn('[realtime] No se pudo obtener token de socket')
       return
     }
 
-    const socket = io('/?XTransformPort=3003', {
+    const realtimeUrl = process.env.NEXT_PUBLIC_REALTIME_URL || ''
+    const socket = io(realtimeUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: 10,
+      // Token en handshake.auth — el servidor deriva identidad del token
+      auth: { token },
     })
 
     socket.on('connect', () => {
-      console.log('[realtime] conectado:', socket.id)
       setConnected(true)
-      // Enviar el token firmado en lugar de userId/role.
-      // El servidor valida el token y extrae identidad del mismo.
-      socket.emit('auth', { token, areaId: opts.areaId })
     })
 
     socket.on('disconnect', () => {
-      console.log('[realtime] desconectado')
       setConnected(false)
     })
 
@@ -92,13 +102,13 @@ export function useRealtime(opts: {
     })
 
     socket.on('auth:fail', (data: any) => {
-      console.warn('[realtime] auth fallida:', data?.message || 'token inválido')
+      console.warn('[realtime] auth fallida:', data?.message)
       setConnected(false)
-      // Desconectar si el token fue rechazado para no reintentar con token caducado
+      tokenCache = null
       socket.disconnect()
     })
 
-    // Eventos de negocio
+    // Eventos de negocio (SOLO ESCUCHA — el servidor emite)
     socket.on('notification', (data: NotificationData) => {
       handlersRef.current.onNotification?.(data)
     })
@@ -132,14 +142,9 @@ export function useRealtime(opts: {
     }
   }, [connect])
 
-  // Funciones para emitir eventos
-  const emit = useCallback((event: string, data: any) => {
-    socketRef.current?.emit(event, data)
-  }, [])
-
+  // NO se expone emit() — el frontend solo RECIBE
   return {
     connected,
-    emit,
     reconnect: connect,
   }
 }

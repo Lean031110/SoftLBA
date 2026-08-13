@@ -180,7 +180,8 @@ export default function NuevoPedidoPage() {
     )
   }
 
-  const { emit } = useRealtime({
+  // v1.0.19.2: useRealtime ya no expone emit() — el servidor emite eventos
+  useRealtime({
     userId: user?.id,
     role: user?.role,
   })
@@ -211,9 +212,8 @@ export default function NuevoPedidoPage() {
       const data = await res.json()
       if (data.ok) {
         toast.success(sendToKitchen ? 'Pedido enviado a cocina' : 'Pedido creado')
-        if (sendToKitchen && data.wsPayload) {
-          emit('order:new', data.wsPayload)
-        }
+        // v1.0.19.2: el servidor ya emite el evento realtime después del DB COMMIT
+        // El frontend ya NO emite eventos de negocio
         router.push(`/mesero/pedidos/${data.item.id}`)
       } else {
         toast.error(data.error || 'Error al crear pedido')

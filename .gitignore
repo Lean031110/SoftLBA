@@ -76,3 +76,5 @@ Thumbs.db
 # Examples (no parte del core)
 /examples/
 tsconfig.tsbuildinfo
+mini-services/realtime-service/bun.lock
+mini-services/realtime-service/bun.lock
