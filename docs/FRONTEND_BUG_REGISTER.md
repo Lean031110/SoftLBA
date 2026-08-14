@@ -18,7 +18,7 @@ Leyenda de severidad:
 |----|-------|-----|--------|---------|------------------|----------|--------|
 | (ninguno P0/P1 activo tras FRONTEND-02) | | | | | | | |
 
-Pendientes para FRONTEND-03 (Design System) y siguientes fases:
+Pendientes para FRONTEND-05+ (POS Mesero) y siguientes fases:
 - P2: aria-labels en 31 icon buttons restantes (ver auditoría FRONTEND-02).
 - P2: tablas admin/productos aún en desktop-first con overflow-x-auto.
 - P3: tipado `any` en use-realtime callbacks (data?: any).
@@ -45,6 +45,8 @@ Pendientes para FRONTEND-03 (Design System) y siguientes fases:
 | FE-013 | 2026-08-14 | P2 | ADMIN | Tabla de usuarios en mobile requiere scroll horizontal (7 columnas) — UX deficiente | Agregada vista mobile como cards con acciones táctiles h-10 + aria-labels descriptivos; tabla original se mantiene en desktop (md+) | v1.0.20-rc17 | 6ff5084 |
 | FE-014 | 2026-08-14 | P2 | CODE | `<Toaster />` shadcn montado pero nunca recibe toasts (toda la app usa sonner) → dead code + TOAST_LIMIT=1 silenciaba notificaciones | Eliminado `<Toaster />` y su import en `src/app/layout.tsx` | v1.0.20-rc17 | 6ff5084 |
 | FE-015 | 2026-08-14 | P2 | A11Y | 0 respeto a `prefers-reduced-motion` en toda la app → usuarios con sensibilidad al movimiento no pueden reducir animaciones | Agregada media query `@media (prefers-reduced-motion: reduce)` en `src/app/globals.css` que reduce animation/transition-duration a 0.01ms | v1.0.20-rc17 | 6ff5084 |
+| FE-019 | 2026-08-14 | P1 | SHELL | Sidebar con 20 items en lista plana → en mobile no se distinguía admin vs operativas | NAV_ITEMS agrupados en 3 secciones (Administración/Operativas/Sistema) con `getNavSections(role)`; títulos uppercase + `min-h-10` (40px) por item; `aria-label` y `aria-current` | v1.0.20-rc19 | (pendiente push) |
+| FE-020 | 2026-08-14 | P1 | A11Y | Header buttons `size-9` (36px) → por debajo del umbral táctil recomendado (40px) en mobile | Mobile menu trigger, ThemeToggle, NotificationBell bumped a `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop) | v1.0.20-rc19 | (pendiente push) |
 
 ---
 

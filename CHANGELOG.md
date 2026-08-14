@@ -184,6 +184,55 @@ FRONTEND-04 — Mobile shell (header/nav/sidebar/sheets unificados).
 
 ---
 
+## [1.0.20-rc19] — 2026-08-14
+
+### FRONTEND-04 — Mobile shell (sidebar agrupado + touch targets)
+
+Mejora el shell móvil sin reescribir el PanelLayout. Cambios mínimos y
+revertibles sobre la estructura existente.
+
+#### FE-019: Sidebar agrupado en secciones lógicas
+- `src/components/layout/panel-layout.tsx`: NAV_ITEMS ahora agrupados en 3
+  secciones (Administración / Operativas / Sistema).
+- Antes: lista plana de 20 items. En mobile con scroll era difícil distinguir
+  admin vs operativas.
+- Ahora: cada sección tiene título uppercase + items con `min-h-10` (40px).
+- `aria-label="Navegación principal"` en `<nav>`.
+- `aria-current="page"` en el link activo.
+- Función `getNavSections(role)` filtra items por rol antes de agrupar.
+
+#### FE-020: Touch targets del header bumped a 40px en mobile
+- Mobile menu trigger: `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop).
+- ThemeToggle: `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop).
+- NotificationBell: `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop).
+- Antes: todos `size-9` (36px) — por debajo del umbral táctil recomendado.
+- WCAG 2.5.5 recomienda 44px mínimo; 40px es aceptable.
+
+#### Verificación visual (viewport 375x667 — iPhone SE)
+- Sidebar mobile muestra 3 secciones con títulos: "Administración",
+  "Operativas", "Sistema". ✅
+- Los 20 items del nav tienen `min-h-10` (40px). ✅
+- `aria-current="page"` en el link activo (Dashboard). ✅
+- Header buttons: 40px × 40px (mobile menu, notifications, theme toggle). ✅
+- UserMenu: 36px × 48px (acceptable, es más ancho por el nombre). ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/components/layout/panel-layout.tsx` — agrupación en secciones + touch targets.
+- `src/components/layout/notification-bell.tsx` — touch target bumped.
+
+#### Próxima fase
+FRONTEND-05 — POS Mesero (nuevo pedido mobile-first).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate

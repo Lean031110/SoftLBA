@@ -208,7 +208,9 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" aria-label="Notificaciones">
+        {/* FRONTEND-04 (FE-020): h-10 (40px) en mobile, size-9 (36px) en
+            desktop. WCAG 2.5.5 recomienda 44px mínimo. */}
+        <Button variant="ghost" size="icon" className="relative h-10 w-10 md:h-9 md:w-9" aria-label="Notificaciones">
           <Bell className="h-4 w-4" />
           {unread > 0 && (
             <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">

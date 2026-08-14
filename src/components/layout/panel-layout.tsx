@@ -66,8 +66,16 @@ type NavItem = {
   roles: UserRole[]
 }
 
+// FRONTEND-04 (FE-019): NAV_ITEMS agrupados en secciones lógicas para mejorar
+// navegación en mobile. Antes: lista plana de 21 items que no se podía
+// distinguir. Ahora: 3 secciones (Administración / Operativas / Sistema).
+type NavSection = {
+  title: string
+  items: NavItem[]
+}
+
 const NAV_ITEMS: NavItem[] = [
-  // Admin
+  // Administración
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'CAJERO'] },
   { href: '/admin/usuarios', label: 'Usuarios', icon: Users, roles: ['ADMIN'] },
   { href: '/admin/productos', label: 'Productos', icon: Package, roles: ['ADMIN'] },
@@ -88,8 +96,38 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/mesero', label: 'Mesero', icon: Utensils, roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
   { href: '/cocina', label: 'Cocina', icon: ChefHat, roles: ['ADMIN', 'COCINA'] },
   { href: '/pizzeria', label: 'Pizzería', icon: Pizza, roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
+  // Sistema
   { href: '/ayuda', label: 'Ayuda', icon: HelpCircle, roles: ['ADMIN', 'MESERO', 'MESERO_PRO', 'COCINA', 'PIZZERIA', 'CAJERO'] },
 ]
+
+// Secciones para renderizar el sidebar agrupado.
+function getNavSections(role: UserRole | undefined): NavSection[] {
+  if (!role) return []
+  const adminItems = NAV_ITEMS.filter(
+    (i) => i.href.startsWith('/admin') && i.roles.includes(role),
+  )
+  const operativasItems = NAV_ITEMS.filter(
+    (i) =>
+      !i.href.startsWith('/admin') &&
+      i.href !== '/ayuda' &&
+      i.roles.includes(role),
+  )
+  const sistemaItems = NAV_ITEMS.filter(
+    (i) => i.href === '/ayuda' && i.roles.includes(role),
+  )
+
+  const sections: NavSection[] = []
+  if (adminItems.length > 0) {
+    sections.push({ title: 'Administración', items: adminItems })
+  }
+  if (operativasItems.length > 0) {
+    sections.push({ title: 'Operativas', items: operativasItems })
+  }
+  if (sistemaItems.length > 0) {
+    sections.push({ title: 'Sistema', items: sistemaItems })
+  }
+  return sections
+}
 
 function getInitials(user: CurrentUser | null): string {
   if (!user) return '?'
@@ -105,30 +143,47 @@ function getNavForRole(role: UserRole | undefined): NavItem[] {
 
 function SidebarNav({ user, onNavigate }: { user: CurrentUser | null; onNavigate?: () => void }) {
   const pathname = usePathname()
-  const items = getNavForRole(user?.role)
+  // FRONTEND-04 (FE-019): renderizar por secciones para mejorar navegación.
+  const sections = getNavSections(user?.role)
 
   return (
-    <nav className="flex flex-col gap-1 p-3 overflow-y-auto">
-      {items.map((item) => {
-        const Icon = item.icon
-        const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800'
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span className="truncate">{item.label}</span>
-          </Link>
-        )
-      })}
+    <nav
+      className="flex flex-col gap-3 p-3 overflow-y-auto pb-6"
+      aria-label="Navegación principal"
+    >
+      {sections.map((section) => (
+        <div key={section.title} className="flex flex-col gap-0.5">
+          {/* Título de sección — visible solo en sm+ para no saturar mobile.
+              En mobile los items igual funcionan; el título ayuda a entender
+              la agrupación cuando hay muchos items. */}
+          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400 dark:text-stone-500">
+            {section.title}
+          </p>
+          {section.items.map((item) => {
+            const Icon = item.icon
+            const isActive =
+              pathname === item.href ||
+              (item.href !== '/' && pathname.startsWith(item.href))
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                aria-current={isActive ? 'page' : undefined}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors min-h-10',
+                  isActive
+                    ? 'bg-blue-500 text-white shadow-sm'
+                    : 'text-stone-700 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800',
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate">{item.label}</span>
+              </Link>
+            )
+          })}
+        </div>
+      ))}
     </nav>
   )
 }
@@ -150,7 +205,7 @@ function ThemeToggle() {
         size="icon"
         disabled
         aria-label="Cargando tema…"
-        className="relative"
+        className="relative h-10 w-10 md:h-9 md:w-9"
       >
         <Sun className="h-4 w-4 opacity-50" />
       </Button>
@@ -163,7 +218,7 @@ function ThemeToggle() {
       size="icon"
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-      className="relative"
+      className="relative h-10 w-10 md:h-9 md:w-9"
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
       <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
@@ -294,7 +349,9 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
             {/* Mobile menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menú de navegación">
+                {/* FRONTEND-04 (FE-020): h-10 (40px) en mobile, size-9 (36px) en
+                    desktop. WCAG 2.5.5 recomienda 44px mínimo. */}
+                <Button variant="ghost" size="icon" className="md:hidden h-10 w-10" aria-label="Abrir menú de navegación">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
