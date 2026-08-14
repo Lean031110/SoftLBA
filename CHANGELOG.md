@@ -233,6 +233,66 @@ FRONTEND-05 — POS Mesero (nuevo pedido mobile-first).
 
 ---
 
+## [1.0.20-rc20] — 2026-08-14
+
+### FRONTEND-05 — POS Mesero (nuevo pedido mobile-first)
+
+Mejora la pantalla crítica del POS (`/mesero/nuevo-pedido`) sin reescribirla.
+4 fixes puntuales sobre el código existente.
+
+#### FE-021: Touch targets de filtros de categoría h-7→h-9
+- Botones "Todas", "Bebidas", "Cafetería", etc. subidos de `h-7` (28px) a
+  `h-9` (36px) en mobile. `text-xs sm:text-sm` para mantener compactos.
+- Agregado `role="group"` + `aria-label="Filtro por categoría"` al contenedor.
+- Agregado `aria-pressed` a cada botón para indicar estado activo.
+- Antes: 28px, propenso a tap erróneo con 8 categorías visibles.
+
+#### FE-022: Botón volver con aria-label + touch target 40px
+- `Button` con `ArrowLeft` ahora tiene `aria-label="Volver a pedidos del mesero"`.
+- Tamaño bumped de `size-9` (36px) a `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop).
+- Icono subido a `h-5 w-5` para mejor visibilidad.
+- Antes: sin aria-label, screen readers anunciaban solo "button".
+
+#### FE-023: Tipar `CartContent` (eliminar `: any`)
+- Creado `type CartContentProps` con todos los 17 props tipados explícitamente.
+- Eliminado `: any` que violaba sección 47 de prohibiciones del plan maestro.
+- Props: cart, customerName, setCustomerName, notes, setNotes, discountPct,
+  setDiscountPct, subtotal, discountAmount, total, submitting, onRemove,
+  onUpdateQty, onSetQty, onUpdateNotes, onSubmit, formatCurrency.
+- TS ahora valida que los callers pasen los tipos correctos.
+
+#### FE-024: Filtros sticky + ScrollArea adaptativo
+- Card de filtros ahora `sticky top-16 z-20` en mobile (debajo del header).
+- En desktop (`lg:`) se desactiva el sticky (`lg:static lg:z-0`) porque hay
+  más espacio vertical y el carrito va en columna lateral.
+- ScrollArea de productos: `max-h-[50vh] lg:max-h-[70vh]` (antes `60vh` fijo).
+  En mobile landscape (alto viewport pequeño) deja más espacio visible.
+- Antes: al scrollear 20+ productos, la búsqueda y filtros desaparecían.
+  Ahora permanecen visibles para búsqueda rápida.
+
+#### Verificación visual (viewport 375x667 — iPhone SE)
+- Filtros de categoría: 36px de alto, `aria-pressed` en botón activo. ✅
+- Botón volver: 40px × 40px, `aria-label="Volver a pedidos del mesero"`. ✅
+- Card de filtros: `position: sticky` confirmado vía `getComputedStyle`. ✅
+- Input de búsqueda permanece visible tras scroll down. ✅
+- `CartContent` tipado, sin `: any` en props. ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/app/mesero/nuevo-pedido/page.tsx` — 4 fixes (filtros, back, tipos, sticky).
+
+#### Próxima fase
+FRONTEND-06 — Pedidos (lista de pedidos del mesero + detalle mobile).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate

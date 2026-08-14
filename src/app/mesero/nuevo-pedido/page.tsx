@@ -230,8 +230,14 @@ export default function NuevoPedidoPage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/mesero')}>
-            <ArrowLeft className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push('/mesero')}
+            aria-label="Volver a pedidos del mesero"
+            className="h-10 w-10 md:h-9 md:w-9"
+          >
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="min-w-0">
             <h1 className="text-xl font-bold truncate">Nuevo pedido</h1>
@@ -246,8 +252,11 @@ export default function NuevoPedidoPage() {
             del carrito no tape la última fila de productos. lg:pb-0 en
             desktop porque el carrito va en columna lateral, no como FAB. */}
         <div className="lg:col-span-2 space-y-4 pb-24 lg:pb-0">
-          {/* Filtros */}
-          <Card>
+          {/* Filtros — sticky en mobile para que búsqueda y categorías queden
+              siempre visibles al scrollear la lista de productos.
+              FE-024 (FRONTEND-05): sticky top-16 z-20 (debajo del header).
+              En desktop no es necesario porque hay más espacio vertical. */}
+          <Card className="lg:static sticky top-16 z-20 lg:z-0">
             <CardContent className="p-4 space-y-3">
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
@@ -318,12 +327,17 @@ export default function NuevoPedidoPage() {
                 />
               </div>
               {categories.length > 0 && (
-                <div className="flex flex-wrap gap-1">
+                <div
+                  className="flex flex-wrap gap-1.5"
+                  role="group"
+                  aria-label="Filtro por categoría"
+                >
                   <Button
                     variant={category === 'all' ? 'default' : 'outline'}
                     size="sm"
                     onClick={() => setCategory('all')}
-                    className="h-7"
+                    aria-pressed={category === 'all'}
+                    className="h-9 px-3 text-xs sm:text-sm"
                   >
                     Todas
                   </Button>
@@ -333,7 +347,8 @@ export default function NuevoPedidoPage() {
                       variant={category === c ? 'default' : 'outline'}
                       size="sm"
                       onClick={() => setCategory(c)}
-                      className="h-7"
+                      aria-pressed={category === c}
+                      className="h-9 px-3 text-xs sm:text-sm"
                     >
                       {c}
                     </Button>
@@ -368,7 +383,7 @@ export default function NuevoPedidoPage() {
                   No se encontraron productos
                 </div>
               ) : (
-                <ScrollArea className="max-h-[60vh]">
+                <ScrollArea className="max-h-[50vh] lg:max-h-[70vh]">
                   <div className="p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {filteredProducts.map((p) => {
                       const inCart = cart.find((i) => i.product.id === p.id)
@@ -476,10 +491,32 @@ export default function NuevoPedidoPage() {
 }
 
 // Componente separado para el contenido del carrito (reutilizable)
+// FE-023 (FRONTEND-05): tipado explícito para eliminar `: any` que violaba
+// la sección 47 de prohibiciones del plan maestro.
+type CartContentProps = {
+  cart: CartItem[]
+  customerName: string
+  setCustomerName: (v: string) => void
+  notes: string
+  setNotes: (v: string) => void
+  discountPct: number
+  setDiscountPct: (v: number) => void
+  subtotal: number
+  discountAmount: number
+  total: number
+  submitting: boolean
+  onRemove: (productId: string) => void
+  onUpdateQty: (productId: string, delta: number) => void
+  onSetQty: (productId: string, qty: number) => void
+  onUpdateNotes: (productId: string, notes: string) => void
+  onSubmit: (sendToKitchen: boolean) => void
+  formatCurrency: (amount: number) => string
+}
+
 function CartContent({
   cart, customerName, setCustomerName, notes, setNotes, discountPct, setDiscountPct,
   subtotal, discountAmount, total, submitting, onRemove, onUpdateQty, onSetQty, onUpdateNotes, onSubmit, formatCurrency,
-}: any) {
+}: CartContentProps) {
   return (
     <Card className="lg:sticky lg:top-4">
       <CardHeader className="pb-3">
