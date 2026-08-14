@@ -92,6 +92,56 @@ FRONTEND-02 — Auditoría completa del frontend (ver `docs/FRONTEND_MASTER_PLAN
 
 ---
 
+## [1.0.20-rc15..rc17] — 2026-08-14
+
+### FRONTEND-02 — Auditoría + fixes mobile UX (3 sub-iteraciones)
+
+Auditoría completa del frontend (delegada a Explore agent) identificó 15
+fixes P1/P2 prioritarios. Se ejecutaron en 3 sub-iteraciones para mantener
+cada commit enfocado y revertible.
+
+#### rc15 — FRONTEND-02A: cableado crítico (4 fixes)
+- FE-005: `use-current-user.ts` migrado a `apiGet()` con redirect 401→`/login?expired=1`.
+- FE-006: creado `src/components/layout/connectivity-banner.tsx` + integrado en PanelLayout.
+- FE-007: `use-beep.ts` ahora cierra AudioContext al desmontar (cleanup).
+- FE-008: `kitchen-dashboard.tsx` con AbortController + dedupe + debounce 50ms para eventos realtime.
+
+#### rc16 — FRONTEND-02B: mobile UX crítica (4 fixes)
+- FE-009: tabs de cocina sticky (top-16 z-20).
+- FE-010: botones "Empezar"/"Listo" subidos a h-10 (40px) con aria-labels.
+- FE-011: botones de pedido detail en sticky bottom bar (Cobrar siempre accesible).
+- FE-012: FAB carrito ya no tapa última fila de productos (pb-24 lg:pb-0).
+
+#### rc17 — FRONTEND-02C: mobile UX deseable (3 fixes)
+- FE-013: tabla de usuarios con vista mobile como cards (h-10 + aria-labels).
+- FE-014: eliminado `<Toaster />` shadcn dead code (toda la app usa sonner).
+- FE-015: agregada `@media (prefers-reduced-motion: reduce)` en globals.css.
+
+#### Tests añadidos en FRONTEND-02 (14 nuevos, 419 total)
+- `tests/unit/use-beep.test.ts` (6 tests) — creación perezosa, reutilización, cleanup.
+- `tests/unit/use-connectivity.test.ts` (8 tests) — estados INITIALIZING/AVAILABLE/UNREACHABLE/NO_NETWORK, refresh().
+
+#### Métricas tras FRONTEND-02
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 419/419 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+- CI: 3/3 verde (rc15, rc16, rc17)
+
+#### Verificación visual
+- `/admin/usuarios` viewport 375x667 (iPhone SE): cards visibles con acciones táctiles. ✅
+- `/cocina`: tabs sticky permanecen visibles tras scroll. ✅
+- `/mesero/pedidos/[id]`: botones Cobrar+Cancelar sticky accesibles tras scroll. ✅
+- `/mesero/nuevo-pedido`: FAB no tapa última fila de productos (pb-24). ✅
+- Login + dashboard: sin hydration errors, sin console errors. ✅
+
+#### Próxima fase
+FRONTEND-03 — Design System (componentes + tokens visuales centralizados).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate

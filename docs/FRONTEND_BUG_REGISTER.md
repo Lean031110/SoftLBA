@@ -16,7 +16,13 @@ Leyenda de severidad:
 
 | ID | Fecha | Sev | Módulo | Síntoma | Causa verificada | Fix plan | Estado |
 |----|-------|-----|--------|---------|------------------|----------|--------|
-| (ninguno P0 activo tras FRONTEND-01) | | | | | | | |
+| (ninguno P0/P1 activo tras FRONTEND-02) | | | | | | | |
+
+Pendientes para FRONTEND-03 (Design System) y siguientes fases:
+- P2: aria-labels en 31 icon buttons restantes (ver auditoría FRONTEND-02).
+- P2: tablas admin/productos aún en desktop-first con overflow-x-auto.
+- P3: tipado `any` en use-realtime callbacks (data?: any).
+- P3: virtualización de listas largas (productos con 200+ items).
 
 ---
 
@@ -24,10 +30,21 @@ Leyenda de severidad:
 
 | ID | Fecha | Sev | Módulo | Síntoma | Fix | Versión | Commit |
 |----|-------|-----|--------|---------|-----|---------|--------|
-| FE-001 | 2026-08-14 | P0 | PWA | Operaciones POST (crear pedido, pagar, transferir) devuelven `202 offline-queued` aunque el servidor esté disponible | SW reescrito: `handleMutationRequest` hace try-network-first; solo encola si la operación está en `OFFLINE_ALLOWED_OPERATIONS` (lista vacía por defecto); si no, devuelve 503 `SERVIDOR_NO_DISPONIBLE` | v1.0.20-rc14 | (pendiente push) |
-| FE-002 | 2026-08-14 | P0 | HYDRATION | React reporta `Hydration failed because the server rendered text didn't match the client` | Creado `src/lib/app-version.ts` + `src/lib/use-mounted.ts` (useSyncExternalStore); eliminados 2 `suppressHydrationWarning` parches en `panel-layout.tsx` y `admin/page.tsx`; movido `new Date()` a `useEffect` en `comprobante/page.tsx`; reemplazado `Math.random()` por valor fijo en `ui/sidebar.tsx` | v1.0.20-rc14 | (pendiente push) |
-| FE-003 | 2026-08-14 | P0 | PAY | Doble click en "Cobrar" o reintento por timeout crea múltiples `Payment` rows | Creado `src/lib/idempotency.ts` con `IdempotencyManager` + `paymentsFingerprint()`; integrado en `handlePay()` en `mesero/pedidos/[id]/page.tsx` — la key se reutiliza mientras no cambien los pagos y se limpia tras 200 OK | v1.0.20-rc14 | (pendiente push) |
-| FE-004 | 2026-08-14 | P0 | CONNECTIVITY | App no distingue "Internet caído pero LAN funciona" de "LAN caída" | Creado `src/hooks/use-connectivity.ts` con 5 estados: `INITIALIZING`, `LOCAL_SERVER_AVAILABLE`, `LOCAL_SERVER_UNREACHABLE`, `RECONNECTING`, `NO_NETWORK`; pollea `/api/health` cada 30s (5s cuando cae); combina con `navigator.onLine` | v1.0.20-rc14 | (pendiente push) |
+| FE-001 | 2026-08-14 | P0 | PWA | Operaciones POST (crear pedido, pagar, transferir) devuelven `202 offline-queued` aunque el servidor esté disponible | SW reescrito: `handleMutationRequest` hace try-network-first; solo encola si la operación está en `OFFLINE_ALLOWED_OPERATIONS` (lista vacía por defecto); si no, devuelve 503 `SERVIDOR_NO_DISPONIBLE` | v1.0.20-rc14 | 4fe8998 |
+| FE-002 | 2026-08-14 | P0 | HYDRATION | React reporta `Hydration failed because the server rendered text didn't match the client` | Creado `src/lib/app-version.ts` + `src/lib/use-mounted.ts` (useSyncExternalStore); eliminados 2 `suppressHydrationWarning` parches en `panel-layout.tsx` y `admin/page.tsx`; movido `new Date()` a `useEffect` en `comprobante/page.tsx`; reemplazado `Math.random()` por valor fijo en `ui/sidebar.tsx` | v1.0.20-rc14 | 4fe8998 |
+| FE-003 | 2026-08-14 | P0 | PAY | Doble click en "Cobrar" o reintento por timeout crea múltiples `Payment` rows | Creado `src/lib/idempotency.ts` con `IdempotencyManager` + `paymentsFingerprint()`; integrado en `handlePay()` en `mesero/pedidos/[id]/page.tsx` — la key se reutiliza mientras no cambien los pagos y se limpia tras 200 OK | v1.0.20-rc14 | 4fe8998 |
+| FE-004 | 2026-08-14 | P0 | CONNECTIVITY | App no distingue "Internet caído pero LAN funciona" de "LAN caída" | Creado `src/hooks/use-connectivity.ts` con 5 estados: `INITIALIZING`, `LOCAL_SERVER_AVAILABLE`, `LOCAL_SERVER_UNREACHABLE`, `RECONNECTING`, `NO_NETWORK`; pollea `/api/health` cada 30s (5s cuando cae); combina con `navigator.onLine` | v1.0.20-rc14 | 4fe8998 |
+| FE-005 | 2026-08-14 | P1 | AUTH | `use-current-user.ts` no redirige a `/login` en 401 → usuario queda con datos stale tras expirar sesión | Migrado a `apiGet()` de `src/lib/api.ts`; apiFetch detecta 401 y redirige a `/login?expired=1` antes de lanzar ApiError | v1.0.20-rc15 | cbb42f0 |
+| FE-006 | 2026-08-14 | P1 | CONNECTIVITY | Hook `useConnectivity` creado pero no integrado en UI | Creado `src/components/layout/connectivity-banner.tsx` con banner amarillo (UNREACHABLE/RECONNECTING) o rojo (NO_NETWORK); integrado en PanelLayout arriba del skip-link | v1.0.20-rc15 | cbb42f0 |
+| FE-007 | 2026-08-14 | P1 | AUDIO | `use-beep.ts` crea AudioContext pero nunca lo cierra → memory leak (browsers cap en ~6 contextos) | Agregado `useEffect` cleanup que llama `ctx.close()` al desmontar; tests cubren creación perezosa, reutilización singleton, cleanup | v1.0.20-rc15 | cbb42f0 |
+| FE-008 | 2026-08-14 | P1 | REALTIME | `kitchen-dashboard` lanza N fetches paralelos sin abort cuando llegan eventos realtime múltiples → race condition con stale state | Agregado `AbortController` para cancelar fetches viejos, `loadingRef` para dedupe, `debounceTimerRef` (50ms) para eventos realtime; cleanup al desmontar | v1.0.20-rc15 | cbb42f0 |
+| FE-009 | 2026-08-14 | P1 | KDS | Tabs de cocina no son sticky → con 30+ pedidos el cocinero no puede cambiar de tab sin scroll arriba | Agregado `sticky top-16 z-20 bg-background` al contenedor de tabs | v1.0.20-rc16 | 3a01fa0 |
+| FE-010 | 2026-08-14 | P1 | KDS | Botones "Empezar"/"Listo" de items son h-7 (28px) → inusables con guantes/manos mojadas en cocina | Subidos a h-10 (40px) con icono+texto colapsable (`hidden sm:inline`); aria-labels descriptivos con nombre de producto | v1.0.20-rc16 | 3a01fa0 |
+| FE-011 | 2026-08-14 | P1 | POS | Botones de acción (Cobrar/Cancelar/Actualizar) en pedido detail no son sticky → desaparecen al scrollear items | Contenedor sticky bottom-0 z-20 backdrop-blur en mobile/tablet; lg:static en desktop para no interferir | v1.0.20-rc16 | 3a01fa0 |
+| FE-012 | 2026-08-14 | P1 | POS | FAB del carrito (fixed bottom-4 h-14) tapa la última fila de productos en mobile | Agregado `pb-24 lg:pb-0` al contenedor de productos (96px de espacio inferior en mobile) | v1.0.20-rc16 | 3a01fa0 |
+| FE-013 | 2026-08-14 | P2 | ADMIN | Tabla de usuarios en mobile requiere scroll horizontal (7 columnas) — UX deficiente | Agregada vista mobile como cards con acciones táctiles h-10 + aria-labels descriptivos; tabla original se mantiene en desktop (md+) | v1.0.20-rc17 | 6ff5084 |
+| FE-014 | 2026-08-14 | P2 | CODE | `<Toaster />` shadcn montado pero nunca recibe toasts (toda la app usa sonner) → dead code + TOAST_LIMIT=1 silenciaba notificaciones | Eliminado `<Toaster />` y su import en `src/app/layout.tsx` | v1.0.20-rc17 | 6ff5084 |
+| FE-015 | 2026-08-14 | P2 | A11Y | 0 respeto a `prefers-reduced-motion` en toda la app → usuarios con sensibilidad al movimiento no pueden reducir animaciones | Agregada media query `@media (prefers-reduced-motion: reduce)` en `src/app/globals.css` que reduce animation/transition-duration a 0.01ms | v1.0.20-rc17 | 6ff5084 |
 
 ---
 
