@@ -122,3 +122,18 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* FE-015 (FRONTEND-02C fix #14): prefers-reduced-motion.
+   Respeta la preferencia del usuario de reducir animaciones.
+   Aplica a todas las animaciones y transiciones de la app
+   (animate-pulse, animate-spin, slide-in/out, etc.). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

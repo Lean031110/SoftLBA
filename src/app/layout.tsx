@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ServiceWorkerRegister } from "@/components/service-worker-register";
@@ -53,7 +52,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
-          <Toaster />
+          {/* FE-014 (FRONTEND-02C fix #13): eliminado <Toaster /> (shadcn) que
+              no recibía toasts — toda la app usa sonner. Dead code que
+              consumía un listener global y TOAST_LIMIT=1 silenciaba
+              notificaciones. */}
           <SonnerToaster position="top-right" />
           <ServiceWorkerRegister />
         </ThemeProvider>

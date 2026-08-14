@@ -200,77 +200,158 @@ export default function UsuariosListPage() {
               No hay usuarios que coincidan con los filtros
             </div>
           ) : (
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Usuario</TableHead>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Rol</TableHead>
-                  <TableHead>Contacto</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead>Último acceso</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Vista desktop: tabla */}
+              <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Usuario</TableHead>
+                      <TableHead>Nombre</TableHead>
+                      <TableHead>Rol</TableHead>
+                      <TableHead>Contacto</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead>Último acceso</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell>
+                          <Link href={`/admin/usuarios/${u.id}`} className="font-medium text-blue-700 hover:underline">
+                            @{u.username}
+                          </Link>
+                          {u.mustChangePass && (
+                            <Badge variant="outline" className="ml-2 text-amber-700 border-amber-300">Cambiar pass</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : <span className="text-stone-400">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          <Badge className={ROLE_BADGE_COLORS[u.role]} variant="secondary">{ROLE_LABELS[u.role]}</Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-stone-500">
+                          {u.email && <div>{u.email}</div>}
+                          {u.phone && <div>📱 {u.phone}</div>}
+                          {!u.email && !u.phone && <span className="text-stone-400">—</span>}
+                        </TableCell>
+                        <TableCell>
+                          {u.isActive ? (
+                            <Badge className="bg-emerald-100 text-emerald-800">Activo</Badge>
+                          ) : (
+                            <Badge variant="destructive">Inactivo</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-stone-500">
+                          {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-CU') : 'Nunca'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button size="icon" variant="ghost" onClick={() => router.push(`/admin/usuarios/${u.id}`)} aria-label="Editar">
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleResetPassword(u)} aria-label="Resetear contraseña">
+                              <KeyRound className="h-4 w-4" />
+                            </Button>
+                            {u.isActive && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleDeactivate(u)}
+                                disabled={deactivatingId === u.id}
+                                aria-label="Desactivar"
+                              >
+                                <Power className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* FE-013 (FRONTEND-02C fix #11): vista mobile como cards.
+                  Antes: tabla con overflow-x-auto dificultaba lectura en
+                  mobile (7 columnas con scroll horizontal). Ahora cada
+                  usuario es una Card con info clave + acciones táctiles. */}
+              <div className="md:hidden space-y-3">
                 {items.map((u) => (
-                  <TableRow key={u.id}>
-                    <TableCell>
-                      <Link href={`/admin/usuarios/${u.id}`} className="font-medium text-blue-700 hover:underline">
-                        @{u.username}
-                      </Link>
-                      {u.mustChangePass && (
-                        <Badge variant="outline" className="ml-2 text-amber-700 border-amber-300">Cambiar pass</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : <span className="text-stone-400">—</span>}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={ROLE_BADGE_COLORS[u.role]} variant="secondary">{ROLE_LABELS[u.role]}</Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-stone-500">
-                      {u.email && <div>{u.email}</div>}
-                      {u.phone && <div>📱 {u.phone}</div>}
-                      {!u.email && !u.phone && <span className="text-stone-400">—</span>}
-                    </TableCell>
-                    <TableCell>
+                  <div
+                    key={u.id}
+                    className="border border-slate-200 dark:border-slate-800 rounded-lg p-3 bg-white dark:bg-slate-900"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/admin/usuarios/${u.id}`} className="font-medium text-blue-700 hover:underline block truncate">
+                          @{u.username}
+                        </Link>
+                        {u.firstName || u.lastName ? (
+                          <p className="text-xs text-stone-500 truncate">
+                            {u.firstName} {u.lastName}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Badge className={ROLE_BADGE_COLORS[u.role]} variant="secondary">
+                        {ROLE_LABELS[u.role]}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
                       {u.isActive ? (
                         <Badge className="bg-emerald-100 text-emerald-800">Activo</Badge>
                       ) : (
                         <Badge variant="destructive">Inactivo</Badge>
                       )}
-                    </TableCell>
-                    <TableCell className="text-xs text-stone-500">
-                      {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-CU') : 'Nunca'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => router.push(`/admin/usuarios/${u.id}`)} aria-label="Editar">
-                          <Pencil className="h-4 w-4" />
+                      {u.mustChangePass && (
+                        <Badge variant="outline" className="text-amber-700 border-amber-300">
+                          Cambiar pass
+                        </Badge>
+                      )}
+                      {u.lastLoginAt && (
+                        <span className="text-xs text-stone-400">
+                          {new Date(u.lastLoginAt).toLocaleDateString('es-CU')}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/admin/usuarios/${u.id}`)}
+                        className="h-10 flex-1"
+                        aria-label={`Editar usuario ${u.username}`}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" /> Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleResetPassword(u)}
+                        className="h-10"
+                        aria-label={`Resetear contraseña de ${u.username}`}
+                      >
+                        <KeyRound className="h-4 w-4" />
+                      </Button>
+                      {u.isActive && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDeactivate(u)}
+                          disabled={deactivatingId === u.id}
+                          className="h-10 text-red-600 border-red-300 hover:bg-red-50"
+                          aria-label={`Desactivar usuario ${u.username}`}
+                        >
+                          <Power className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="ghost" onClick={() => handleResetPassword(u)} aria-label="Resetear contraseña">
-                          <KeyRound className="h-4 w-4" />
-                        </Button>
-                        {u.isActive && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => handleDeactivate(u)}
-                            disabled={deactivatingId === u.id}
-                            aria-label="Desactivar"
-                          >
-                            <Power className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                      )}
+                    </div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
