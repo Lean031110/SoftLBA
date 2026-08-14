@@ -1,9 +1,11 @@
 // src/app/mesero/error.tsx
+// v1.0.20-FRONTEND-03: refactorizado para usar ErrorState (DRY).
+
 'use client'
 
 import { useEffect } from 'react'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle } from 'lucide-react'
 
 export default function MeseroError({
   error,
@@ -17,25 +19,16 @@ export default function MeseroError({
   }, [error])
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 p-6 text-center">
-      <AlertTriangle className="h-12 w-12 text-amber-500" />
-      <div>
-        <h2 className="text-xl font-semibold">Error en sección Mesero</h2>
-        <p className="text-sm text-muted-foreground mt-2 max-w-md">
-          No se pudo cargar esta página. Reintenta o recarga la página completa.
-        </p>
-        {error.digest && (
-          <p className="text-xs text-muted-foreground mt-2 font-mono">
-            ID: {error.digest}
-          </p>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <Button onClick={reset}>Reintentar</Button>
+    <ErrorState
+      title="Error en sección Mesero"
+      description="No se pudo cargar esta página. Reintenta o recarga la página completa."
+      error={error}
+      onRetry={reset}
+      secondaryAction={
         <Button onClick={() => window.location.reload()} variant="outline">
           Recargar
         </Button>
-      </div>
-    </div>
+      }
+    />
   )
 }

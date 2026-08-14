@@ -1,9 +1,11 @@
 // src/app/pizzeria/error.tsx
+// v1.0.20-FRONTEND-03: refactorizado para usar ErrorState (DRY).
+
 'use client'
 
 import { useEffect } from 'react'
+import { ErrorState } from '@/components/ui/error-state'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle } from 'lucide-react'
 
 export default function PizzeriaError({
   error,
@@ -17,25 +19,16 @@ export default function PizzeriaError({
   }, [error])
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 p-6 text-center">
-      <AlertTriangle className="h-12 w-12 text-amber-500" />
-      <div>
-        <h2 className="text-xl font-semibold">Error en panel de Pizzería</h2>
-        <p className="text-sm text-muted-foreground mt-2 max-w-md">
-          Se perdió la conexión con la pizzería. Reintenta o recarga la página.
-        </p>
-        {error.digest && (
-          <p className="text-xs text-muted-foreground mt-2 font-mono">
-            ID: {error.digest}
-          </p>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <Button onClick={reset}>Reintentar</Button>
+    <ErrorState
+      title="Error en panel de Pizzería"
+      description="Se perdió la conexión con la pizzería. Reintenta o recarga la página."
+      error={error}
+      onRetry={reset}
+      secondaryAction={
         <Button onClick={() => window.location.reload()} variant="outline">
           Recargar
         </Button>
-      </div>
-    </div>
+      }
+    />
   )
 }

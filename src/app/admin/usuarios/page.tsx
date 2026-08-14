@@ -23,6 +23,7 @@ import {
   Users, Plus, Search, KeyRound, AlertTriangle, Power, Pencil, RefreshCw, Copy, Check,
 } from 'lucide-react'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, type UserRole } from '@/lib/permissions'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type UserItem = {
   id: string
@@ -238,11 +239,8 @@ export default function UsuariosListPage() {
                           {!u.email && !u.phone && <span className="text-stone-400">—</span>}
                         </TableCell>
                         <TableCell>
-                          {u.isActive ? (
-                            <Badge className="bg-emerald-100 text-emerald-800">Activo</Badge>
-                          ) : (
-                            <Badge variant="destructive">Inactivo</Badge>
-                          )}
+                          {/* FRONTEND-03: StatusBadge en vez de Badge con clases hardcoded. */}
+                          <StatusBadge kind="user-active" value={u.isActive} size="sm" />
                         </TableCell>
                         <TableCell className="text-xs text-stone-500">
                           {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString('es-CU') : 'Nunca'}
@@ -300,11 +298,8 @@ export default function UsuariosListPage() {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      {u.isActive ? (
-                        <Badge className="bg-emerald-100 text-emerald-800">Activo</Badge>
-                      ) : (
-                        <Badge variant="destructive">Inactivo</Badge>
-                      )}
+                      {/* FRONTEND-03: StatusBadge unificado (mobile + desktop). */}
+                      <StatusBadge kind="user-active" value={u.isActive} size="sm" />
                       {u.mustChangePass && (
                         <Badge variant="outline" className="text-amber-700 border-amber-300">
                           Cambiar pass

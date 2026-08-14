@@ -142,6 +142,48 @@ FRONTEND-03 — Design System (componentes + tokens visuales centralizados).
 
 ---
 
+## [1.0.20-rc18] — 2026-08-14
+
+### FRONTEND-03 — Design System (tokens + componentes base)
+
+Crea la base del design system de SoftLBA. No migra toda la app — solo crea
+los componentes base y los documenta. Migración incremental en FRONTEND-04+.
+
+#### Nuevos archivos
+- `src/lib/status-config.ts` — mapas centralizados de estados (order, table, item, payment, user-active). 9 + 5 + 6 + 3 + 2 estados con label + badgeClasses + dotColor.
+- `src/components/ui/status-badge.tsx` — componente tipado que consume los mapas.
+- `src/components/ui/empty-state.tsx` — empty state consistente (icon + title + description + action).
+- `src/components/ui/error-state.tsx` — error state con retry, usado por los `error.tsx`.
+- `docs/DESIGN_SYSTEM.md` — documenta tokens, componentes, patrones UX, próximos pasos.
+
+#### Refactor (sin cambio funcional)
+- `src/app/{admin,mesero,cocina,pizzeria}/error.tsx` + `src/app/error.tsx` refactorizados para usar `ErrorState`. Elimina HTML duplicado, comportamiento idéntico.
+- `src/app/admin/usuarios/page.tsx` migrado a `StatusBadge` para `Activo`/`Inactivo` (2 ocurrencias: desktop + mobile). Validación del patrón.
+
+#### Tests añadidos (49 nuevos, 468 total)
+- `tests/unit/status-config.test.ts` (20 tests) — mapas completos, helpers con fallback.
+- `tests/unit/status-badge.test.tsx` (19 tests) — kind, value, size, showDot, labelOverride, fallback.
+- `tests/unit/empty-state.test.tsx` (10 tests) — title, description, icon, action, compact.
+- `vitest.config.ts` actualizado para incluir `*.test.tsx`.
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando (+49 nuevos)
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+- CI: (pendiente verificación)
+
+#### Verificación visual
+- `/admin/usuarios`: StatusBadge renderiza "Activo"/"Inactivo" correctamente. ✅
+- Sin errores de consola. ✅
+
+#### Próxima fase
+FRONTEND-04 — Mobile shell (header/nav/sidebar/sheets unificados).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate
