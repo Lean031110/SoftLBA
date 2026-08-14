@@ -82,9 +82,30 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
 
   const { play } = useBeep()
 
+  // FRONTEND-02A (fix #10): AbortController para cancelar fetches viejos y
+  // evitar race conditions cuando llegan múltiples eventos realtime juntos.
+  // Antes: si llegaban 10 eventos en 5s, se lanzaban 10 fetches paralelos y
+  // el último en responder sobreescribía a los demás (posible stale state).
+  const abortRef = useRef<AbortController | null>(null)
+  // Dedupe: si un fetch ya está en vuelo, no lanzar otro.
+  const loadingRef = useRef<boolean>(false)
+  // Debounce: si llegan varios eventos seguidos, esperar 50ms antes de fetch.
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const load = useCallback(async () => {
+    // Dedupe: si ya hay un fetch en vuelo, ignorar.
+    if (loadingRef.current) return
+    loadingRef.current = true
+
+    // Abortar fetch anterior si existe
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     try {
-      const res = await fetch(`${apiBase}/orders?served=true`)
+      const res = await fetch(`${apiBase}/orders?served=true`, {
+        signal: controller.signal,
+      })
       const data = await res.json()
       if (data.ok) {
         const newItems: KitchenItem[] = data.items || []
@@ -107,12 +128,33 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
       } else {
         setError(data.error || 'Error al cargar')
       }
-    } catch {
+    } catch (e) {
+      // AbortError es esperado cuando cancelamos un fetch viejo.
+      if (e instanceof DOMException && e.name === 'AbortError') return
       setError('Error de conexión')
     } finally {
-      setLoading(false)
+      // Solo limpiar si este controller sigue siendo el actual.
+      if (abortRef.current === controller) {
+        loadingRef.current = false
+      }
     }
   }, [apiBase, soundOn, play])
+
+  // Versión debounced para eventos realtime (50ms).
+  const loadDebounced = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    debounceTimerRef.current = setTimeout(() => {
+      load()
+    }, 50)
+  }, [load])
+
+  // Cleanup al desmontar: abortar fetch en vuelo + limpiar timer.
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort()
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     load()
@@ -120,12 +162,13 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
     return () => clearInterval(interval)
   }, [load])
 
-  // WebSocket: recargar al recibir notificación
+  // WebSocket: recargar al recibir notificación (debounced para evitar
+  // múltiples fetches paralelos cuando llegan varios eventos juntos).
   useRealtime({
     userId: user?.id,
     role: user?.role,
-    onOrderNew: () => { load() },
-    onOrderStatus: () => { load() },
+    onOrderNew: () => { loadDebounced() },
+    onOrderStatus: () => { loadDebounced() },
   })
 
   async function handleStatusChange(orderId: string, newStatus: string) {

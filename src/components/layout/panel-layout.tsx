@@ -57,6 +57,7 @@ import { LoadingScreen } from '@/components/loading'
 import { appVersionDisplay } from '@/lib/app-version'
 import { useMounted } from '@/lib/use-mounted'
 import { NotificationBell } from '@/components/layout/notification-bell'
+import { ConnectivityBanner } from '@/components/layout/connectivity-banner'
 
 type NavItem = {
   href: string
@@ -253,6 +254,9 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
   // user es non-null aquí gracias al guard anterior
   return (
     <RealtimeProvider userId={user.id} role={user.role}>
+      {/* FRONTEND-02A (fix #2): banner de conectividad LAN/Internet.
+          Se renderiza solo cuando el servidor local no responde. */}
+      <ConnectivityBanner />
       {/* v1.0.20-rc-final: skip-to-content link para usuarios de teclado */}
       <a
         href="#main-content"

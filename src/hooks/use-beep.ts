@@ -1,10 +1,28 @@
 'use client'
 
 // Hook para generar un beep con Web Audio API
-import { useCallback, useRef } from 'react'
+//
+// FRONTEND-02A (fix #5): cleanup de AudioContext al desmontar.
+// Antes: el AudioContext se creaba pero nunca se cerraba → memory leak
+// (browsers cap en ~6 contextos activos simultáneos).
+import { useCallback, useEffect, useRef } from 'react'
 
 export function useBeep() {
   const ctxRef = useRef<AudioContext | null>(null)
+
+  // Cleanup al desmontar: cerrar el AudioContext para liberar recursos.
+  useEffect(() => {
+    return () => {
+      if (ctxRef.current) {
+        try {
+          ctxRef.current.close()
+        } catch {
+          // Silencioso si ya estaba cerrado
+        }
+        ctxRef.current = null
+      }
+    }
+  }, [])
 
   const play = useCallback((frequency = 880, duration = 200, volume = 0.3) => {
     try {
@@ -37,7 +55,7 @@ export function useBeep() {
 
       osc.start(now)
       osc.stop(now + duration / 1000 + 0.7)
-    } catch (e) {
+    } catch {
       // Silencioso si el navegador bloquea
     }
   }, [])
