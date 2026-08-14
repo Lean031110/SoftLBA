@@ -265,8 +265,11 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
         </Button>
       </div>
 
-      {/* Tabs */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Tabs — sticky para que el cocinero siempre pueda cambiar de vista
+          aunque haya 30+ pedidos cargados (FE-009, FRONTEND-02B fix #3).
+          top-16 = altura del header del PanelLayout. z-20 para estar sobre
+          las tarjetas pero bajo el header. */}
+      <div className="grid grid-cols-3 gap-2 sticky top-16 z-20 bg-background pb-2 pt-1">
         {(['pending', 'preparing', 'ready'] as TabKey[]).map((t) => (
           <Button
             key={t}
@@ -380,27 +383,31 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                             </div>
                             {/* Botones por item */}
                             {itemStatus !== 'CANCELADO' && itemStatus !== 'SERVIDO' && (
-                              <div className="flex gap-1.5">
+                              <div className="flex gap-2">
                                 {itemStatus === 'PENDIENTE' && (
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 text-xs bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700"
+                                    // FE-010 (FRONTEND-02B fix #4): h-10 (40px) en vez de h-7 (28px)
+                                    // para uso cómodo con guantes/manos mojadas en cocina.
+                                    className="h-10 text-xs sm:text-sm bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700 px-3"
                                     onClick={() => handleItemStatusChange(o.id, it.id, 'EN_PREPARACION')}
                                     disabled={actionLoading === `${it.id}-EN_PREPARACION`}
+                                    aria-label={`Empezar preparación de ${it.product.name}`}
                                   >
-                                    <Play className="h-3 w-3 mr-1" /> Empezar
+                                    <Play className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Empezar</span>
                                   </Button>
                                 )}
                                 {itemStatus === 'PENDIENTE' || itemStatus === 'EN_PREPARACION' ? (
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 text-xs bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-700"
+                                    className="h-10 text-xs sm:text-sm bg-emerald-50 hover:bg-emerald-100 border-emerald-300 text-emerald-700 px-3"
                                     onClick={() => handleItemStatusChange(o.id, it.id, 'LISTO')}
                                     disabled={actionLoading === `${it.id}-LISTO`}
+                                    aria-label={`Marcar ${it.product.name} como listo`}
                                   >
-                                    <CheckCircle2 className="h-3 w-3 mr-1" /> Listo
+                                    <CheckCircle2 className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Listo</span>
                                   </Button>
                                 ) : null}
                               </div>

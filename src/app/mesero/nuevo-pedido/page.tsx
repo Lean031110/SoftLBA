@@ -241,8 +241,11 @@ export default function NuevoPedidoPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Productos */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* Productos.
+            FE-012 (FRONTEND-02B fix #9): pb-24 en mobile para que el FAB
+            del carrito no tape la última fila de productos. lg:pb-0 en
+            desktop porque el carrito va en columna lateral, no como FAB. */}
+        <div className="lg:col-span-2 space-y-4 pb-24 lg:pb-0">
           {/* Filtros */}
           <Card>
             <CardContent className="p-4 space-y-3">

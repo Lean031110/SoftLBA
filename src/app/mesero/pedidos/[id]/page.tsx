@@ -346,28 +346,34 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
             </p>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} /> Actualizar
-          </Button>
-          <Button variant="outline" onClick={() => router.push(`/mesero/pedidos/${order.id}/comprobante`)}>
-            <Printer className="h-4 w-4 mr-2" /> Comprobante
-          </Button>
-          {canAddProducts && (
-            <Button variant="outline" onClick={openAddProductDialog}>
-              <Plus className="h-4 w-4 mr-2" /> Añadir productos
+        {/* FE-011 (FRONTEND-02B fix #6): sticky bottom bar para que los
+            botones primarios (especialmente Cobrar) queden accesibles al
+            hacer scroll en pedidos largos. Solo aplica en mobile/tablet;
+            en desktop los botones fluyen normalmente. */}
+        <div className="sticky bottom-0 z-20 -mx-4 px-4 py-2 mt-3 bg-background/95 backdrop-blur border-t border-slate-200 dark:border-slate-800 lg:static lg:bg-transparent lg:border-0 lg:backdrop-blur-none lg:m-0 lg:p-0">
+          <div className="flex gap-2 flex-wrap items-center">
+            <Button variant="outline" onClick={load} disabled={loading} size="sm" className="h-10">
+              <RefreshCw className={`h-4 w-4 sm:mr-2 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Actualizar</span>
             </Button>
-          )}
-          {canCancel && (
-            <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-red-600 border-red-300 hover:bg-red-50">
-              <XCircle className="h-4 w-4 mr-2" /> Cancelar
+            <Button variant="outline" onClick={() => router.push(`/mesero/pedidos/${order.id}/comprobante`)} size="sm" className="h-10">
+              <Printer className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Comprobante</span>
             </Button>
-          )}
-          {canCobrar && !isFullyPaid && order.status !== 'CANCELADO' && (
-            <Button onClick={openPayDialog} disabled={!allItemsReady}>
-              <Wallet className="h-4 w-4 mr-2" /> Cobrar
-            </Button>
-          )}
+            {canAddProducts && (
+              <Button variant="outline" onClick={openAddProductDialog} size="sm" className="h-10">
+                <Plus className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Añadir</span>
+              </Button>
+            )}
+            {canCancel && (
+              <Button variant="outline" onClick={() => setCancelOpen(true)} className="text-red-600 border-red-300 hover:bg-red-50 h-10" size="sm">
+                <XCircle className="h-4 w-4 sm:mr-2" /> <span className="hidden sm:inline">Cancelar</span>
+              </Button>
+            )}
+            {canCobrar && !isFullyPaid && order.status !== 'CANCELADO' && (
+              <Button onClick={openPayDialog} disabled={!allItemsReady} size="sm" className="h-10 ml-auto">
+                <Wallet className="h-4 w-4 sm:mr-2" /> Cobrar
+              </Button>
+            )}
+          </div>
         </div>
         {!allItemsReady && order && order.status !== 'CANCELADO' && order.status !== 'COBRADO' && pendingItems.length > 0 && (
           <Alert className="mt-3 border-amber-200 bg-amber-50 dark:bg-amber-950/30">
