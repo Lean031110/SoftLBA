@@ -11,7 +11,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useRealtime } from '@/hooks/use-realtime'
+import { useRealtimeContext } from '@/components/realtime/realtime-provider'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -136,49 +136,10 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
   }, [])
 
   // Sonido y toast cuando llega una nueva notificación por WebSocket
-  const { connected } = useRealtime({
-    userId,
-    role,
-    onNotification: (n) => {
-      playSound(880, 0.2)
-      toast(n.title, { description: n.message })
-      showNativeNotification(n.title, n.message, n)
-      load()
-    },
-    onOrderStatus: (data) => {
-      const statusLabels: Record<string, string> = {
-        EN_PREPARACION: 'en preparación',
-        LISTO: 'listo para recoger',
-        SERVIDO: 'servido',
-        COBRADO: 'cobrado',
-      }
-      const status = statusLabels[data.status] || data.status
-      const title = `Pedido #${data.orderNumber || data.orderId} ${status}`
-      const body = `El pedido ha sido actualizado a: ${status}`
-      toast(title, { description: body })
-      showNativeNotification(title, body, { url: `/mesero/pedidos/${data.orderId}` })
-      load()
-    },
-    onOrderReady: (data) => {
-      // Sonido más fuerte para pedido listo (3 beeps)
-      playSound(1000, 0.15, 3)
-      const title = `¡Pedido #${data.orderNumber} LISTO!`
-      const body = `Ya puedes servirlo o cobrarlo. Mesa: ${data.tableName || 'Para llevar'}`
-      toast.success(title, { description: body })
-      showNativeNotification(title, body, {
-        url: `/mesero/pedidos/${data.orderId}`,
-        tag: `order-ready-${data.orderId}`,
-      })
-      load()
-    },
-    onStockLow: (data) => {
-      const title = 'Stock bajo'
-      const body = `${data.productName || 'Producto'} está por debajo del mínimo`
-      toast.warning(title, { description: body })
-      showNativeNotification(title, body)
-      load()
-    },
-  })
+  // v1.0.20-rc-final: usar el socket singleton del RealtimeProvider
+  // en vez de crear uno nuevo por componente.
+  const realtimeCtx = useRealtimeContext()
+  const connected = realtimeCtx?.connected ?? false
 
   // Solicitar permiso de notificaciones al cargar si no está concedido
   useEffect(() => {

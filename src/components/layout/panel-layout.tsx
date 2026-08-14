@@ -52,6 +52,10 @@ import { useTheme } from 'next-themes'
 import Image from 'next/image'
 import { useCurrentUser, type CurrentUser } from '@/hooks/use-current-user'
 import { ROLE_LABELS, ROLE_BADGE_COLORS, type UserRole } from '@/lib/permissions'
+import { RealtimeProvider } from '@/components/realtime/realtime-provider'
+import { LoadingScreen } from '@/components/loading'
+import { appVersionDisplay } from '@/lib/app-version'
+import { useMounted } from '@/lib/use-mounted'
 import { NotificationBell } from '@/components/layout/notification-bell'
 
 type NavItem = {
@@ -129,14 +133,35 @@ function SidebarNav({ user, onNavigate }: { user: CurrentUser | null; onNavigate
 }
 
 function ThemeToggle() {
+  // FE-002 (hydration mismatch): next-themes setea `class` en <html> client-side,
+  // por lo que `theme` es undefined en SSR y 'light'/'dark' tras mount.
+  // Antes se usaba `suppressHydrationWarning` como parche. El patrón correcto
+  // es el "mounted" gate: renderiza un placeholder hasta que el cliente monte.
   const { theme, setTheme } = useTheme()
+  const mounted = useMounted()
+
+  if (!mounted) {
+    // Placeholder neutro mientras SSR + primer paint del cliente coinciden.
+    // Sin icono de tema hasta que next-themes determine el tema real.
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        disabled
+        aria-label="Cargando tema…"
+        className="relative"
+      >
+        <Sun className="h-4 w-4 opacity-50" />
+      </Button>
+    )
+  }
+
   return (
     <Button
       variant="ghost"
       size="icon"
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      aria-label="Cambiar tema"
-      suppressHydrationWarning
+      aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
       className="relative"
     >
       <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
@@ -194,7 +219,6 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useCurrentUser()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [restaurantName, setRestaurantName] = useState('Restaurante')
-  const [currentPath, setCurrentPath] = useState('')
 
   useEffect(() => {
     fetch('/api/public/config')
@@ -207,20 +231,38 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.pathname) {
-      const path = window.location.pathname
-      requestAnimationFrame(() => setCurrentPath(path))
+  // v1.0.20-rc-final: usar usePathname() directamente (sin useState/useEffect)
+  // para que el título de la página se actualice tras navegación client-side.
+  const panelPath = usePathname()
+
+  // Si no hay usuario (cargando o no), no mostramos panel.
+  // v1.0.20-rc-final: antes solo se cubría el caso !loading && !user,
+  // pero si loading=true y user=null (refresh en /admin con cookie válida
+  // pero aún no cargada), se llegaba a este return con user=null → crash.
+  if (!user) {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <LoadingScreen />
+        </div>
+      )
     }
-  }, [])
+    return null
+  }
 
-  // Si no hay usuario y no está cargando, no mostramos panel (la ruta lo redirige)
-  if (!loading && !user) return null
-
+  // user es non-null aquí gracias al guard anterior
   return (
-    <div className="flex min-h-screen w-full bg-slate-50 dark:bg-slate-950">
-      {/* Sidebar desktop */}
-      <aside className="hidden md:flex w-60 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+    <RealtimeProvider userId={user.id} role={user.role}>
+      {/* v1.0.20-rc-final: skip-to-content link para usuarios de teclado */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-blue-600 focus:text-white focus:rounded-md focus:shadow-lg"
+      >
+        Saltar al contenido principal
+      </a>
+      <div className="flex min-h-screen w-full bg-slate-50 dark:bg-slate-950">
+        {/* Sidebar desktop */}
+        <aside className="hidden md:flex w-60 flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
         <div className="flex items-center gap-2 px-4 h-16 border-b border-slate-200 dark:border-slate-800">
           <Image
             src="/softlba-logo.svg"
@@ -248,7 +290,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
             {/* Mobile menu */}
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden">
+                <Button variant="ghost" size="icon" className="md:hidden" aria-label="Abrir menú de navegación">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -273,7 +315,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
             </Sheet>
             <h1 className="text-base font-semibold hidden sm:block">
               {NAV_ITEMS.find((i) => {
-                return currentPath === i.href || (i.href !== '/' && currentPath.startsWith(i.href))
+                return panelPath === i.href || (i.href !== '/' && panelPath.startsWith(i.href))
               })?.label || 'Panel'}
             </h1>
           </div>
@@ -285,7 +327,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main id="main-content" className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}
         </main>
 
@@ -300,11 +342,12 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
               className="h-3.5 w-3.5"
             />
             <span className="font-semibold text-blue-700 dark:text-blue-300">SoftLBA</span>
-            {' · v0.6.0 · Sistema local para restaurante · '}
+            {` · ${appVersionDisplay} · Sistema local para restaurante · `}
             <span className="text-slate-400">Sin dependencia de Internet</span>
           </p>
         </footer>
       </div>
     </div>
+    </RealtimeProvider>
   )
 }

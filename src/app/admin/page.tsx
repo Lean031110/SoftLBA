@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useRealtime } from '@/hooks/use-realtime'
+import { useMounted } from '@/lib/use-mounted'
 
 type DashboardData = {
   stats: {
@@ -462,29 +463,40 @@ function LiveBadge({
   refreshing: boolean
   onRefresh: () => void
 }) {
+  // FE-002 (hydration mismatch): `connected` es false en SSR y true/false tras
+  // mount del socket. Antes se usaba `suppressHydrationWarning` como parche.
+  // Patrón correcto: gate con `mounted` hasta que el cliente determine el
+  // estado real del socket.
+  const mounted = useMounted()
+
+  // En SSR y primer paint: renderizar estado "desconocido" neutro (sin color).
+  // Tras mount: renderizar estado real del socket.
+  const isConnected = mounted && connected
+
   return (
     <div className="flex items-center gap-2">
       <Badge
         variant="outline"
         className={
-          connected
-            ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-            : 'border-stone-300 bg-stone-50 text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400'
+          !mounted
+            ? 'border-stone-300 bg-stone-50 text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400'
+            : isConnected
+              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+              : 'border-stone-300 bg-stone-50 text-stone-500 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-400'
         }
-        suppressHydrationWarning
       >
         <span className="relative flex h-2 w-2 mr-1.5">
-          {connected && (
+          {isConnected && (
             <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
           )}
           <span
             className={
               'relative inline-flex rounded-full h-2 w-2 ' +
-              (connected ? 'bg-emerald-500' : 'bg-stone-400')
+              (isConnected ? 'bg-emerald-500' : 'bg-stone-400')
             }
           />
         </span>
-        {connected ? 'En vivo' : 'Sin conexión'}
+        {!mounted ? 'Conectando…' : isConnected ? 'En vivo' : 'Sin conexión'}
       </Badge>
       <Button
         size="sm"

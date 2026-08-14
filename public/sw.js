@@ -1,6 +1,9 @@
 // ============================================================
-// Service Worker - SoftLBA PWA v1.0.19.5
+// Service Worker - SoftLBA PWA
 // ============================================================
+// v1.0.20-rc-final: versión sincronizada con package.json vía el script
+// de build que inyecta NEXT_PUBLIC_APP_VERSION. Para simplicidad, el SW
+// usa una constante que debe bump-earse con cada release.
 // Estrategias:
 //  - Network-first  → páginas de navegación (HTML)
 //  - Cache-first   → assets estáticos (CSS, JS, fonts, imágenes)
@@ -9,8 +12,31 @@
 //  - Push notifications → avisa de pedidos nuevos aunque la app esté cerrada
 // ============================================================
 
-const SW_VERSION = 'softlba-v1.0.19.5'
+// FE-001 (FRONTEND-01): Versión sincronizada con package.json.
+// El SW no puede importar módulos TS, así que esta constante debe bump-earse
+// manualmente con cada release. Compara con `src/lib/app-version.ts`.
+const SW_VERSION = 'softlba-v1.0.20-rc14'
 const OFFLINE_URL = '/offline'
+
+// FE-001 (FRONTEND-01): Operaciones permitidas para Background Sync.
+// Lista EXHAUSTIVA de {method, path} que pueden encolarse cuando el servidor
+// local no responde. Cada entrada debe estar diseñada con idempotencia
+// explícita + reconciliación en el backend.
+//
+// LISTA VACÍA por defecto porque el plan prohíbe "cola offline universal":
+//   "No todas las mutaciones deben entrar en Background Sync."
+//   "Pago: NO, salvo diseño explícto con idempotencia/reconciliación"
+//   "Crear pedido: Solo si existe estrategia idempotente y reconciliación"
+//
+// Para agregar una operación:
+//   1. Verificar que el backend tiene idempotencyKey o similar.
+//   2. Documentar la operación en docs/FRONTEND_API_CONTRACT.md.
+//   3. Agregar prueba E2E que simule offline + retry + reconciliación.
+//   4. Solo entonces agregarla aquí.
+const OFFLINE_ALLOWED_OPERATIONS = [
+  // Ejemplo (NO activo hasta que se cumplan los pasos anteriores):
+  // { method: 'POST', path: '/api/mesero/orders' },
+]
 
 // Caches separados para invalidación granular
 const CACHE_PAGES = `${SW_VERSION}-pages`
@@ -38,7 +64,7 @@ const FONT_RE = /\.(?:woff2?|ttf|eot|otf)$/
 // Instalación: pre-cache del app shell
 // ------------------------------------------------------------
 self.addEventListener('install', (event) => {
-  console.log('[SW] Instalando service worker v0.17.0...')
+  console.log('[SW] Instalando service worker v1.0.20-rc-final...')
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_ASSETS)
@@ -62,7 +88,7 @@ self.addEventListener('install', (event) => {
 // Activación: limpia caches viejos y toma control
 // ------------------------------------------------------------
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activando service worker v0.17.0...')
+  console.log('[SW] Activando service worker v1.0.20-rc-final...')
   event.waitUntil(
     (async () => {
       const keys = await caches.keys()
@@ -165,9 +191,22 @@ self.addEventListener('fetch', (event) => {
 
   // Solo GET
   if (request.method !== 'GET') {
-    // v1.0.19.5: NO interceptar POSTs a rutas de autenticación, auth, ni API internas.
-    // Estas rutas deben llegar directamente al servidor (login, logout, socket-token).
-    // Si las encolamos, el usuario no puede iniciar sesión.
+    // FE-001 (FRONTEND-01): La política ANTERIOR interceptaba TODOS los
+    // POST/PUT/DELETE de /api/* y devolvía `202 offline-queued` SIN intentar
+    // el fetch real. Eso rompía el POS aunque el servidor estuviera disponible.
+    //
+    // Política nueva (alineada con docs/FRONTEND_MASTER_PLAN.md sección 4):
+    // 1. Intentar el fetch al servidor LOCAL PRIMERO (no encolar ciegamente).
+    // 2. Si responde 2xx → devolver la respuesta real.
+    // 3. Si la red falla O responde no-2xx → NO encolar automáticamente;
+    //    solo las operaciones en `OFFLINE_ALLOWED_OPERATIONS` se encolan.
+    //    Las demás devuelven 503 "Servidor local no disponible".
+    // 4. Rutas de auth SIEMPRE pasan directo (no se interceptan).
+    //
+    // Actualmente `OFFLINE_ALLOWED_OPERATIONS` está VACÍO porque el plan prohíbe
+    // "cola offline universal" — cada operación offline debe diseñarse con
+    // idempotencia + reconciliación explícitas. Ver docs/FRONTEND_MASTER_PLAN.md
+    // sección 4 tabla "Política recomendada".
     const SKIP_BG_SYNC_PATHS = [
       '/api/auth/login',
       '/api/auth/logout',
@@ -179,14 +218,11 @@ self.addEventListener('fetch', (event) => {
     const shouldSkipBgSync = SKIP_BG_SYNC_PATHS.some(p => url.pathname.startsWith(p))
 
     if (!shouldSkipBgSync &&
-      'sync' in self.registration &&
       (request.method === 'POST' ||
         request.method === 'PUT' ||
         request.method === 'DELETE')
     ) {
-      // Para POST/PUT/DELETE de negocio → intentar Background Sync
-      // PERO solo si ya estamos autenticados (si no, dejar pasar directo)
-      event.respondWith(handleBackgroundSyncRequest(event))
+      event.respondWith(handleMutationRequest(event))
     }
     return
   }
@@ -316,21 +352,74 @@ async function flushQueue() {
   }
 }
 
-async function handleBackgroundSyncRequest(event) {
-  await enqueueRequest(event.request)
+// FE-001 (FRONTEND-01): Handler nuevo para mutaciones (POST/PUT/DELETE).
+// Estrategia: try network first; solo encolar si la operación está en
+// `OFFLINE_ALLOWED_OPERATIONS` y la red falló.
+//
+// Respuestas posibles:
+//  - 2xx real del servidor → forward al cliente.
+//  - 4xx/5xx real del servidor → forward al cliente (no encolamos errores).
+//  - Red caída + operación permitida → 202 offline-queued + encolar para retry.
+//  - Red caída + operación NO permitida → 503 "Servidor local no disponible".
+async function handleMutationRequest(event) {
+  const { request } = event
+  const url = new URL(request.url)
+
+  // 1. Intentar el fetch al servidor LOCAL primero.
   try {
-    await self.registration.sync.register(SYNC_TAG)
-    console.log('[SW] Background sync registrado')
-  } catch (err) {
-    console.warn('[SW] Background sync no soportado, intento directo:', err)
-  }
-  return new Response(
-    JSON.stringify({ ok: false, error: 'offline-queued' }),
-    {
-      status: 202,
-      headers: { 'Content-Type': 'application/json' },
+    const networkResponse = await fetch(event.request.clone())
+    // Si el servidor respondió (cualquier código), devolver la respuesta real.
+    // No encolamos ni siquiera si fue 4xx/5xx — el cliente decide qué hacer.
+    return networkResponse
+  } catch (networkErr) {
+    // Red caída o servidor inalcanzable.
+    console.warn('[SW] Mutation fetch failed:', url.pathname, networkErr?.message || networkErr)
+
+    // 2. Verificar si la operación está permitida para offline.
+    const isAllowed = OFFLINE_ALLOWED_OPERATIONS.some(
+      (op) => url.pathname === op.path && request.method === op.method,
+    )
+
+    if (isAllowed && 'sync' in self.registration) {
+      // Operación diseñada para offline: encolar para retry con BG Sync.
+      await enqueueRequest(event.request)
+      try {
+        await self.registration.sync.register(SYNC_TAG)
+        console.log('[SW] Background sync registrado para operación permitida:', url.pathname)
+      } catch (err) {
+        console.warn('[SW] Background sync no soportado:', err)
+      }
+      return new Response(
+        JSON.stringify({ ok: false, error: 'offline-queued' }),
+        {
+          status: 202,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
     }
-  )
+
+    // 3. Operación NO permitida para offline: devolver 503 claro.
+    // El cliente debe mostrar "Servidor local no disponible", NO "offline-queued".
+    return new Response(
+      JSON.stringify({
+        ok: false,
+        error: 'SERVIDOR_NO_DISPONIBLE',
+        message: 'No se puede alcanzar el servidor local. Verifica que SoftLBA esté corriendo.',
+      }),
+      {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
+  }
+}
+
+// Mantener handleBackgroundSyncRequest por compatibilidad con cualquier
+// referencia pendiente (puede eliminarse cuando se confirme que no se usa).
+async function handleBackgroundSyncRequest(event) {
+  // v1.0.20-FRONTEND-01: depreciado — usar handleMutationRequest.
+  // Redirige al nuevo handler para mantener compatibilidad.
+  return handleMutationRequest(event)
 }
 
 self.addEventListener('sync', (event) => {

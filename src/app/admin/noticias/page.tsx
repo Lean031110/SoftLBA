@@ -191,6 +191,7 @@ export default function NoticiasListPage() {
               No hay noticias que coincidan con los filtros
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -248,6 +249,7 @@ export default function NoticiasListPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
           )}
         </CardContent>
       </Card>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Wifi, WifiOff, RefreshCw, Loader2 } from 'lucide-react'
+import { appVersionDisplay } from '@/lib/app-version'
 
 type OfflineConfig = {
   offlineTitle?: string
@@ -159,7 +160,7 @@ export default function OfflinePage() {
         </Button>
 
         <p className="text-xs text-slate-400 mt-6">
-          SoftLBA v0.15.0 · Sistema local · Sin dependencia de Internet
+          SoftLBA {appVersionDisplay} · Sistema local · Sin dependencia de Internet
         </p>
       </div>
     </div>

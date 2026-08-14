@@ -65,6 +65,47 @@ export async function POST(
     if (user.role === 'MESERO' && order.userId !== user.id) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
+
+    // v1.0.20-rc-final: parsear el body y comprobar idempotencyKey ANTES de
+    // validar el estado del pedido. Esto es CRÍTICO para que un reintento
+    // (mismo idempotencyKey) devuelva 200 idempotente en vez de 400
+    // "El pedido ya está cobrado" — el cliente no puede distinguir ambos casos.
+    const json = await req.json().catch(() => null)
+    if (!json) return NextResponse.json({ ok: false, error: 'Cuerpo inválido' }, { status: 400 })
+    const parsed = PaySchema.safeParse(json)
+    if (!parsed.success) {
+      return NextResponse.json(
+        { ok: false, error: parsed.error.issues[0]?.message || 'Datos inválidos' },
+        { status: 400 },
+      )
+    }
+    const d = parsed.data
+
+    // v1.0.17: idempotencia — si llega idempotencyKey, verificar si ya existe.
+    // Debe ir ANTES de los checks de status del pedido (CANCELADO/COBRADO).
+    if (d.idempotencyKey) {
+      const existing = await db.payment.findFirst({
+        where: { idempotencyKey: d.idempotencyKey },
+        include: { order: { select: { id: true, number: true } } },
+      })
+      if (existing) {
+        if (existing.orderId !== order.id) {
+          return NextResponse.json(
+            { ok: false, error: 'idempotencyKey ya usado para otro pedido' },
+            { status: 409 },
+          )
+        }
+        // Retornar resultado anterior (idempotencia).
+        return NextResponse.json({
+          ok: true,
+          idempotent: true,
+          message: 'Pago ya procesado anteriormente con este idempotencyKey',
+          orderId: order.id,
+        })
+      }
+    }
+
+    // Ahora sí: validar estado del pedido (después del check idempotente).
     if (order.status === 'CANCELADO') {
       return NextResponse.json({ ok: false, error: 'El pedido está cancelado' }, { status: 400 })
     }
@@ -86,40 +127,6 @@ export async function POST(
         { ok: false, error: `No se puede cobrar: ${pendingItems.length} producto(s) aún no están listos. Espera a que todas las áreas terminen.` },
         { status: 400 },
       )
-    }
-
-    const json = await req.json().catch(() => null)
-    if (!json) return NextResponse.json({ ok: false, error: 'Cuerpo inválido' }, { status: 400 })
-    const parsed = PaySchema.safeParse(json)
-    if (!parsed.success) {
-      return NextResponse.json(
-        { ok: false, error: parsed.error.issues[0]?.message || 'Datos inválidos' },
-        { status: 400 },
-      )
-    }
-    const d = parsed.data
-
-    // v1.0.17: idempotencia — si llega idempotencyKey, verificar si ya existe.
-    if (d.idempotencyKey) {
-      const existing = await db.payment.findFirst({
-        where: { idempotencyKey: d.idempotencyKey },
-        include: { order: { select: { id: true, number: true } } },
-      })
-      if (existing) {
-        if (existing.orderId !== order.id) {
-          return NextResponse.json(
-            { ok: false, error: 'idempotencyKey ya usado para otro pedido' },
-            { status: 409 },
-          )
-        }
-        // Retornar resultado anterior (idempotencia).
-        return NextResponse.json({
-          ok: true,
-          idempotent: true,
-          message: 'Pago ya procesado anteriormente con este idempotencyKey',
-          orderId: order.id,
-        })
-      }
     }
 
     // v1.0-RC1-bloque2-3 (items 19-20): cargar la tasa USD→CUP configurada para

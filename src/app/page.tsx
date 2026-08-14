@@ -5,6 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { appVersionDisplay } from '@/lib/app-version'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Utensils, LogIn, MapPin, Phone, Clock, Mail, Megaphone, Pizza, AlertCircle, Sparkles } from 'lucide-react'
@@ -242,7 +243,7 @@ export default function HomePage() {
             </p>
           )}
           <p className="text-[10px] mt-3 text-slate-500">
-            Sistema local · Sin dependencia de Internet · v0.6.0
+            Sistema local · Sin dependencia de Internet · {appVersionDisplay}
           </p>
         </div>
       </footer>

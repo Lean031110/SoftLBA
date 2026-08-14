@@ -71,8 +71,16 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
   const [order, setOrder] = useState<OrderDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // FE-002: timestamp de emisión se setea en mount (no en render) para evitar
+  // hydration mismatch entre server time y client time.
+  const [issuedAt, setIssuedAt] = useState<string>('')
 
   useEffect(() => { params.then((p) => setOrderId(p.id)) }, [params])
+
+  // FE-002: setear issuedAt solo tras mount, una sola vez.
+  useEffect(() => {
+    setIssuedAt(new Date().toLocaleString('es-CU'))
+  }, [])
 
   const load = useCallback(async () => {
     if (!orderId) return
@@ -345,7 +353,10 @@ export default function ComprobantePage({ params }: { params: Promise<{ id: stri
               {config?.receiptFooter || '¡Gracias por su visita!'}
             </p>
             <p className="text-[10px] text-stone-400">
-              Emitido el {new Date().toLocaleString('es-CU')}
+              {/* FE-002: evitar hydration mismatch — `new Date()` en render
+                  difiere entre server y cliente. Mostrar ISO date en SSR y
+                  format tras mount. */}
+              {issuedAt ? `Emitido el ${issuedAt}` : '\u00A0'}
             </p>
           </div>
         </CardContent>

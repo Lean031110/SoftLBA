@@ -202,6 +202,7 @@ export default function ProductosListPage() {
               No hay productos que coincidan con los filtros
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -260,6 +261,7 @@ export default function ProductosListPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
           )}
         </CardContent>
       </Card>

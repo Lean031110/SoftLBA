@@ -1,6 +1,6 @@
 {
   "name": "softlba",
-  "version": "1.0.20-rc2",
+  "version": "1.0.20-rc14",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -17,7 +17,11 @@
     "simulate": "bun run scripts/simulate-day.ts",
     "realtime": "bun run mini-services/realtime-service/index.ts",
     "test:unit": "vitest run tests/unit/",
-    "test:integration": "echo 'Starting server...' && npx next dev -p 3099 & sleep 5 && INTEGRATION_BASE_URL=http://127.0.0.1:3099 npx vitest run tests/integration/; kill %1 2>/dev/null"
+    "test:integration": "tests/integration/run.sh",
+    "test:integration:server": "npx next dev -p 3099",
+    "test:integration:run": "INTEGRATION_BASE_URL=http://127.0.0.1:3099 npx vitest run tests/integration/",
+    "test:e2e": "npx playwright test --config=tests/e2e/playwright.config.ts",
+    "test:e2e:install": "npx playwright install chromium"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -95,7 +99,10 @@
     "zustand": "^5.0.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^3.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -103,6 +110,7 @@
     "bun-types": "^1.3.4",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "tw-animate-css": "^1.3.5",
     "typescript": "^5",

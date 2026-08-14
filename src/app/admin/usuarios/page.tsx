@@ -200,6 +200,7 @@ export default function UsuariosListPage() {
               No hay usuarios que coincidan con los filtros
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -269,6 +270,7 @@ export default function UsuariosListPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
           )}
         </CardContent>
       </Card>

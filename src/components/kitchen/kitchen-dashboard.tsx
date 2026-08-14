@@ -138,17 +138,9 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
       })
       const data = await res.json()
       if (data.ok) {
-        // Emitir evento WebSocket para notificar al mesero
-        if (data.wsPayload) {
-          try {
-            const { io } = await import('socket.io-client')
-            const socket = io('/?XTransformPort=3003', { transports: ['websocket'] })
-            socket.emit(data.wsEvent || 'order:status', data.wsPayload)
-            setTimeout(() => socket.disconnect(), 1000)
-          } catch {
-            // Silencioso
-          }
-        }
+        // v1.0.20-rc-final: el servidor ya emite el evento realtime desde
+        // el route handler (vía realtime-emitter.ts). No es necesario (ni
+        // estaba permitido por el server) emitir desde el cliente.
         const labels: Record<string, string> = {
           EN_PREPARACION: 'Pedido en preparación',
           LISTO: 'Pedido listo',
@@ -177,15 +169,7 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
       })
       const data = await res.json()
       if (data.ok) {
-        // Emitir WebSocket
-        if (data.wsPayload) {
-          try {
-            const { io } = await import('socket.io-client')
-            const socket = io('/?XTransformPort=3003', { transports: ['websocket'] })
-            socket.emit(data.wsEvent || 'order:status', data.wsPayload)
-            setTimeout(() => socket.disconnect(), 1000)
-          } catch {}
-        }
+        // v1.0.20-rc-final: el servidor ya emite el evento realtime.
         toast.success(newStatus === 'LISTO' ? 'Producto listo' : 'Producto en preparación')
         load()
       } else {

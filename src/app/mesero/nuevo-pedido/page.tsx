@@ -519,29 +519,30 @@ function CartContent({
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            className="h-10 w-10 shrink-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                             onClick={() => onRemove(it.product.id)}
-                            aria-label="Quitar"
+                            aria-label={`Quitar ${it.product.name} del carrito`}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                         {/* Cantidad + subtotal */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => onUpdateQty(it.product.id, -1)}>
-                              <Minus className="h-3 w-3" />
+                            <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => onUpdateQty(it.product.id, -1)} aria-label={`Reducir cantidad de ${it.product.name}`}>
+                              <Minus className="h-4 w-4" />
                             </Button>
                             <Input
                               type="number"
                               value={it.quantity}
                               onChange={(e) => onSetQty(it.product.id, Number(e.target.value))}
-                              className="h-7 w-14 text-center px-1 font-medium"
+                              className="h-10 w-16 text-center px-1 font-medium"
                               min={0}
                               step={it.product.unit === 'ml' || it.product.unit === 'kg' ? 0.5 : 1}
+                              aria-label={`Cantidad de ${it.product.name}`}
                             />
-                            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => onUpdateQty(it.product.id, 1)}>
-                              <Plus className="h-3 w-3" />
+                            <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => onUpdateQty(it.product.id, 1)} aria-label={`Aumentar cantidad de ${it.product.name}`}>
+                              <Plus className="h-4 w-4" />
                             </Button>
                           </div>
                           <div className="text-right">

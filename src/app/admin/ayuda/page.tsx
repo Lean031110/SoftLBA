@@ -162,6 +162,7 @@ export default function AyudaListPage() {
               No hay artículos que coincidan con los filtros
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -206,6 +207,7 @@ export default function AyudaListPage() {
                 ))}
               </TableBody>
             </Table>
+          </div>
           )}
         </CardContent>
       </Card>

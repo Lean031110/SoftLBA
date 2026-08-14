@@ -18,7 +18,7 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { Server as SocketIOServer, Socket } from 'socket.io'
-import { networkInterfaces } from 'os'
+// v1.0.20-rc-final: networkInterfaces removido — ya no se auto-descubren IPs locales.
 
 const PORT = parseInt(process.env.REALTIME_PORT || '3003', 10)
 
@@ -110,33 +110,31 @@ async function verifySessionToken(token: string): Promise<VerifiedSession | null
 // ============================================================
 // CORS
 // ============================================================
+// v1.0.20-rc-final: NO auto-incluir IPs de red local — si el servidor
+// tiene IP pública (VPS, Cloud), quedaría CORS abierto a cualquier origen.
+// Solo incluir localhost/127.0.0.1 en dev, y orígenes explícitos de env var.
 function getAllowedOrigins(): string[] {
-  const origins = new Set<string>([
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-    'http://localhost',
-    'http://127.0.0.1',
-  ])
+  const origins = new Set<string>()
 
-  try {
-    const nets = networkInterfaces()
-    for (const name of Object.keys(nets)) {
-      for (const net of nets[name] || []) {
-        if (net.family === 'IPv4' && !net.internal) {
-          origins.add(`http://${net.address}:3000`)
-          origins.add(`http://${net.address}`)
-        }
-      }
-    }
-  } catch {
-    // Ignorar
+  // En dev, permitir localhost
+  if (process.env.NODE_ENV !== 'production') {
+    origins.add('http://localhost:3000')
+    origins.add('http://127.0.0.1:3000')
+    origins.add('http://localhost')
+    origins.add('http://127.0.0.1')
   }
 
+  // Orígenes explícitos del env (CSV)
   const envOrigins = process.env.ALLOWED_ORIGINS
   if (envOrigins) {
     for (const o of envOrigins.split(',').map((s) => s.trim()).filter(Boolean)) {
       origins.add(o)
     }
+  } else if (process.env.NODE_ENV === 'production') {
+    console.warn(
+      '[cors] ALLOWED_ORIGINS no configurado en producción. ' +
+        'El realtime service rechazará conexiones desde orígenes no listados.',
+    )
   }
 
   return Array.from(origins)
@@ -385,16 +383,17 @@ io.on('connection', (socket: Socket) => {
   console.log(`[+] ${socket.id} conectado`)
   clients.set(socket.id, { authenticated: false, authVersion: 0, connectedAt: Date.now() })
 
-  // Autenticación: el cliente envía { token } en el handshake o en 'auth'
-  // El token se verifica y se extrae userId/role del mismo.
-  // NO se confía en userId/role enviados por el cliente.
-  const tokenFromQuery = socket.handshake.query.token as string | undefined
+  // Autenticación: el cliente envía { token } en el handshake (auth.token)
+  // o en el evento 'auth' posterior. El token se verifica y se extrae
+  // userId/role del mismo. NO se confía en userId/role enviados por el cliente.
+  //
+  // v1.0.20-rc-final: NO aceptar token de query string — aparece en logs
+  // de proxy, browser history y DevTools network tab. Solo auth.token.
   const tokenFromAuth = socket.handshake.auth?.token as string | undefined
-  const token = tokenFromQuery || tokenFromAuth
 
-  if (token) {
+  if (tokenFromAuth) {
     // Autenticación desde handshake (preferida)
-    authenticateSocket(socket, token)
+    authenticateSocket(socket, tokenFromAuth)
   }
 
   // Evento 'auth' para autenticación posterior o reautenticación

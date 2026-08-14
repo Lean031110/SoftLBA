@@ -91,7 +91,19 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  // v1.0.20-rc-final: headers de seguridad obligatorios para POS.
+  const response = NextResponse.next()
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('X-DNS-Prefetch-Control', 'off')
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains',
+    )
+  }
+  return response
 }
 
 export const config = {

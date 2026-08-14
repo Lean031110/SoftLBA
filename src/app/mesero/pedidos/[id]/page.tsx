@@ -20,6 +20,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
+import { getIdempotencyManager, paymentsFingerprint } from '@/lib/idempotency'
 import {
   ArrowLeft, Wallet, Printer, XCircle, RefreshCw, Plus, Trash2, Receipt, AlertTriangle, Clock,
 } from 'lucide-react'
@@ -229,6 +230,14 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
     }
     setSubmitting(true)
     try {
+      // FE-003: idempotencia frontend. Generar/reutilizar key por intento lógico.
+      // - Si los pagos no cambiaron desde el último intento fallido, reutilizar key.
+      // - Si los pagos cambiaron (monto, método, currency), es un intento nuevo.
+      // - Tras 200 OK del backend, limpiar la key (operación exitosa).
+      const manager = getIdempotencyManager()
+      const fp = paymentsFingerprint(validPayments)
+      const idempotencyKey = manager.getOrCreate(orderId, fp)
+
       const res = await fetch(`/api/mesero/orders/${orderId}/pay`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -239,18 +248,27 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
             currency: p.currency,
             reference: p.reference || undefined,
           })),
+          idempotencyKey,
         }),
       })
       const data = await res.json()
       if (data.ok) {
-        toast.success(data.fullyPaid ? 'Pedido cobrado completamente' : 'Pago registrado')
+        // Operación exitosa (primer pago o reintento idempotente): limpiar key.
+        manager.clear(orderId)
+        if (data.idempotent) {
+          toast.info('Pago ya estaba registrado (idempotente)')
+        } else {
+          toast.success(data.fullyPaid ? 'Pedido cobrado completamente' : 'Pago registrado')
+        }
         setPayOpen(false)
         load()
       } else {
+        // 4xx/5xx: MANTENER key para reintentar con la misma.
         toast.error(data.error || 'Error al registrar pago')
       }
     } catch {
-      toast.error('Error de conexión')
+      // Error de red/timeout: MANTENER key para reintentar con la misma.
+      toast.error('Error de conexión. Reintenta con el mismo monto para evitar duplicar el pago.')
     } finally {
       setSubmitting(false)
     }

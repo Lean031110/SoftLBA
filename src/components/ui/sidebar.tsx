@@ -606,10 +606,10 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean
 }) {
-  // Random width between 50 to 90%.
-  const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`
-  }, [])
+  // FE-002: ancho fijo determinista (70%) en vez de Math.random() para evitar
+  // hydration mismatch entre SSR y cliente. El skeleton es un placeholder
+  // visual — el ancho variable no aporta valor real y rompe la hidratación.
+  const width = React.useMemo(() => '70%', [])
 
   return (
     <div
