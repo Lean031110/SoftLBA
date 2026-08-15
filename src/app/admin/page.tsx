@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useMounted } from '@/lib/use-mounted'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type DashboardData = {
   stats: {
@@ -406,9 +407,7 @@ export default function AdminDashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="font-semibold">${o.total.toFixed(2)}</span>
-                      <Badge className={STATUS_COLORS[o.status] || STATUS_COLORS.CREADO} variant="secondary">
-                        {STATUS_LABELS[o.status] || o.status}
-                      </Badge>
+                      <StatusBadge kind="order" value={o.status} size="sm" />
                     </div>
                   </div>
                 ))}

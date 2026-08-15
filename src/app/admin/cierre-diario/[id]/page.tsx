@@ -25,6 +25,7 @@ import { toast } from 'sonner'
 import {
   ArrowLeft, Loader2, AlertTriangle, Plus, Trash2, Lock, CheckCircle2, Calculator,
 } from 'lucide-react'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type Denomination = {
   id: string
@@ -252,9 +253,7 @@ export default function CierreDetallePage() {
             Abierto por {close.user.firstName} {close.user.lastName} · {new Date(close.openedAt).toLocaleTimeString('es-CU')}
           </p>
         </div>
-        <Badge className={STATUS_COLORS[close.status]} variant="secondary">
-          {STATUS_LABELS[close.status]}
-        </Badge>
+        <StatusBadge kind="cierre-diario" value={close.status} size="sm" />
       </div>
 
       {/* Resumen del día */}

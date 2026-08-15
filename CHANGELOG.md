@@ -497,6 +497,45 @@ FRONTEND-10 — Administración (UX de páginas admin mobile).
 
 ---
 
+## [1.0.20-rc25] — 2026-08-15
+
+### FRONTEND-10 — Administración (STATUS_COLORS → StatusBadge)
+
+Migra los últimos STATUS_COLORS hardcoded en páginas admin al design system.
+3 archivos migrados + 1 nuevo tipo de status en status-config.
+
+#### FE-035: Migrar STATUS_COLORS en admin/page.tsx
+- Badge con `STATUS_COLORS[o.status]` → `<StatusBadge kind="order" />`.
+- Elimina mapa local de 8 estados duplicado de order-utils.
+
+#### FE-036: Migrar STATUS_COLORS en cierre-diario (lista + detalle)
+- `src/app/admin/cierre-diario/page.tsx`: Badge con `STATUS_COLORS[c.status]` →
+  `<StatusBadge kind="cierre-diario" value={c.status} />`.
+- `src/app/admin/cierre-diario/[id]/page.tsx`: mismo cambio.
+- Nuevo `CIERRE_DIARIO_STATUS_CONFIG` en `src/lib/status-config.ts` con 4 estados:
+  ABIERTO (verde), EN_PROCESO (amber), CERRADO (gris), BLOQUEADO (rojo).
+- Nuevo `kind="cierre-diario"` en StatusBadge + helper `getCierreDiarioStatusConfig()`.
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/lib/status-config.ts` — nuevo CIERRE_DIARIO_STATUS_CONFIG + helper.
+- `src/components/ui/status-badge.tsx` — nuevo kind="cierre-diario".
+- `src/app/admin/page.tsx` — StatusBadge kind="order".
+- `src/app/admin/cierre-diario/page.tsx` — StatusBadge kind="cierre-diario".
+- `src/app/admin/cierre-diario/[id]/page.tsx` — StatusBadge kind="cierre-diario".
+
+#### Próxima fase
+FRONTEND-11 — Ayuda por área (aislamiento de help por rol).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate

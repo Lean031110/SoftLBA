@@ -14,6 +14,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
@@ -184,9 +185,7 @@ export default function CierreDiarioPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge className={STATUS_COLORS[c.status] || 'bg-stone-100'} variant="secondary">
-                          {STATUS_LABELS[c.status] || c.status}
-                        </Badge>
+                        <StatusBadge kind="cierre-diario" value={c.status} size="sm" />
                       </TableCell>
                       <TableCell className="text-xs">
                         {c.user.firstName} {c.user.lastName}

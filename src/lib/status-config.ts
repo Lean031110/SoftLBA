@@ -178,6 +178,44 @@ export const USER_STATUS_CONFIG = {
   },
 } as const
 
+// === CIERRE DIARIO STATUS ===
+// FE-035 (FRONTEND-10): estados específicos de cierre diario.
+export type CierreDiarioStatus = 'ABIERTO' | 'EN_PROCESO' | 'CERRADO' | 'BLOQUEADO'
+
+export const CIERRE_DIARIO_STATUS_CONFIG: Record<
+  CierreDiarioStatus,
+  { label: string; badgeClasses: string }
+> = {
+  ABIERTO: {
+    label: 'Abierto',
+    badgeClasses: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+  },
+  EN_PROCESO: {
+    label: 'En proceso',
+    badgeClasses: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+  },
+  CERRADO: {
+    label: 'Cerrado',
+    badgeClasses: 'bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200',
+  },
+  BLOQUEADO: {
+    label: 'Bloqueado',
+    badgeClasses: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  },
+}
+
+export function getCierreDiarioStatusConfig(status: string): {
+  label: string
+  badgeClasses: string
+} {
+  return (
+    CIERRE_DIARIO_STATUS_CONFIG[status as CierreDiarioStatus] ?? {
+      label: status,
+      badgeClasses: 'bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200',
+    }
+  )
+}
+
 // === HELPERS ===
 
 /**

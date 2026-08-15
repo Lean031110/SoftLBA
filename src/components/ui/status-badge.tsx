@@ -20,10 +20,11 @@ import {
   getTableStatusConfig,
   getOrderItemStatusConfig,
   getPaymentStatusConfig,
+  getCierreDiarioStatusConfig,
   USER_STATUS_CONFIG,
 } from '@/lib/status-config'
 
-type StatusKind = 'order' | 'table' | 'item' | 'payment' | 'user-active'
+type StatusKind = 'order' | 'table' | 'item' | 'payment' | 'user-active' | 'cierre-diario'
 
 interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** Tipo de status. Determina qué mapa de configuración usar. */
@@ -78,6 +79,10 @@ export function StatusBadge({
       badgeClasses = cfg.badgeClasses
     } else if (kind === 'item') {
       const cfg = getOrderItemStatusConfig(strValue)
+      label = labelOverride ?? cfg.label
+      badgeClasses = cfg.badgeClasses
+    } else if (kind === 'cierre-diario') {
+      const cfg = getCierreDiarioStatusConfig(strValue)
       label = labelOverride ?? cfg.label
       badgeClasses = cfg.badgeClasses
     } else {
