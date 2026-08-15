@@ -58,7 +58,8 @@ Pendientes para FRONTEND-05+ (POS Mesero) y siguientes fases:
 | FE-029 | 2026-08-15 | P1 | KDS | Sound button en cocina `size="sm"` (32px) + aria-label "Toggle sonido" no descriptivo | Subido a `h-9 px-3` (36px); aria-label dinámico "Desactivar/Activar sonido de notificaciones"; aria-pressed; texto colapsable | v1.0.20-rc22 | (pendiente push) |
 | FE-030 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` hardcoded en kitchen-dashboard + item badges con 3 condicionales inline | Migrado a `<StatusBadge kind="order" />` y `<StatusBadge kind="item" />` usando mapas de `src/lib/status-config.ts` | v1.0.20-rc22 | (pendiente push) |
 | FE-031 | 2026-08-15 | P1 | A11Y | `<CollapsibleTrigger asChild>` envuelve `<div>` → no focusable por teclado (WCAG 2.1.1) | Cambiado a `<button type="button">` con `aria-expanded` + `aria-controls` + `focus-visible:ring-2` | v1.0.20-rc22 | (pendiente push) |
-| FE-032 | 2026-08-15 | P2 | CODE | `elapsedMin` local duplica `elapsedMinutes` de order-utils + `text-[10px]` ilegible | Eliminado helper local, usa `elapsedMinutes()`; badge de minutos a `text-xs` (12px) | v1.0.20-rc22 | (pendiente push) |
+| FE-032 | 2026-08-15 | P2 | CODE | `elapsedMin` local duplica `elapsedMinutes` de order-utils + `text-[10px]` ilegible | Eliminado helper local, usa `elapsedMinutes()`; badge de minutos a `text-xs` (12px) | v1.0.20-rc22 | 8423244 |
+| FE-033 | 2026-08-15 | P0 | KDS | **KDS muestra skeletons eternos y nunca renderiza pedidos** — `load()` limpia `loadingRef` pero nunca llama `setLoading(false)` | Agregado `setLoading(false)` después del fetch exitoso + en catch de error | v1.0.20-rc23 | (pendiente push) |
 
 ---
 

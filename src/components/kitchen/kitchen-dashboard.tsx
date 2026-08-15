@@ -127,10 +127,15 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
       } else {
         setError(data.error || 'Error al cargar')
       }
+      // FE-033 (FRONTEND-08): setLoading(false) faltaba — el loading state
+      // se quedaba en true para siempre, mostrando skeletons eternos.
+      // El loadingRef.current se limpiaba pero setLoading nunca se llamaba.
+      setLoading(false)
     } catch (e) {
       // AbortError es esperado cuando cancelamos un fetch viejo.
       if (e instanceof DOMException && e.name === 'AbortError') return
       setError('Error de conexión')
+      setLoading(false)
     } finally {
       // Solo limpiar si este controller sigue siendo el actual.
       if (abortRef.current === controller) {

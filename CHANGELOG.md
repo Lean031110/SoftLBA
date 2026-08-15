@@ -409,6 +409,50 @@ FRONTEND-08 — KDS Pizzería (mismo patrón que cocina, aislado por área).
 
 ---
 
+## [1.0.20-rc23] — 2026-08-15
+
+### FRONTEND-08 — KDS Pizzería + bug crítico loading
+
+FRONTEND-08: pizzería reusa el mismo `KitchenDashboard` que cocina.
+Durante la verificación visual se descubrió un bug P0 crítico.
+
+#### FE-033 (P0): KDS muestra skeletons eternos — setLoading(false) faltaba
+- **Bug crítico descubierto durante FRONTEND-08**: el `load()` del
+  `KitchenDashboard` limpiaba `loadingRef.current = false` en el `finally`
+  pero **nunca llamaba `setLoading(false)`**.
+- Resultado: el estado `loading` se quedaba en `true` para siempre →
+  el KDS mostraba 6 skeletons infinitos y NUNCA renderizaba las tarjetas
+  de pedidos.
+- Afectaba TANTO a cocina como a pizzería (mismo componente).
+- **Fix**: agregado `setLoading(false)` después del fetch exitoso y en
+  el catch de error. Ahora las tarjetas aparecen correctamente.
+- **Verificación visual**: Cocina muestra 8 order cards (0 skeletons).
+  Pizzería muestra 5 order cards (0 skeletons). ✅
+
+#### Verificación de aislamiento de área
+- `/api/cocina/orders` filtra por `targetAreaId = SALON` (área de cocina).
+- `/api/pizzeria/orders` filtra por `targetAreaId = PIZZERIA`.
+- El `KitchenDashboard` recibe `apiBase` diferente pero renderiza igual.
+- Pizzería muestra título "Pizzería" + colores naranja. ✅
+- Cocina muestra título "Cocina" + colores azul. ✅
+- Items de cocina NO aparecen en pizzería y viceversa. ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/components/kitchen/kitchen-dashboard.tsx` — fix FE-033 + cleanup código duplicado.
+
+#### Próxima fase
+FRONTEND-09 — Área Directo (productos DIRECTO, despacho inmediato).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate
