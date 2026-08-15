@@ -14,8 +14,9 @@ import {
 import { useCurrentUser } from '@/hooks/use-current-user'
 import { useRealtime } from '@/hooks/use-realtime'
 import {
-  STATUS_COLORS, STATUS_LABELS, formatCurrency, formatTime,
+  STATUS_COLORS, STATUS_LABELS, formatCurrency, formatTime, elapsedMinutes,
 } from '@/lib/order-utils'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type OrderItem = {
   id: string
@@ -112,11 +113,11 @@ export default function MeseroDashboardPage() {
           <p className="text-xs text-slate-500">Gestiona tus pedidos</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={load}>
-            <RefreshCw className="h-3 w-3 mr-1" /> Actualizar
+          <Button variant="outline" size="sm" onClick={load} className="h-9 px-3" aria-label="Actualizar lista de pedidos">
+            <RefreshCw className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Actualizar</span>
           </Button>
-          <Button size="sm" onClick={() => router.push('/mesero/nuevo-pedido')}>
-            <Plus className="h-3 w-3 mr-1" /> Nuevo pedido
+          <Button size="sm" onClick={() => router.push('/mesero/nuevo-pedido')} className="h-9 px-3">
+            <Plus className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Nuevo</span>
           </Button>
         </div>
       </div>
@@ -173,7 +174,7 @@ export default function MeseroDashboardPage() {
       ) : (
         <div className="space-y-2">
           {sorted.map((order) => {
-            const mins = Math.max(0, Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000))
+            const mins = elapsedMinutes(order.createdAt)
             const isAnclada = order.status === 'EN_PREPARACION'
             return (
               <Card
@@ -185,9 +186,7 @@ export default function MeseroDashboardPage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold">#{order.number}</span>
-                        <Badge className={STATUS_COLORS[order.status] || ''} variant="secondary">
-                          {STATUS_LABELS[order.status] || order.status}
-                        </Badge>
+                        <StatusBadge kind="order" value={order.status} size="sm" />
                         {isAnclada && (
                           <Badge variant="default" className="text-[10px] bg-blue-600">
                             🔔 En elaboración
@@ -214,8 +213,8 @@ export default function MeseroDashboardPage() {
                     </div>
                   </div>
                   <div className="flex justify-end mt-2">
-                    <Button size="sm" variant="outline" onClick={() => router.push(`/mesero/pedidos/${order.id}`)}>
-                      <Eye className="h-3 w-3 mr-1" /> Ver
+                    <Button size="sm" variant="outline" onClick={() => router.push(`/mesero/pedidos/${order.id}`)} className="h-9 px-3" aria-label={`Ver detalle del pedido #${order.number}`}>
+                      <Eye className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Ver</span>
                     </Button>
                   </div>
                 </CardContent>

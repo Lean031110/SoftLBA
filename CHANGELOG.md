@@ -293,6 +293,62 @@ FRONTEND-06 — Pedidos (lista de pedidos del mesero + detalle mobile).
 
 ---
 
+## [1.0.20-rc21] — 2026-08-15
+
+### FRONTEND-06 — Pedidos (lista + detalle mobile)
+
+Mejora la lista de pedidos del mesero y el detalle de pedido sin reescribir.
+4 fixes puntuales sobre el código existente.
+
+#### FE-025: Touch targets en botones de lista de pedidos
+- Botones "Ver", "Actualizar", "Nuevo pedido" subidos de `size="sm"` (32px)
+  a `h-9 px-3` (36px) en mobile.
+- Iconos subidos a `h-4 w-4` (antes `h-3 w-3`).
+- Texto colapsable: solo icono en mobile, icono+texto en `sm+`.
+- aria-label descriptivo en botón "Ver": `Ver detalle del pedido #1108`.
+- aria-label en botón "Actualizar": `Actualizar lista de pedidos`.
+
+#### FE-026: Migrar STATUS_COLORS a StatusBadge
+- `src/app/mesero/page.tsx`: Badge con `STATUS_COLORS[order.status]` →
+  `<StatusBadge kind="order" value={order.status} size="sm" />`.
+- `src/app/mesero/pedidos/[id]/page.tsx`: mismo cambio + Badge de pago
+  hardcoded → `<StatusBadge kind="payment" value={order.paymentStatus} />`.
+- Usa los mapas centralizados de `src/lib/status-config.ts` (FRONTEND-03).
+- Elimina duplicación de colores hardcoded.
+
+#### FE-027: Botón volver en detalle con aria-label + 40px
+- `aria-label="Volver a la lista de pedidos"`.
+- `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop).
+- Icono `h-5 w-5`.
+
+#### FE-028: Eliminar Date.now() del render en lista
+- `Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000)`
+  → `elapsedMinutes(order.createdAt)` (helper de `src/lib/order-utils.ts`).
+- El helper ya existía pero no se usaba. Evita hydration mismatch potencial
+  y mejora legibilidad.
+
+#### Verificación visual (viewport 375x667)
+- Botones "Ver": 36px, aria-label `Ver detalle del pedido #1108`. ✅
+- Botón "Nuevo": 36px. ✅
+- StatusBadge renderiza correctamente (mismo colores que antes). ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/app/mesero/page.tsx` — touch targets + StatusBadge + elapsedMinutes.
+- `src/app/mesero/pedidos/[id]/page.tsx` — botón volver + StatusBadge.
+
+#### Próxima fase
+FRONTEND-07 — KDS Cocina (dashboard de cocina mobile).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate

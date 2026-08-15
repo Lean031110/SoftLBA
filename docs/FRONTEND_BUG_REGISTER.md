@@ -50,7 +50,11 @@ Pendientes para FRONTEND-05+ (POS Mesero) y siguientes fases:
 | FE-021 | 2026-08-14 | P1 | POS | Botones de filtro de categoría en nuevo-pedido son `h-7` (28px) → propensos a tap erróneo con 8 categorías visibles | Subidos a `h-9` (36px) con `text-xs sm:text-sm`; agregado `role="group"` + `aria-label="Filtro por categoría"` + `aria-pressed` por botón | v1.0.20-rc20 | (pendiente push) |
 | FE-022 | 2026-08-14 | P1 | A11Y | Botón volver en nuevo-pedido sin `aria-label` + `size-9` (36px) → screen readers no lo anuncian | Agregado `aria-label="Volver a pedidos del mesero"` + `h-10 w-10 md:h-9 md:w-9` (40px mobile) + icono `h-5 w-5` | v1.0.20-rc20 | (pendiente push) |
 | FE-023 | 2026-08-14 | P1 | CODE | `CartContent` en nuevo-pedido usa `: any` en props → pierde tipado, viola sección 47 prohibiciones | Creado `type CartContentProps` con 17 props tipados explícitamente; TS valida callers | v1.0.20-rc20 | (pendiente push) |
-| FE-024 | 2026-08-14 | P1 | POS | Filtros de búsqueda y categoría en nuevo-pedido no son sticky → al scrollear 20+ productos desaparecen | Card de filtros `sticky top-16 z-20` en mobile (`lg:static`); ScrollArea `max-h-[50vh] lg:max-h-[70vh]` adaptativo | v1.0.20-rc20 | (pendiente push) |
+| FE-024 | 2026-08-14 | P1 | POS | Filtros de búsqueda y categoría en nuevo-pedido no son sticky → al scrollear 20+ productos desaparecen | Card de filtros `sticky top-16 z-20` en mobile (`lg:static`); ScrollArea `max-h-[50vh] lg:max-h-[70vh]` adaptativo | v1.0.20-rc20 | ff66d69 |
+| FE-025 | 2026-08-15 | P1 | POS | Botones "Ver"/"Actualizar"/"Nuevo pedido" en lista de pedidos son `size="sm"` (32px) → táctil pequeño | Subidos a `h-9 px-3` (36px) con icono `h-4 w-4`; texto colapsable `hidden sm:inline`; aria-label descriptivo por pedido | v1.0.20-rc21 | (pendiente push) |
+| FE-026 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` hardcoded en mesero/page.tsx y pedidos/[id] → duplicación de colores | Migrado a `<StatusBadge kind="order" />` y `<StatusBadge kind="payment" />` usando mapas de `src/lib/status-config.ts` (FRONTEND-03) | v1.0.20-rc21 | (pendiente push) |
+| FE-027 | 2026-08-15 | P1 | A11Y | Botón volver en detalle de pedido sin aria-label + `size="icon"` (36px) | `aria-label="Volver a la lista de pedidos"` + `h-10 w-10 md:h-9 md:w-9` (40px mobile) | v1.0.20-rc21 | (pendiente push) |
+| FE-028 | 2026-08-15 | P2 | CODE | `Date.now()` en render de lista de pedidos → hydration mismatch potencial | Reemplazado por `elapsedMinutes()` helper de `src/lib/order-utils.ts` | v1.0.20-rc21 | (pendiente push) |
 
 ---
 

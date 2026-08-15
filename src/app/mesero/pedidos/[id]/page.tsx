@@ -30,6 +30,7 @@ import {
   STATUS_COLORS, STATUS_LABELS, PAYMENT_METHOD_LABELS, PAYMENT_METHODS, formatCurrency, formatTime,
 } from '@/lib/order-utils'
 import { hasPermission } from '@/lib/permissions'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type OrderDetail = {
   id: string
@@ -324,21 +325,20 @@ export default function PedidoDetallePage({ params }: { params: Promise<{ id: st
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/mesero')}>
-            <ArrowLeft className="h-4 w-4" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push('/mesero')}
+            aria-label="Volver a la lista de pedidos"
+            className="h-10 w-10 md:h-9 md:w-9"
+          >
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-xl font-bold">Pedido #{order.number}</h1>
-              <Badge className={STATUS_COLORS[order.status] || STATUS_COLORS.CREADO} variant="secondary">
-                {STATUS_LABELS[order.status] || order.status}
-              </Badge>
-              {order.paymentStatus === 'PAGADO' && (
-                <Badge variant="outline" className="text-emerald-700 border-emerald-300">Pagado</Badge>
-              )}
-              {order.paymentStatus === 'PARCIAL' && (
-                <Badge variant="outline" className="text-amber-700 border-amber-300">Pago parcial</Badge>
-              )}
+              <StatusBadge kind="order" value={order.status} size="sm" />
+              <StatusBadge kind="payment" value={order.paymentStatus} size="sm" />
             </div>
             <p className="text-xs text-stone-500 mt-0.5 flex items-center gap-2">
               <Clock className="h-3 w-3" />
