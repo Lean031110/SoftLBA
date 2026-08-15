@@ -62,7 +62,9 @@ Pendientes para FRONTEND-05+ (POS Mesero) y siguientes fases:
 | FE-033 | 2026-08-15 | P0 | KDS | **KDS muestra skeletons eternos y nunca renderiza pedidos** — `load()` limpia `loadingRef` pero nunca llama `setLoading(false)` | Agregado `setLoading(false)` después del fetch exitoso + en catch de error | v1.0.20-rc23 | 2bb6046 |
 | FE-034 | 2026-08-15 | P1 | POS | Productos DIRECTO muestran tipo como texto crudo "DIRECTO" en `text-[10px]` ilegible + stock negativo confuso ("Stock: -20") + sin aria-label | Badge azul "Directo" / amber "Preparación" + "Sin stock" en rojo para stock ≤ 0 + aria-label descriptivo con tipo, stock y nombre | v1.0.20-rc24 | 8d133be |
 | FE-035 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` duplicados en admin/page.tsx (8 estados) — mismo mapa que order-utils | Migrado a `<StatusBadge kind="order" />` usando mapas de `src/lib/status-config.ts` | v1.0.20-rc25 | (pendiente push) |
-| FE-036 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` duplicados en cierre-diario/page.tsx + [id]/page.tsx (4 estados específicos) | Nuevo `CIERRE_DIARIO_STATUS_CONFIG` en status-config.ts + `kind="cierre-diario"` en StatusBadge + helper `getCierreDiarioStatusConfig()` | v1.0.20-rc25 | (pendiente push) |
+| FE-036 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` duplicados en cierre-diario/page.tsx + [id]/page.tsx (4 estados específicos) | Nuevo `CIERRE_DIARIO_STATUS_CONFIG` en status-config.ts + `kind="cierre-diario"` en StatusBadge + helper `getCierreDiarioStatusConfig()` | v1.0.20-rc25 | b21c9b1 |
+| FE-037 | 2026-08-15 | P1 | SECURITY | `/api/help` devuelve TODOS los artículos a cualquier usuario autenticado — COCINA ve ayuda de pedidos/cierre que no le corresponde | Nuevo `MODULES_BY_ROLE` en API filtra módulos por rol: COCINA solo ve inventario+sistema, MESERO solo pedidos+sistema, ADMIN ve todos | v1.0.20-rc26 | (pendiente push) |
+| FE-038 | 2026-08-15 | P1 | A11Y | Botón volver en `/ayuda` sin aria-label + `size="icon"` (36px) | `aria-label="Volver al panel principal"` + `h-10 w-10 md:h-9 md:w-9` (40px mobile) | v1.0.20-rc26 | (pendiente push) |
 
 ---
 

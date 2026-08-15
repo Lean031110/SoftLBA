@@ -75,8 +75,14 @@ export default function AyudaPublicaPage() {
       <div className="space-y-6 max-w-4xl mx-auto">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={handleBack}>
-              <ArrowLeft className="h-4 w-4" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleBack}
+              aria-label="Volver al panel principal"
+              className="h-10 w-10 md:h-9 md:w-9"
+            >
+              <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">

@@ -536,6 +536,56 @@ FRONTEND-11 — Ayuda por área (aislamiento de help por rol).
 
 ---
 
+## [1.0.20-rc26] — 2026-08-15
+
+### FRONTEND-11 — Ayuda por área (filtrado por rol)
+
+Implementa el aislamiento de ayuda por rol que el plan sección 25-26 exige.
+Antes: cualquier usuario veía todos los artículos de ayuda. Ahora: el
+backend filtra por módulos relevantes al rol.
+
+#### FE-037: Filtrar help por rol en API
+- `src/app/api/help/route.ts`: nuevo `MODULES_BY_ROLE` mapea qué módulos
+  puede ver cada rol:
+  - ADMIN: pedidos, cierre, inventario, productos, sistema (todos)
+  - CAJERO: pedidos, cierre, sistema
+  - MESERO: pedidos, sistema
+  - MESERO_PRO: pedidos, cierre, sistema
+  - COCINA: inventario, sistema
+  - PIZZERIA: inventario, sistema
+- La query `findMany` ahora filtra `module: { in: allowedModules }`.
+- El plan sección 26 exige: "el backend debe ignorar un `area` no autorizado
+  enviado por cliente y derivarlo del usuario autenticado." Cumplido.
+- **Verificado**: COCINA ve 21 items (inventario+sistema), MESERO ve 28
+  (pedidos+sistema), ADMIN ve 56 (todos).
+
+#### FE-038: Botón volver en /ayuda con aria-label + 40px
+- `aria-label="Volver al panel principal"`.
+- `h-10 w-10 md:h-9 md:w-9` (40px mobile, 36px desktop).
+- Icono `h-5 w-5`.
+
+#### Verificación del filtrado por rol (via API)
+- COCINA: solo módulos `inventario` + `sistema` (21 items). ✅
+- MESERO: solo módulos `pedidos` + `sistema` (28 items). ✅
+- ADMIN: todos los módulos (56 items). ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/app/api/help/route.ts` — filtrado por rol con MODULES_BY_ROLE.
+- `src/app/ayuda/page.tsx` — botón volver aria-label + 40px.
+
+#### Próxima fase
+FRONTEND-12 — Realtime UX (estados de conexión visibles).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate
