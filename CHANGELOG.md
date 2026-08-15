@@ -453,6 +453,50 @@ FRONTEND-09 — Área Directo (productos DIRECTO, despacho inmediato).
 
 ---
 
+## [1.0.20-rc24] — 2026-08-15
+
+### FRONTEND-09 — Área Directo (productos DIRECTO, despacho inmediato)
+
+Mejora la visualización de productos DIRECTO en el POS sin reescribir.
+1 fix con 3 mejoras visuales.
+
+#### FE-034: Visualización de tipo de producto + stock negativo
+- **Badge de tipo**: productos DIRECTO muestran badge azul "Directo",
+  productos FINAL muestran badge amber "Preparación". Antes: texto crudo
+  "DIRECTO" / "FINAL" en `text-[10px]` ilegible.
+- **Stock negativo**: si `areaStock <= 0`, muestra "Sin stock" (rojo)
+  en vez del número negativo confuso (antes: "Stock: -20").
+- **aria-label descriptivo**: "Agua Mineral 500ml, despacho inmediato,
+  Sin stock" o "Cerveza Nacional 330ml, despacho inmediato, Stock: 5".
+  Antes: sin aria-label.
+
+#### Verificación visual (viewport 375x667)
+- Productos DIRECTO: badge "Directo" azul visible. ✅
+- Productos FINAL: badge "Preparación" amber visible. ✅
+- Stock negativo: muestra "Sin stock" (rojo) en vez de "-20". ✅
+- aria-label: "Agua Mineral 500ml, despacho inmediato, Sin stock". ✅
+
+#### Comportamiento backend verificado (no modificado)
+- DIRECTO nace como `SERVIDO` (no va a cocina/pizzería). ✅
+- DIRECTO se excluye del KDS de cocina y pizzería. ✅
+- Stock se decrementa atómicamente al añadir al carrito. ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/app/mesero/nuevo-pedido/page.tsx` — badge de tipo + stock label + aria-label.
+
+#### Próxima fase
+FRONTEND-10 — Administración (UX de páginas admin mobile).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate

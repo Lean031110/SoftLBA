@@ -388,11 +388,20 @@ export default function NuevoPedidoPage() {
                     {filteredProducts.map((p) => {
                       const inCart = cart.find((i) => i.product.id === p.id)
                       const outOfStock = p.areaStock !== null && p.areaStock <= 0
+                      // FE-034 (FRONTEND-09): indicador visual de tipo de producto.
+                      // DIRECTO = despacho inmediato (no va a cocina).
+                      // FINAL = requiere preparación (va a cocina/pizzería).
+                      const isDirecto = p.type === 'DIRECTO'
+                      // Stock: si es negativo, mostrar "Sin stock" en vez del número.
+                      const stockLabel = p.areaStock !== null
+                        ? (outOfStock ? 'Sin stock' : `Stock: ${p.areaStock}`)
+                        : null
                       return (
                         <button
                           key={p.id}
                           onClick={() => addToCart(p)}
                           disabled={outOfStock}
+                          aria-label={`${p.name}, ${isDirecto ? 'despacho inmediato' : 'requiere preparación'}, ${stockLabel || 'sin info de stock'}`}
                           className={`text-left border rounded-lg p-3 transition-colors ${
                             inCart
                               ? 'border-blue-500 bg-blue-50 dark:bg-blue-950'
@@ -407,14 +416,29 @@ export default function NuevoPedidoPage() {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-[10px] text-stone-500 mt-1">{p.code} · {p.type}</p>
+                          {/* FE-034: badge de tipo con color distintivo.
+                              DIRECTO = azul (despacho inmediato).
+                              FINAL = amber (requiere preparación). */}
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Badge
+                              variant="secondary"
+                              className={`text-[10px] px-1.5 py-0 ${
+                                isDirecto
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-200'
+                              }`}
+                            >
+                              {isDirecto ? 'Directo' : 'Preparación'}
+                            </Badge>
+                            <span className="text-[10px] text-stone-500">{p.code}</span>
+                          </div>
                           <div className="flex items-center justify-between mt-2">
                             <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
                               {formatCurrency(p.price)}
                             </span>
-                            {p.areaStock !== null && (
-                              <span className={`text-[10px] ${outOfStock ? 'text-blue-600' : 'text-stone-500'}`}>
-                                Stock: {p.areaStock}
+                            {stockLabel && (
+                              <span className={`text-[10px] ${outOfStock ? 'text-red-600 font-medium' : 'text-stone-500'}`}>
+                                {stockLabel}
                               </span>
                             )}
                           </div>
