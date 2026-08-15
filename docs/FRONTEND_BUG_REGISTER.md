@@ -54,7 +54,11 @@ Pendientes para FRONTEND-05+ (POS Mesero) y siguientes fases:
 | FE-025 | 2026-08-15 | P1 | POS | Botones "Ver"/"Actualizar"/"Nuevo pedido" en lista de pedidos son `size="sm"` (32px) → táctil pequeño | Subidos a `h-9 px-3` (36px) con icono `h-4 w-4`; texto colapsable `hidden sm:inline`; aria-label descriptivo por pedido | v1.0.20-rc21 | (pendiente push) |
 | FE-026 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` hardcoded en mesero/page.tsx y pedidos/[id] → duplicación de colores | Migrado a `<StatusBadge kind="order" />` y `<StatusBadge kind="payment" />` usando mapas de `src/lib/status-config.ts` (FRONTEND-03) | v1.0.20-rc21 | (pendiente push) |
 | FE-027 | 2026-08-15 | P1 | A11Y | Botón volver en detalle de pedido sin aria-label + `size="icon"` (36px) | `aria-label="Volver a la lista de pedidos"` + `h-10 w-10 md:h-9 md:w-9` (40px mobile) | v1.0.20-rc21 | (pendiente push) |
-| FE-028 | 2026-08-15 | P2 | CODE | `Date.now()` en render de lista de pedidos → hydration mismatch potencial | Reemplazado por `elapsedMinutes()` helper de `src/lib/order-utils.ts` | v1.0.20-rc21 | (pendiente push) |
+| FE-028 | 2026-08-15 | P2 | CODE | `Date.now()` en render de lista de pedidos → hydration mismatch potencial | Reemplazado por `elapsedMinutes()` helper de `src/lib/order-utils.ts` | v1.0.20-rc21 | a24644c |
+| FE-029 | 2026-08-15 | P1 | KDS | Sound button en cocina `size="sm"` (32px) + aria-label "Toggle sonido" no descriptivo | Subido a `h-9 px-3` (36px); aria-label dinámico "Desactivar/Activar sonido de notificaciones"; aria-pressed; texto colapsable | v1.0.20-rc22 | (pendiente push) |
+| FE-030 | 2026-08-15 | P1 | CODE | `STATUS_COLORS`/`STATUS_LABELS` hardcoded en kitchen-dashboard + item badges con 3 condicionales inline | Migrado a `<StatusBadge kind="order" />` y `<StatusBadge kind="item" />` usando mapas de `src/lib/status-config.ts` | v1.0.20-rc22 | (pendiente push) |
+| FE-031 | 2026-08-15 | P1 | A11Y | `<CollapsibleTrigger asChild>` envuelve `<div>` → no focusable por teclado (WCAG 2.1.1) | Cambiado a `<button type="button">` con `aria-expanded` + `aria-controls` + `focus-visible:ring-2` | v1.0.20-rc22 | (pendiente push) |
+| FE-032 | 2026-08-15 | P2 | CODE | `elapsedMin` local duplica `elapsedMinutes` de order-utils + `text-[10px]` ilegible | Eliminado helper local, usa `elapsedMinutes()`; badge de minutos a `text-xs` (12px) | v1.0.20-rc22 | (pendiente push) |
 
 ---
 

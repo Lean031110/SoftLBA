@@ -19,8 +19,9 @@ import { useCurrentUser } from '@/hooks/use-current-user'
 import { useRealtime } from '@/hooks/use-realtime'
 import { useBeep } from '@/hooks/use-beep'
 import {
-  STATUS_COLORS, STATUS_LABELS, formatTime, formatCurrency,
+  STATUS_COLORS, STATUS_LABELS, formatTime, formatCurrency, elapsedMinutes,
 } from '@/lib/order-utils'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type KitchenItem = {
   id: string
@@ -52,10 +53,8 @@ const TAB_LABELS: Record<TabKey, string> = {
   ready: 'Listos',
 }
 
-function elapsedMin(dateStr: string) {
-  const d = new Date(dateStr)
-  return Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000))
-}
+// FE-032 (FRONTEND-07): eliminado elapsedMin local — usar elapsedMinutes
+// de src/lib/order-utils.ts (helper centralizado, evita duplicación).
 
 export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaName: string }) {
   const { user } = useCurrentUser()
@@ -258,10 +257,12 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
             setSoundOn(v)
             toast.info(v ? 'Sonido activado' : 'Sonido desactivado')
           }}
-          aria-label="Toggle sonido"
+          aria-label={soundOn ? 'Desactivar sonido de notificaciones' : 'Activar sonido de notificaciones'}
+          aria-pressed={soundOn}
+          className="h-9 px-3"
         >
-          {soundOn ? <Volume2 className="h-4 w-4 mr-2" /> : <VolumeX className="h-4 w-4 mr-2" />}
-          {soundOn ? 'Sonido on' : 'Sonido off'}
+          {soundOn ? <Volume2 className="h-4 w-4 sm:mr-2" /> : <VolumeX className="h-4 w-4 sm:mr-2" />}
+          <span className="hidden sm:inline">{soundOn ? 'Sonido on' : 'Sonido off'}</span>
         </Button>
       </div>
 
@@ -302,7 +303,7 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((o) => {
-            const mins = elapsedMin(o.createdAt)
+            const mins = elapsedMinutes(o.createdAt)
             const isLate = mins >= 15
             const expanded = openId === o.id
             return (
@@ -320,14 +321,20 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
               >
                 <Collapsible open={expanded} onOpenChange={(v) => setOpenId(v ? o.id : null)}>
                   <CollapsibleTrigger asChild>
-                    <div className="cursor-pointer p-4 pb-3">
+                    {/* FE-031 (FRONTEND-07): usar <button> en vez de <div> para
+                        que sea focusable por teclado (WCAG 2.1.1). El div
+                        anterior no era accesible sin mouse. */}
+                    <button
+                      type="button"
+                      className="cursor-pointer p-4 pb-3 w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-t-lg"
+                      aria-expanded={expanded}
+                      aria-controls={`order-items-${o.id}`}
+                    >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold">#{o.number}</span>
-                            <Badge className={STATUS_COLORS[o.status] || STATUS_COLORS.CREADO} variant="secondary">
-                              {STATUS_LABELS[o.status] || o.status}
-                            </Badge>
+                            <StatusBadge kind="order" value={o.status} size="sm" />
                           </div>
                           <p className="text-xs text-stone-500 mt-1">
                             {o.table ? o.table.name : 'Para llevar'}
@@ -338,17 +345,19 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1">
-                          <Badge variant={isLate ? 'destructive' : 'secondary'} className="text-[10px]">
+                          {/* FE-032 (FRONTEND-07): text-xs en vez de text-[10px]
+                              para legibilidad mobile. */}
+                          <Badge variant={isLate ? 'destructive' : 'secondary'} className="text-xs">
                             <Clock className="h-3 w-3 mr-1" />
                             {mins} min
                           </Badge>
-                          {expanded ? <ChevronUp className="h-3 w-3 text-stone-400" /> : <ChevronDown className="h-3 w-3 text-stone-400" />}
+                          {expanded ? <ChevronUp className="h-4 w-4 text-stone-400" /> : <ChevronDown className="h-4 w-4 text-stone-400" />}
                         </div>
                       </div>
-                    </div>
+                    </button>
                   </CollapsibleTrigger>
 
-                  <CardContent className="pt-0 pb-3 space-y-2">
+                  <CardContent id={`order-items-${o.id}`} className="pt-0 pb-3 space-y-2">
                     {/* Items con botones individuales */}
                     <div className="space-y-2">
                       {o.items.map((it) => {
@@ -370,16 +379,7 @@ export function KitchenDashboard({ apiBase, areaName }: { apiBase: string; areaN
                                   <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">📝 {it.notes}</p>
                                 )}
                               </div>
-                              <Badge
-                                className={
-                                  itemStatus === 'LISTO' ? 'bg-emerald-100 text-emerald-800'
-                                  : itemStatus === 'EN_PREPARACION' ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-amber-100 text-amber-800'
-                                }
-                                variant="secondary"
-                              >
-                                {itemStatus === 'LISTO' ? 'Listo' : itemStatus === 'EN_PREPARACION' ? 'Preparando' : 'Pendiente'}
-                              </Badge>
+                              <StatusBadge kind="item" value={itemStatus} size="sm" />
                             </div>
                             {/* Botones por item */}
                             {itemStatus !== 'CANCELADO' && itemStatus !== 'SERVIDO' && (

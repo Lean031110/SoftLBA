@@ -349,6 +349,66 @@ FRONTEND-07 — KDS Cocina (dashboard de cocina mobile).
 
 ---
 
+## [1.0.20-rc22] — 2026-08-15
+
+### FRONTEND-07 — KDS Cocina (dashboard mobile)
+
+Mejora el dashboard de cocina (KDS) sin reescribirlo. 4 fixes de
+accesibilidad + mobile UX + design system.
+
+#### FE-029: Sound button touch target + aria-label dinámico
+- Botón "Toggle sonido" subido de `size="sm"` (32px) a `h-9 px-3` (36px).
+- `aria-label` dinámico: "Desactivar sonido de notificaciones" / "Activar sonido...".
+- `aria-pressed={soundOn}` para indicar estado del toggle.
+- Texto colapsable: solo icono en mobile, icono+texto en `sm+`.
+- Antes: aria-label="Toggle sonido" (no descriptivo, en inglés).
+
+#### FE-030: Migrar STATUS_COLORS + item badges a StatusBadge
+- Order status: `<Badge className={STATUS_COLORS[...]} variant="secondary">` →
+  `<StatusBadge kind="order" value={o.status} size="sm" />`.
+- Item status: Badge con 3 condicionales inline (LISTO/EN_PREPARACION/PENDIENTE) →
+  `<StatusBadge kind="item" value={itemStatus} size="sm" />`.
+- Usa mapas centralizados de `src/lib/status-config.ts` (FRONTEND-03).
+- Elimina duplicación de colores hardcoded en kitchen-dashboard.
+
+#### FE-031: CollapsibleTrigger div → button (WCAG 2.1.1)
+- `<CollapsibleTrigger asChild>` ahora envuelve un `<button>` en vez de `<div>`.
+- Antes: el div no era focusable por teclado, no tenía `role`, no manejaba
+  `onKeyDown`. Usuarios de teclado no podían expandir/colapsar pedidos.
+- Ahora: `<button type="button">` con `aria-expanded={expanded}` y
+  `aria-controls={`order-items-${o.id}`}` para lectores de pantalla.
+- `focus-visible:ring-2` para indicar foco al navegar con Tab.
+- `CardContent` ahora tiene `id={`order-items-${o.id}`}` para el `aria-controls`.
+
+#### FE-032: Eliminar `elapsedMin` local + `text-[10px]` → `text-xs`
+- Eliminado `function elapsedMin()` local (duplicada de `elapsedMinutes` de
+  `src/lib/order-utils.ts`). Ahora usa el helper centralizado.
+- Badge de minutos transcurridos: `text-[10px]` → `text-xs` (12px) para
+  legibilidad mobile. Info crítica para cocinero.
+- Iconos ChevronUp/ChevronDown: `h-3 w-3` → `h-4 w-4` para mejor visibilidad.
+
+#### Verificación visual (viewport 375x667)
+- Sound button: 36px, aria-label dinámico, aria-pressed=true. ✅
+- CollapsibleTrigger: ahora es `<button>` (era `<div>`). ✅
+- aria-expanded y aria-controls presentes. ✅
+- StatusBadge renderiza correctamente. ✅
+
+#### Métricas
+- TypeScript: 0 errores
+- ESLint: 0 errores
+- Unit tests: 468/468 pasando
+- Integration tests: 27/27 pasando
+- E2E tests: 6/7 pasando (1 skip esperado)
+- Build: SUCCESS
+
+#### Archivos modificados
+- `src/components/kitchen/kitchen-dashboard.tsx` — 4 fixes.
+
+#### Próxima fase
+FRONTEND-08 — KDS Pizzería (mismo patrón que cocina, aislado por área).
+
+---
+
 ## [1.0.20-rc1] — 2026-08-13
 
 ### Release Candidate
