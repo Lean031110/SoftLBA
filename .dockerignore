@@ -1,0 +1,82 @@
+# ============================================================
+# SoftLBA — .dockerignore
+# ============================================================
+# Excluye archivos que NO deben entrar en el contexto de build
+# de Docker. Reduce el tamaño del contexto y acelera el build.
+# ============================================================
+
+# Dependencias
+node_modules
+mini-services/realtime-service/node_modules
+
+# Build artifacts
+.next
+.next/cache
+dist
+build
+
+# Datos locales (se montan como volúmenes en compose)
+db/*.db
+db/*.db-journal
+db/*.db-wal
+db/*.db-shm
+db/test*.db
+db/build.db
+
+# Logs
+dev.log
+server.log
+*.log
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Git
+.git
+.gitignore
+
+# Documentación (no necesaria en runtime)
+docs
+*.md
+!README.md
+!package.json
+
+# Uploads temporales
+upload
+uploads
+
+# Backups
+backups
+*.tar.gz
+*.zip
+
+# Tests (no necesarios en runtime)
+tests
+playwright-report
+test-results
+
+# Skills y scripts de desarrollo
+skills
+scripts/dev-keeper.sh
+agent-ctx
+tool-results
+
+# Variables de entorno (se inyectan vía compose)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Downloads temporales
+download

@@ -1,10 +1,27 @@
-:81 {
+# ============================================================
+# SoftLBA — Caddyfile
+# ============================================================
+# Reverse proxy para SoftLBA.
+#
+# En Docker, Caddy se conecta al contenedor "softlba" por nombre.
+# En bare-metal/systemd, usar "localhost" en vez de "softlba".
+#
+# Puerto :80 dentro del contenedor (mapeado a :81 externo en compose).
+# Para HTTPS automático, cambiar ":80" por un dominio real:
+#   midominio.com {
+#     ...
+#   }
+# ============================================================
+
+:80 {
+	# Soporte para XTransformPort (gateway del preview sandbox).
+	# Permite proxy a puertos arbitrarios via ?XTransformPort=NNNN.
 	@transform_port_query {
 		query XTransformPort=*
 	}
 
 	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
+		reverse_proxy softlba:{query.XTransformPort} {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
@@ -12,8 +29,9 @@
 		}
 	}
 
+	# Proxy por defecto al servidor Next.js (puerto 3000).
 	handle {
-		reverse_proxy localhost:3000 {
+		reverse_proxy softlba:3000 {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}

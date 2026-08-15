@@ -1,0 +1,86 @@
+# ============================================================
+# SoftLBA — docker-compose.yml
+# ============================================================
+# Despliegue completo de SoftLBA con Docker.
+#
+# Servicios:
+#   softlba    — Next.js (web app) + Realtime service (Socket.IO)
+#   caddy      — Reverse proxy (HTTPS automático o HTTP en LAN)
+#
+# Uso:
+#   1. Copia .env.example a .env y configura los valores
+#   2. docker compose up -d
+#   3. Accede a http://localhost:81 (o el puerto configurado)
+#
+# Volúmenes persistentes:
+#   softlba-db        — Base de datos SQLite
+#   softlba-backups   — Backups generados
+#   softlba-download  — Downloads (comprobantes, reportes)
+#   caddy-data        — Configuración de Caddy
+#   caddy-config      — Configuración de Caddy
+# ============================================================
+
+services:
+  softlba:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: softlba
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+      - "${REALTIME_PORT:-3003}:3003"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
+      - DATABASE_URL=file:/app/db/custom.db
+      - INIT_DB=${INIT_DB:-true}
+      - SKIP_SEED=${SKIP_SEED:-false}
+      - DEMO_USERS=${DEMO_USERS:-true}
+    volumes:
+      - softlba-db:/app/db
+      - softlba-backups:/app/backups
+      - softlba-download:/app/download
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    networks:
+      - softlba-net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: softlba-caddy
+    restart: unless-stopped
+    ports:
+      - "${CADDY_PORT:-81}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      softlba:
+        condition: service_healthy
+    networks:
+      - softlba-net
+
+volumes:
+  softlba-db:
+    driver: local
+  softlba-backups:
+    driver: local
+  softlba-download:
+    driver: local
+  caddy-data:
+    driver: local
+  caddy-config:
+    driver: local
+
+networks:
+  softlba-net:
+    driver: bridge
