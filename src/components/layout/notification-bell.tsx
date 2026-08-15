@@ -140,6 +140,8 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
   // en vez de crear uno nuevo por componente.
   const realtimeCtx = useRealtimeContext()
   const connected = realtimeCtx?.connected ?? false
+  // FE-039: estado de conexión con 5 valores para indicador visual.
+  const connectionState = realtimeCtx?.connectionState ?? 'connecting'
 
   // Solicitar permiso de notificaciones al cargar si no está concedido
   useEffect(() => {
@@ -217,8 +219,29 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
               {unread > 9 ? '9+' : unread}
             </span>
           )}
-          {connected && (
-            <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white" title="Conectado" />
+          {/* FE-039: indicador de conexión con 3 estados visuales.
+              Verde = conectado, Amber pulsante = reconectando, Rojo = desconectado/auth_fail.
+              Plan sección 20: "● Conectado" / "↻ Reconectando…" */}
+          {connectionState === 'connected' && (
+            <span
+              className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white"
+              title="Tiempo real conectado"
+              aria-label="Tiempo real conectado"
+            />
+          )}
+          {connectionState === 'reconnecting' && (
+            <span
+              className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-amber-500 ring-1 ring-white animate-pulse"
+              title="Reconectando tiempo real..."
+              aria-label="Reconectando tiempo real"
+            />
+          )}
+          {(connectionState === 'disconnected' || connectionState === 'auth_failed') && (
+            <span
+              className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-red-500 ring-1 ring-white"
+              title="Tiempo real desconectado"
+              aria-label="Tiempo real desconectado"
+            />
           )}
         </Button>
       </PopoverTrigger>
