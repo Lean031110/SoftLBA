@@ -79,3 +79,7 @@ Thumbs.db
 tsconfig.tsbuildinfo
 mini-services/realtime-service/bun.lock
 mini-services/realtime-service/bun.lock
+
+# Visual regression screenshots (generadas por Playwright)
+tests/e2e/screenshots/*.png
+!tests/e2e/screenshots/README.md
