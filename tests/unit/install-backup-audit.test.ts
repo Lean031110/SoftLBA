@@ -81,9 +81,15 @@ describe('FASE 32 — Instalación limpia desde cero', () => {
     expect(exists('mini-services/realtime-service/tsconfig.json')).toBe(true)
   })
 
-  it('deploy/ tiene systemd services para producción', () => {
-    expect(exists('deploy/softlba.service')).toBe(true)
-    expect(exists('deploy/softlba-realtime.service')).toBe(true)
+  it('deploy/ tiene systemd services para producción (Linux)', () => {
+    // FE-046: movido a deploy/linux/ en FRONTEND-16 para soportar Windows.
+    expect(exists('deploy/linux/softlba.service')).toBe(true)
+    expect(exists('deploy/linux/softlba-realtime.service')).toBe(true)
+  })
+
+  it('deploy/windows/ tiene scripts de instalación', () => {
+    expect(exists('deploy/windows/install-windows.bat')).toBe(true)
+    expect(exists('deploy/windows/uninstall-windows.bat')).toBe(true)
   })
 
   it('no hay rutas absolutas hardcodeadas en código runtime', () => {
