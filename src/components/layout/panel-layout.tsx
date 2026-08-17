@@ -93,7 +93,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/respaldos', label: 'Respaldos', icon: Database, roles: ['ADMIN'] },
   { href: '/admin/configuracion', label: 'Configuración', icon: Settings, roles: ['ADMIN'] },
   // Operativas
-  { href: '/mesero', label: 'Mesero', icon: Utensils, roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
+  { href: '/mesero/salon', label: 'Salón', icon: Utensils, roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
   { href: '/cocina', label: 'Cocina', icon: ChefHat, roles: ['ADMIN', 'COCINA'] },
   { href: '/pizzeria', label: 'Pizzería', icon: Pizza, roles: ['ADMIN', 'PIZZERIA', 'COCINA'] },
   // Sistema
