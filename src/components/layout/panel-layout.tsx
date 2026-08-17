@@ -291,19 +291,21 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
   // para que el título de la página se actualice tras navegación client-side.
   const panelPath = usePathname()
 
-  // Si no hay usuario (cargando o no), no mostramos panel.
-  // v1.0.20-rc-final: antes solo se cubría el caso !loading && !user,
-  // pero si loading=true y user=null (refresh en /admin con cookie válida
-  // pero aún no cargada), se llegaba a este return con user=null → crash.
-  if (!user) {
-    if (loading) {
-      return (
-        <div className="flex items-center justify-center min-h-screen">
-          <LoadingScreen />
-        </div>
-      )
+  // v1.1.0-rc1 (POS_RECONSTRUCTION): cuando !user && !loading, redirigir
+  // a /login en vez de devolver null (pantalla en blanco).
+  useEffect(() => {
+    if (!loading && !user) {
+      const currentPath = window.location.pathname + window.location.search
+      window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`
     }
-    return null
+  }, [loading, user])
+
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <LoadingScreen />
+      </div>
+    )
   }
 
   // user es non-null aquí gracias al guard anterior
