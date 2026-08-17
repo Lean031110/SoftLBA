@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, Check, X, BellOff, Loader2 } from 'lucide-react'
+import { Bell, Check, X, BellOff, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -143,30 +143,37 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
   // FE-039: estado de conexión con 5 valores para indicador visual.
   const connectionState = realtimeCtx?.connectionState ?? 'connecting'
 
-  // Solicitar permiso de notificaciones al cargar si no está concedido
-  useEffect(() => {
-    if (userId && 'Notification' in window && Notification.permission === 'default') {
-      // Auto-solicitar después de 3 segundos
-      const timer = setTimeout(() => {
-        Notification.requestPermission().then((perm) => {
-          if (perm === 'granted') setPushEnabled(true)
-        })
-      }, 3000)
-      return () => clearTimeout(timer)
-    }
-  }, [userId])
+  // v1.1.0-rc1 (POS_RECONSTRUCTION): NO auto-solicitar permiso de notificaciones.
+  // Chrome ≥ 84 bloquea requestPermission() sin gesto del usuario.
+  // Si el permiso ya está 'denied', mostrar mensaje claro en vez de
+  // "Permiso denegado" sin explicación.
 
-  // Solicitar permiso de notificaciones
+  // Solicitar permiso de notificaciones (solo al hacer click del usuario)
   async function requestPushPermission() {
     if (!('Notification' in window)) {
-      toast.error('Tu navegador no soporta notificaciones')
+      toast.error('Tu navegador no soporta notificaciones push.')
+      return
+    }
+    // Si ya está denegado, el navegador NO muestra el diálogo de nuevo.
+    // Hay que guiar al usuario a cambiarlo manualmente.
+    if (Notification.permission === 'denied') {
+      toast.error(
+        'Notificaciones bloqueadas por el navegador',
+        {
+          description: 'Ve a la configuración del sitio (ícono de candado en la barra de direcciones) → Permisos → Notificaciones → Permitir.',
+          duration: 8000,
+          action: {
+            label: 'Entendido',
+            onClick: () => {},
+          },
+        },
+      )
       return
     }
     const permission = await Notification.requestPermission()
     if (permission === 'granted') {
       setPushEnabled(true)
-      toast.success('Notificaciones activadas. Te avisaremos aunque la web no esté abierta.')
-      // Enviar notificación de prueba
+      toast.success('Notificaciones activadas. Te avisaremos de pedidos nuevos.')
       try {
         new Notification('SoftLBA - Notificaciones activadas', {
           body: 'Recibirás alertas de pedidos y estados en tiempo real.',
@@ -175,8 +182,14 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
           tag: 'softlba-welcome',
         })
       } catch {}
-    } else {
-      toast.error('Permiso de notificaciones denegado')
+    } else if (permission === 'denied') {
+      toast.error(
+        'Permiso de notificaciones denegado',
+        {
+          description: 'Si quieres activarlas después, ve al ícono de candado en la barra de direcciones.',
+          duration: 6000,
+        },
+      )
     }
   }
 
@@ -204,6 +217,38 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
       await load()
     } catch (e) {
       console.error(e)
+    }
+  }
+
+  // v1.1.0-rc1: eliminar notificación del historial.
+  async function deleteOne(id: string) {
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'DELETE' })
+      await load()
+      toast.success('Notificación eliminada')
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al eliminar')
+    }
+  }
+
+  // v1.1.0-rc1: eliminar todas las notificaciones leídas.
+  async function deleteAllRead() {
+    setLoading(true)
+    try {
+      const readNotifs = notifications.filter((n) => n.isRead)
+      await Promise.all(
+        readNotifs.map((n) =>
+          fetch(`/api/notifications/${n.id}`, { method: 'DELETE' }),
+        ),
+      )
+      await load()
+      toast.success(`${readNotifs.length} notificación(es) eliminada(s)`)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al eliminar')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -268,6 +313,20 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
                 Leídas
               </Button>
             )}
+            {/* v1.1.0-rc1: botón eliminar todas las leídas */}
+            {notifications.some((n) => n.isRead) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-red-600 hover:text-red-700"
+                onClick={deleteAllRead}
+                disabled={loading}
+                aria-label="Eliminar notificaciones leídas"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Limpiar
+              </Button>
+            )}
           </div>
         </div>
         <ScrollArea className="max-h-80">
@@ -320,10 +379,24 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
                           e.stopPropagation()
                           markOne(n.id)
                         }}
+                        aria-label="Marcar como leída"
                       >
                         <Check className="h-3 w-3" />
                       </Button>
                     )}
+                    {/* v1.1.0-rc1: botón eliminar individual */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-red-500 hover:text-red-700"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteOne(n.id)
+                      }}
+                      aria-label="Eliminar notificación"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               ))}

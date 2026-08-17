@@ -52,12 +52,38 @@ else
 fi
 
 # Paso 3: Arrancar servicio realtime en background
+# v1.1.0-rc1: verificar que socket.io está instalado antes de arrancar.
 echo ""
 echo "[3/4] Arrancando servicio Realtime (Socket.IO) en puerto ${REALTIME_PORT:-3003}..."
 cd /app/mini-services/realtime-service
-bun run dist/index.js &
-REALTIME_PID=$!
-echo "  Realtime PID: $REALTIME_PID"
+
+# Verificar dependencias del realtime service
+if [ ! -d "node_modules/socket.io" ]; then
+  echo "  Instalando dependencias del realtime service..."
+  bun install --production 2>/dev/null || npm install --production 2>/dev/null || echo "  WARN: no se pudieron instalar deps del realtime"
+fi
+
+# Verificar que el build existe
+if [ ! -f "dist/index.js" ]; then
+  echo "  Compilando realtime service..."
+  bun build index.ts --outdir dist --target bun 2>/dev/null || npx tsc 2>/dev/null || echo "  WARN: no se pudo compilar realtime"
+fi
+
+# Arrancar realtime service
+if [ -f "dist/index.js" ]; then
+  bun run dist/index.js &
+  REALTIME_PID=$!
+  echo "  Realtime PID: $REALTIME_PID"
+elif [ -f "index.ts" ]; then
+  # Fallback: ejecutar TypeScript directamente con bun
+  bun run index.ts &
+  REALTIME_PID=$!
+  echo "  Realtime PID: $REALTIME_PID (modo TypeScript directo)"
+else
+  echo "  ERROR: No se encontró el código del realtime service."
+  echo "  El servidor web arrancará sin realtime (las notificaciones push no funcionarán)."
+  REALTIME_PID=""
+fi
 
 # Volver al directorio principal
 cd /app

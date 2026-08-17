@@ -426,3 +426,38 @@ El salón no espera que un directo pase por producción.
 **PRIMERO HACER ESTO PERFECTAMENTE.**
 
 Después: KDS, Android, notificaciones, CMS, analítica, funciones avanzadas.
+
+---
+
+## 22. FIXES ADICIONALES (v1.1.0-rc1)
+
+### 22.1 Notificaciones push
+- **Problema:** `Notification.requestPermission()` se auto-solicitaba 3s después del mount sin gesto del usuario → Chrome ≥ 84 bloquea el diálogo y devuelve "denied" inmediatamente.
+- **Fix:** Eliminado auto-request. Ahora solo se solicita al hacer click en "Activar". Si el permiso ya está "denied", se muestra un toast con instrucciones claras: "Ve a la configuración del sitio (ícono de candado) → Permisos → Notificaciones → Permitir."
+- **Implementado en:** `src/components/layout/notification-bell.tsx`
+
+### 22.2 Historial de notificaciones persistente + eliminación
+- **Problema:** Las notificaciones ya persisten en DB (model Notification), pero no había forma de eliminarlas del historial.
+- **Fix:**
+  - Nuevo endpoint `DELETE /api/notifications/[id]` — elimina una notificación individual.
+  - Función `deleteOne(id)` en NotificationBell — botón trash icon en cada notificación.
+  - Función `deleteAllRead()` — botón "Limpiar" en el header del popover para eliminar todas las leídas.
+  - Verificación de ownership: solo el dueño o ADMIN pueden eliminar.
+- **Implementado en:** `src/app/api/notifications/[id]/route.ts` + `src/components/layout/notification-bell.tsx`
+
+### 22.3 Docker: arranque de mini-servicios + socket.io
+- **Problema:** El `docker-entrypoint.sh` asumía que el realtime service ya estaba compilado y con dependencias instaladas. Si faltaba `socket.io`, el servicio crasheaba silenciosamente.
+- **Fix:**
+  - El entrypoint ahora verifica si `node_modules/socket.io` existe. Si no, instala deps con `bun install --production`.
+  - Verifica si `dist/index.js` existe. Si no, compila con `bun build`.
+  - Fallback: si no hay build, ejecuta `index.ts` directamente con bun.
+  - Si todo falla, arranca el servidor web sin realtime (con warning claro).
+- **Implementado en:** `docker-entrypoint.sh`
+
+### 22.4 Memoria para build
+- **Problema:** El build de Next.js requiere ~1.5GB RAM. En el sandbox con 3.9GB total, si next-server está corriendo, el build falla con OOM (exit code 137).
+- **Fix:**
+  - Limpiar `download/`, `.next/`, `test-results/` antes del build.
+  - Matar procesos `next dev` y `next-server` antes del build.
+  - Con 3.4GB libres, el build compila correctamente.
+- **Recomendación para CI:** El GitHub Actions runner tiene 7GB RAM, suficiente.
