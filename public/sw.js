@@ -15,7 +15,7 @@
 // FE-001 (FRONTEND-01): Versión sincronizada con package.json.
 // El SW no puede importar módulos TS, así que esta constante debe bump-earse
 // manualmente con cada release. Compara con `src/lib/app-version.ts`.
-const SW_VERSION = 'softlba-v1.0.20-rc14'
+const SW_VERSION = "softlba-v1.1.0-rc1"
 const OFFLINE_URL = '/offline'
 
 // FE-001 (FRONTEND-01): Operaciones permitidas para Background Sync.

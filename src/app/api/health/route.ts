@@ -1,8 +1,9 @@
 // GET /api/health - Health check del sistema
-// v1.0.20-rc9: NO fallar si realtime no está disponible en CI/tests.
+// v1.1.0-rc1: incluye versión de la app en la respuesta.
 // El health check debe ser simple: DB responde = OK.
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { APP_VERSION } from '@/lib/app-version'
 
 export async function GET() {
   const checks: Record<string, { status: string; error?: string }> = {}
@@ -19,7 +20,12 @@ export async function GET() {
   const dbOk = checks.database.status === 'ok'
 
   return NextResponse.json(
-    { ok: dbOk, status: dbOk ? 'healthy' : 'unhealthy', checks },
+    {
+      ok: dbOk,
+      status: dbOk ? 'healthy' : 'unhealthy',
+      version: APP_VERSION,
+      checks,
+    },
     { status: dbOk ? 200 : 503 },
   )
 }

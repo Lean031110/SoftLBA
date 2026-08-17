@@ -4,7 +4,7 @@
 
 ### Sistema POS/ERP para Restaurantes — Hecho en Cuba 🇨🇺
 
-[![Version](https://img.shields.io/badge/versión-1.0.20--rc1-blue.svg)](https://github.com/Lean031110/SoftLBA/releases)
+[![Version](https://img.shields.io/badge/versión-1.1.0--rc1-blue.svg)](https://github.com/Lean031110/SoftLBA/releases)
 [![License: MIT](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-0%20errores-blue.svg)](https://www.typescriptlang.org/)
 [![Tests](https://img.shields.io/badge/tests-375%20pasando-brightgreen.svg)](https://github.com/Lean031110/SoftLBA/actions)
@@ -325,7 +325,7 @@ Este proyecto está bajo la [Licencia MIT](LICENSE).
 
 | Métrica | Valor |
 |---------|-------|
-| Versión | 1.0.20-rc1 |
+| Versión | 1.1.0-rc1 |
 | Tests | 375 pasando |
 | Errores TS | 0 |
 | Última actualización | Agosto 2026 |

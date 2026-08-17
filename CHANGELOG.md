@@ -7,6 +7,43 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.0-rc1] — 2026-08-16
+
+### Inicio de reconstrucción del POS de Salón
+
+Cambio de estrategia: el POS de Salón se reconstruye desde cero.
+El backend y los servicios de dominio se conservan intactos.
+
+#### Unificación de versión (APP_VERSION)
+- **Problema**: package.json estaba estancado en `rc14` durante 19 versiones (rc15-rc33). README decía `rc1`. SW decía `rc14`. Health no devolvía versión.
+- **Fix**: unificado a `1.1.0-rc1` en package.json, README badge, SW_VERSION, y health endpoint.
+- El health endpoint ahora incluye `version: APP_VERSION` en la respuesta JSON.
+- `docs/POS_RECONSTRUCTION_PLAN.md` creado como documento contractual de la reconstrucción.
+
+#### Resumen rc15-rc33 (19 versiones no reflejadas en CHANGELOG)
+Las versiones rc15 a rc33 se publicaron en GitHub pero el CHANGELOG y package.json no se actualizaron. Resumen:
+
+- **rc15-rc17 (FRONTEND-02)**: 11 bugs P1/P2 cerrados (apiFetch wiring, connectivity banner, AudioContext cleanup, kitchen race condition, sticky tabs, touch targets, sticky pay, FAB padding, tablas→cards, Toaster dead code, prefers-reduced-motion).
+- **rc18 (FRONTEND-03)**: Design System base (StatusBadge, EmptyState, ErrorState, status-config con 6 tipos de estado).
+- **rc19 (FRONTEND-04)**: Mobile shell (sidebar agrupado en 3 secciones, touch targets 40px).
+- **rc20 (FRONTEND-05)**: POS Mesero (filtros sticky, touch targets filtros, CartContent tipado, botón volver aria-label).
+- **rc21 (FRONTEND-06)**: Pedidos lista+detalle (touch targets, StatusBadge, elapsedMinutes, botón volver).
+- **rc22 (FRONTEND-07)**: KDS Cocina (sound button aria-label, StatusBadge, CollapsibleTrigger→button, elapsedMin→helper).
+- **rc23 (FRONTEND-08)**: KDS Pizzería + bug P0 crítico (setLoading(false) faltante → skeletons eternos).
+- **rc24 (FRONTEND-09)**: Área Directo (badge Directo/Preparación, stock negativo→"Sin stock", aria-label).
+- **rc25 (FRONTEND-10)**: Administración (STATUS_COLORS→StatusBadge en admin + cierre-diario).
+- **rc26 (FRONTEND-11)**: Ayuda por área (filtrado por rol: COCINA no ve pedidos/cierre).
+- **rc27 (Docker)**: Dockerfile multi-stage, docker-compose, entrypoint, .dockerignore.
+- **rc28 (FRONTEND-12)**: Realtime UX (5 estados de conexión, auth:fail recovery, reconexión infinita).
+- **rc29 (FRONTEND-13)**: +22 E2E tests (kitchen-flow, auth-roles).
+- **rc30 (FRONTEND-14)**: +30 visual regression tests.
+- **rc31 (FRONTEND-15)**: Performance (4 deps eliminadas, compress, images AVIF/WebP).
+- **rc32-rc33 (FRONTEND-16)**: Windows/Linux (post-build.mjs, deploy/linux/ + deploy/windows/).
+
+Total: 46 bugs cerrados (FE-001 a FE-046), 469 unit tests, 27 integration tests, 59 E2E tests.
+
+---
+
 ## [1.0.20-rc14] — 2026-08-14
 
 ### FRONTEND-01 — Estabilidad crítica (P0)
