@@ -83,6 +83,17 @@ export default function SalonPOSPage() {
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
+  // v1.1.0-rc2: último pedido creado (para ofrecer cobro inmediato).
+  const [lastOrderId, setLastOrderId] = useState<string | null>(null)
+  const [lastOrderNumber, setLastOrderNumber] = useState<number | null>(null)
+  // v1.1.0-rc2: si todos los items del carrito son DIRECTO, el pedido
+  // será inmediatamente cobrable (nacen como SERVIDO).
+  const allDirecto = useMemo(
+    () => cart.length > 0 && cart.every((i) => i.product.type === 'DIRECTO'),
+    [cart],
+  )
+  // Cobro
+  const [paying, setPaying] = useState(false)
 
   // Mobile cart sheet
   const [cartOpen, setCartOpen] = useState(false)
@@ -242,11 +253,26 @@ export default function SalonPOSPage() {
       const data = await res.json()
 
       if (data.ok) {
-        toast.success(`Pedido #${data.item.number} creado`, {
+        const orderNumber = data.item.number
+        const orderId = data.item.id
+        toast.success(`Pedido #${orderNumber} creado`, {
           description: sendToKitchen ? 'Enviado a cocina' : 'Guardado',
         })
         clearCart()
         setSelectedTable(null)
+        // v1.1.0-rc2: si todos eran DIRECTO, el pedido es cobrable ya.
+        if (allDirecto) {
+          setLastOrderId(orderId)
+          setLastOrderNumber(orderNumber)
+          toast.info(`Pedido #${orderNumber} listo para cobrar`, {
+            description: 'Todos los productos son directo (servidos).',
+            duration: 6000,
+            action: {
+              label: 'Cobrar',
+              onClick: () => handlePay(orderId, orderNumber),
+            },
+          })
+        }
         await loadData()
       } else {
         toast.error(data.error || 'Error al crear pedido')
@@ -255,6 +281,58 @@ export default function SalonPOSPage() {
       toast.error('Error de conexión')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // === COBRAR ===
+  // v1.1.0-rc2: cobro integrado en el POS.
+  // Usa IdempotencyManager para prevenir doble pago.
+  const handlePay = async (orderId: string, orderNumber: number) => {
+    setPaying(true)
+    try {
+      // Obtener el total del pedido
+      const orderRes = await fetch(`/api/mesero/orders/${orderId}`)
+      const orderData = await orderRes.json()
+      if (!orderData.ok) {
+        toast.error('No se pudo cargar el pedido para cobrar')
+        return
+      }
+      const total = orderData.item.total
+
+      // Generar idempotencyKey
+      const manager = getIdempotencyManager()
+      const fp = paymentsFingerprint([{ method: 'EFECTIVO_CUP', amount: total }])
+      const idempotencyKey = manager.getOrCreate(orderId, fp)
+
+      const payRes = await fetch(`/api/mesero/orders/${orderId}/pay`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payments: [{ method: 'EFECTIVO_CUP', amount: total }],
+          idempotencyKey,
+        }),
+      })
+      const payData = await payRes.json()
+
+      if (payData.ok) {
+        manager.clear(orderId)
+        if (payData.idempotent) {
+          toast.info('Pago ya estaba registrado')
+        } else {
+          toast.success(`Pedido #${orderNumber} cobrado`, {
+            description: payData.fullyPaid ? 'Pagado completamente' : 'Pago parcial',
+          })
+        }
+        setLastOrderId(null)
+        setLastOrderNumber(null)
+        await loadData()
+      } else {
+        toast.error(payData.error || 'Error al cobrar')
+      }
+    } catch {
+      toast.error('Error de conexión al cobrar')
+    } finally {
+      setPaying(false)
     }
   }
 
@@ -302,6 +380,23 @@ export default function SalonPOSPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* v1.1.0-rc2: botón COBRAR cuando hay un pedido cobrable */}
+          {lastOrderId && lastOrderNumber && (
+            <Button
+              className="h-10 px-4 bg-emerald-600 hover:bg-emerald-700"
+              onClick={() => handlePay(lastOrderId, lastOrderNumber)}
+              disabled={paying}
+            >
+              {paying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Wallet className="h-4 w-4 mr-1" />
+                  Cobrar #{lastOrderNumber}
+                </>
+              )}
+            </Button>
+          )}
           {/* Carrito móvil */}
           {cart.length > 0 && (
             <Sheet open={cartOpen} onOpenChange={setCartOpen}>
