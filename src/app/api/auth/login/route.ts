@@ -1,5 +1,6 @@
 // POST /api/auth/login
 // v1.0.17: rate limiting por IP + dispositivo integrado.
+// FASE 3: logger estructurado con redacción de secretos.
 import { NextRequest, NextResponse } from 'next/server'
 import { login } from '@/lib/auth'
 import {
@@ -7,6 +8,7 @@ import {
   recordFailedAttempt,
   recordSuccessfulAttempt,
 } from '@/lib/security/login-rate-limiter'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 const BodySchema = z.object({
@@ -85,7 +87,7 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (e: any) {
-    console.error('login error', e)
+    logger.error('Login error', { err: e?.message, stack: e?.stack }, 'auth')
     return NextResponse.json({ ok: false, error: 'Error interno del servidor' }, { status: 500 })
   }
 }

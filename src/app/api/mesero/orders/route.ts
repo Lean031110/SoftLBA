@@ -1,5 +1,6 @@
 // GET /api/mesero/orders - Lista pedidos del mesero actual (o todos si ADMIN)
 // POST /api/mesero/orders - Crear nuevo pedido
+// FASE 3: logger estructurado con redacción.
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
@@ -9,6 +10,7 @@ import { recalculateOrderStatus } from '@/lib/order-state-machine'
 import { sumConvertedToCup } from '@/lib/currency'
 import { emitOrderNew } from '@/lib/realtime-emitter'
 import { createPrintJobsForOrder } from '@/lib/print/print-service'
+import { logger } from '@/lib/logger'
 import { z } from 'zod'
 
 // Estados considerados "activos" en el dashboard del mesero
@@ -86,7 +88,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, items })
   } catch (e: any) {
-    console.error('GET /api/mesero/orders', e)
+    logger.error('GET /api/mesero/orders', { err: (e as Error)?.message }, 'api')
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }
 }
@@ -408,10 +410,10 @@ export async function POST(req: NextRequest) {
       // DESPUÉS del DB COMMIT, no bloquea la creación del pedido.
       try {
         const printResult = await createPrintJobsForOrder(order.id)
-        console.log(`[orders] PrintJobs creados: ${printResult.created}, skipped: ${printResult.skipped}`)
+        logger.info(`PrintJobs creados`, { created: printResult.created, skipped: printResult.skipped, orderId: order.id }, 'orders')
       } catch (printErr) {
         // La impresión NO debe bloquear el pedido. Si falla, log y continuar.
-        console.error('[orders] Error creando PrintJobs:', printErr)
+        logger.error('Error creando PrintJobs', { err: (printErr as Error)?.message, orderId: order.id }, 'orders')
       }
     }
 
@@ -429,7 +431,7 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (e: any) {
-    console.error('POST /api/mesero/orders', e)
+    logger.error('POST /api/mesero/orders', { err: (e as Error)?.message, stack: (e as Error)?.stack }, 'api')
     // Errores lanzados desde dentro de la transacción: mensaje útil al cliente.
     if (e?.message?.startsWith('Stock insuficiente')) {
       return NextResponse.json({ ok: false, error: e.message }, { status: 400 })

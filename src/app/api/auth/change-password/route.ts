@@ -1,11 +1,13 @@
 // POST /api/auth/change-password
 // Permite cambiar la contraseña (requiere sesión activa)
 // Si mustChangePass=true, debe usarse para completar el primer acceso
+// FASE 3: logger estructurado con redacción de secretos.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { getCurrentUser, hashPassword, verifyPassword } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { logger } from '@/lib/logger'
 
 const BodySchema = z.object({
   currentPassword: z.string().min(1).max(100),
@@ -80,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (e: any) {
-    console.error('change-password error', e)
+    logger.error('Change password error', { err: e?.message, stack: e?.stack }, 'auth')
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }
 }

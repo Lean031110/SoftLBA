@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { logger } from '@/lib/logger'
 import {
   computeConvertedAmount,
   sumConvertedToCup,
@@ -46,6 +47,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Await fuera del try para que el id esté disponible en el catch si falla más adelante.
+  const { id: orderId } = await params
   try {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ ok: false, error: 'NO_AUTENTICADO' }, { status: 401 })
@@ -53,7 +56,7 @@ export async function POST(
     if (!['ADMIN', 'CAJERO', 'MESERO'].includes(user.role)) {
       return NextResponse.json({ ok: false, error: 'SIN_PERMISO' }, { status: 403 })
     }
-    const { id } = await params
+    const id = orderId
 
     const order = await db.order.findUnique({
       where: { id },
@@ -290,7 +293,7 @@ export async function POST(
           },
         })
       } catch (e) {
-        console.error('Error creando comprobante automático:', e)
+        logger.error('Error creando comprobante automático', { err: (e as Error)?.message, orderId: order.id }, 'pay')
       }
     }
 
@@ -320,7 +323,7 @@ export async function POST(
       },
     })
   } catch (e: any) {
-    console.error('POST /api/mesero/orders/[id]/pay', e)
+    logger.error('POST /api/mesero/orders/[id]/pay', { err: (e as Error)?.message, stack: (e as Error)?.stack, orderId }, 'pay')
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }
 }

@@ -1,10 +1,12 @@
 // GET /api/auth/profile - Devuelve perfil completo del usuario actual
 // PATCH /api/auth/profile - Actualiza perfil del usuario actual
+// FASE 3: logger estructurado.
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
 import { audit } from '@/lib/audit'
+import { logger } from '@/lib/logger'
 
 export async function GET() {
   try {
@@ -41,7 +43,7 @@ export async function GET() {
 
     return NextResponse.json({ ok: true, user: fullUser })
   } catch (e: any) {
-    console.error('profile GET error', e)
+    logger.error('profile GET error', { err: (e as Error)?.message }, 'auth')
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }
 }
@@ -139,7 +141,7 @@ export async function PATCH(req: NextRequest) {
 
     return NextResponse.json({ ok: true, user: updated })
   } catch (e: any) {
-    console.error('profile PATCH error', e)
+    logger.error('profile PATCH error', { err: (e as Error)?.message }, 'auth')
     return NextResponse.json({ ok: false, error: 'Error interno' }, { status: 500 })
   }
 }

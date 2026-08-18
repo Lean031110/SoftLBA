@@ -3,6 +3,7 @@
 // PrintService — Servicio de impresión profesional
 // ============================================================
 // v1.1.0-rc6: Implementación real del PrintService.
+// FASE 3: logger estructurado.
 //
 // Responsabilidades:
 //   1. Generar PrintJobs cuando se crea/envía un pedido (por área).
@@ -22,6 +23,7 @@
 // ============================================================
 
 import { db } from '@/lib/db'
+import { logger } from '@/lib/logger'
 import * as net from 'net'
 
 // === TIPOS ===

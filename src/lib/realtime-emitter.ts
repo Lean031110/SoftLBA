@@ -7,12 +7,15 @@
 //   - Helpers de alto nivel: emitOrderNew, emitOrderStatus, emitPaymentDone.
 //   - Fire-and-forget: si el servicio realtime no está disponible, la
 //     operación de negocio NO falla (solo se loggea un warning).
+// FASE 3: logger estructurado.
 //
 // ARQUITECTURA:
 //   API → DB COMMIT → RealtimeEmitter → /api/internal/emit → Socket.IO → clientes
 //
 //   El frontend SOLO RECIBE eventos. El servidor DECIDE y EMITE.
 // ============================================================
+
+import { logger } from '@/lib/logger'
 
 const INTERNAL_EMIT_URL =
   process.env.REALTIME_INTERNAL_URL ||
@@ -38,7 +41,7 @@ async function postEmit(room: string, event: string, data: any): Promise<void> {
     clearTimeout(timeout)
   } catch (e) {
     // Fire-and-forget: no propagamos el error al caller.
-    console.error('[realtime-emitter] Error:', e)
+    logger.warn('Realtime emit falló (fire-and-forget)', { err: (e as Error)?.message, room, event }, 'realtime')
   }
 }
 
