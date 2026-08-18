@@ -18,7 +18,7 @@ jobs:
     env:
       DATABASE_URL: file:./db/test.db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -33,7 +33,7 @@ jobs:
     env:
       DATABASE_URL: file:./db/test.db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -46,7 +46,7 @@ jobs:
   realtime-service:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -59,7 +59,7 @@ jobs:
       DATABASE_URL: file:./db/test-integration.db
       INTEGRATION_BASE_URL: http://127.0.0.1:3099
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -112,7 +112,7 @@ jobs:
     env:
       DATABASE_URL: file:./db/build.db
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
