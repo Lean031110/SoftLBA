@@ -19,7 +19,6 @@ beforeEach(() => {
   process.env.DATABASE_URL = `file:${join(tmpDir, 'test.db')}`
   process.env.NEXTAUTH_SECRET = 'test-secret-at-least-16-chars-long'
   process.env.REALTIME_SECRET = 'test-realtime-secret-16chars'
-  process.env.NODE_ENV = 'test'
 })
 
 afterEach(() => {
