@@ -47,6 +47,7 @@ import {
   UserCircle,
   BarChart3,
   History,
+  Activity,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import Image from 'next/image'
@@ -93,6 +94,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/estadisticas', label: 'Estadísticas', icon: BarChart3, roles: ['ADMIN'] },
   { href: '/admin/respaldos', label: 'Respaldos', icon: Database, roles: ['ADMIN'] },
   { href: '/admin/configuracion', label: 'Configuración', icon: Settings, roles: ['ADMIN'] },
+  { href: '/admin/diagnostics', label: 'Diagnóstico', icon: Activity, roles: ['ADMIN'] },
   // Operativas
   { href: '/mesero/salon', label: 'Salón', icon: Utensils, roles: ['ADMIN', 'MESERO', 'MESERO_PRO'] },
   { href: '/cocina', label: 'Cocina', icon: ChefHat, roles: ['ADMIN', 'COCINA'] },
