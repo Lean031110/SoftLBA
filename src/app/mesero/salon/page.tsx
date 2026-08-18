@@ -272,6 +272,14 @@ export default function SalonPOSPage() {
               onClick: () => handlePay(orderId, orderNumber),
             },
           })
+        } else {
+          // v1.1.0-rc3: pedido mixto — algunos items van a cocina/pizzería.
+          const finalCount = cart.filter((i) => i.product.type === 'FINAL').length
+          const directoCount = cart.filter((i) => i.product.type === 'DIRECTO').length
+          toast.info(`Pedido #${orderNumber} enviado`, {
+            description: `${finalCount} producto(s) en preparación, ${directoCount} directo(s) servido(s). Cobrar cuando estén listos.`,
+            duration: 8000,
+          })
         }
         await loadData()
       } else {
