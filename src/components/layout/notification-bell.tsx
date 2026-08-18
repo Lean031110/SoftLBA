@@ -83,10 +83,51 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
   }, [userId, load])
 
   // Solicitar permiso de notificaciones nativas del navegador
+  // FASE 22: diagnóstico completo de contexto seguro + PushManager.
+  const [notifDiag, setNotifDiag] = useState<{
+    isSecureContext: boolean
+    notificationSupported: boolean
+    permission: string
+    serviceWorkerReady: boolean
+    pushSupported: boolean
+    origin: string
+    protocol: string
+  } | null>(null)
+
   useEffect(() => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      setPushEnabled(true)
+    if (typeof window === 'undefined') return
+
+    const run = async () => {
+      const isSecureContext = window.isSecureContext === true
+      const notificationSupported = 'Notification' in window
+      const permission = notificationSupported ? Notification.permission : 'unsupported'
+      let swReady = false
+      let pushSupported = false
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration()
+          swReady = !!reg
+        }
+        if ('PushManager' in window) {
+          pushSupported = true
+        }
+      } catch {
+        /* ignore */
+      }
+      setNotifDiag({
+        isSecureContext,
+        notificationSupported,
+        permission,
+        serviceWorkerReady: swReady,
+        pushSupported,
+        origin: window.location.origin,
+        protocol: window.location.protocol,
+      })
+      if (notificationSupported && Notification.permission === 'granted') {
+        setPushEnabled(true)
+      }
     }
+    run()
   }, [])
 
   // Función para mostrar notificación nativa (funciona aunque la web no esté en primer plano)
@@ -328,6 +369,55 @@ export function NotificationBell({ userId, role }: { userId?: string; role?: str
               </Button>
             )}
           </div>
+
+          {/* FASE 22: diagnóstico de Web Notifications (visible siempre) */}
+          {notifDiag && (
+            <div className="border-t pt-2 px-1 text-[10px] text-muted-foreground space-y-0.5 font-mono">
+              <div className="flex justify-between">
+                <span>Secure Context:</span>
+                <span className={notifDiag.isSecureContext ? 'text-emerald-600' : 'text-red-600'}>
+                  {notifDiag.isSecureContext ? '✓ sí' : '✗ NO'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Notification API:</span>
+                <span className={notifDiag.notificationSupported ? 'text-emerald-600' : 'text-red-600'}>
+                  {notifDiag.notificationSupported ? '✓ soportada' : '✗ no'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Permission:</span>
+                <span className={
+                  notifDiag.permission === 'granted' ? 'text-emerald-600' :
+                  notifDiag.permission === 'denied' ? 'text-red-600' : 'text-amber-600'
+                }>
+                  {notifDiag.permission}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Service Worker:</span>
+                <span className={notifDiag.serviceWorkerReady ? 'text-emerald-600' : 'text-amber-600'}>
+                  {notifDiag.serviceWorkerReady ? '✓ activo' : '✗ no registrado'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>PushManager:</span>
+                <span className={notifDiag.pushSupported ? 'text-emerald-600' : 'text-red-600'}>
+                  {notifDiag.pushSupported ? '✓ soportado' : '✗ no'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Origin:</span>
+                <span className="truncate ml-2">{notifDiag.origin}</span>
+              </div>
+              {!notifDiag.isSecureContext && (
+                <div className="mt-1 p-1 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded text-[10px]">
+                  ⚠️ Las notificaciones del navegador requieren HTTPS.
+                  Para LAN: configura Caddy local con certificado confiable.
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <ScrollArea className="max-h-80">
           {notifications.length === 0 ? (
