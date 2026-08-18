@@ -374,6 +374,10 @@ model Order {
   total         Float      @default(0)
   notes         String?
   paymentStatus PaymentStatus @default(PENDIENTE)
+  // FASE 17-18: idempotencyKey para prevenir duplicados por doble click o
+  // reintento de red. Si se envía la misma key en un POST /orders, el backend
+  // devuelve el Order ya creado en vez de crear uno nuevo.
+  idempotencyKey String?   @unique
   // FIX 18 — División de cuenta:
   //   Si este pedido fue dividido desde otro, parentOrderId apunta al
   //   pedido original. El original tiene childOrders = [this].

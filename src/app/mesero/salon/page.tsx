@@ -17,7 +17,7 @@
 //   - TableService, InventoryService, ProductAreaResolver
 // ============================================================
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -213,6 +213,13 @@ export default function SalonPOSPage() {
   }
 
   // === SUBMIT ORDER ===
+  // FASE 17-18: idempotencyKey persistida por intento de envío.
+  // Se reutiliza en reintentos para que el backend devuelva el mismo Order
+  // en vez de crear uno nuevo (defensa contra doble click / red lenta).
+  const pendingIdempotencyKeyRef = useRef<string | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const [sendTimedOut, setSendTimedOut] = useState(false)
+
   const handleSubmit = async (sendToKitchen: boolean) => {
     if (cart.length === 0) {
       toast.error('Agrega al menos un producto')
@@ -223,12 +230,23 @@ export default function SalonPOSPage() {
       return
     }
     setSubmitting(true)
+    setSendTimedOut(false)
     try {
       const salonArea = areas.find((a) => a.code === 'SALON') || areas[0]
       if (!salonArea) {
         toast.error('No hay área de SALON configurada')
         return
       }
+
+      // FASE 17-18: idempotencyKey — reutilizar si hay un intento pendiente
+      // (mismo carrito + mesa), generar nuevo si es un envío fresh.
+      if (!pendingIdempotencyKeyRef.current) {
+        pendingIdempotencyKeyRef.current =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `key-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      }
+      const idempotencyKey = pendingIdempotencyKeyRef.current
 
       const body: any = {
         areaId: salonArea.id,
@@ -238,24 +256,62 @@ export default function SalonPOSPage() {
           notes: i.notes || undefined,
         })),
         sendToKitchen,
+        idempotencyKey,
       }
-      if (selectedTable.currentOrderId) {
-        body.tableId = selectedTable.id
-      } else {
-        body.tableId = selectedTable.id
-      }
+      // FASE 17-18: fix branch duplicada — si la mesa ya tiene currentOrderId,
+      // se usará el endpoint /items para añadir (futuro). Por ahora asignar la mesa.
+      body.tableId = selectedTable.id
 
-      const res = await fetch('/api/mesero/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
+      // FASE 17-18: AbortController con timeout 30s para que el botón nunca
+      // quede girando indefinidamente.
+      if (abortControllerRef.current) abortControllerRef.current.abort()
+      const controller = new AbortController()
+      abortControllerRef.current = controller
+      const timeoutId = setTimeout(() => controller.abort(), 30_000)
+
+      let res: Response
+      try {
+        res = await fetch('/api/mesero/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        })
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId)
+        if (fetchErr?.name === 'AbortError') {
+          setSendTimedOut(true)
+          toast.error('El servidor no respondió en 30s', {
+            description: 'Puedes reintentar (no se duplicará el pedido) o cancelar.',
+            duration: 12000,
+            action: {
+              label: 'Reintentar',
+              onClick: () => handleSubmit(sendToKitchen),
+            },
+          })
+        } else {
+          toast.error('Error de conexión', {
+            description: 'Puedes reintentar. No se duplicará el pedido.',
+            action: {
+              label: 'Reintentar',
+              onClick: () => handleSubmit(sendToKitchen),
+            },
+          })
+        }
+        return
+      }
+      clearTimeout(timeoutId)
+
       const data = await res.json()
 
       if (data.ok) {
+        // Limpiar idempotencyKey solo tras éxito.
+        pendingIdempotencyKeyRef.current = null
+
         const orderNumber = data.item.number
         const orderId = data.item.id
-        toast.success(`Pedido #${orderNumber} creado`, {
+        const idempotent = data.idempotent === true
+        toast.success(`Pedido #${orderNumber} creado${idempotent ? ' (recuperado)' : ''}`, {
           description: sendToKitchen ? 'Enviado a cocina' : 'Guardado',
         })
         clearCart()
@@ -290,6 +346,18 @@ export default function SalonPOSPage() {
     } finally {
       setSubmitting(false)
     }
+  }
+
+  // FASE 17-18: cancelar envío pendiente — aborta el fetch y limpia la key.
+  const handleCancelSend = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+    }
+    pendingIdempotencyKeyRef.current = null
+    setSubmitting(false)
+    setSendTimedOut(false)
+    toast.info('Envío cancelado. El carrito se mantuvo.')
   }
 
   // === COBRAR ===
@@ -426,7 +494,9 @@ export default function SalonPOSPage() {
                   onRemove={removeItem}
                   onClear={clearCart}
                   onSubmit={handleSubmit}
+                  onCancel={handleCancelSend}
                   selectedTable={selectedTable?.name || null}
+                  sendTimedOut={sendTimedOut}
                 />
               </SheetContent>
             </Sheet>
@@ -602,7 +672,9 @@ export default function SalonPOSPage() {
             onRemove={removeItem}
             onClear={clearCart}
             onSubmit={handleSubmit}
+            onCancel={handleCancelSend}
             selectedTable={selectedTable?.name || null}
+            sendTimedOut={sendTimedOut}
           />
         </div>
       </div>
@@ -628,7 +700,7 @@ export default function SalonPOSPage() {
 // CartPanel — Panel del carrito (reutilizable desktop + mobile)
 // ============================================================
 function CartPanel({
-  cart, subtotal, submitting, onQty, onNotes, onRemove, onClear, onSubmit, selectedTable,
+  cart, subtotal, submitting, onQty, onNotes, onRemove, onClear, onSubmit, onCancel, selectedTable, sendTimedOut,
 }: {
   cart: CartItem[]
   subtotal: number
@@ -639,7 +711,9 @@ function CartPanel({
   onRemove: (index: number) => void
   onClear: () => void
   onSubmit: (sendToKitchen: boolean) => void
+  onCancel: () => void
   selectedTable: string | null
+  sendTimedOut?: boolean
 }) {
   return (
     <>
@@ -775,7 +849,26 @@ function CartPanel({
                 </>
               )}
             </Button>
+            {/* FASE 17-18: botón Cancelar visible cuando hay timeout o envío en curso */}
+            {submitting && (
+              <Button
+                variant="destructive"
+                className="h-11 px-3"
+                onClick={onCancel}
+                title="Cancelar envío (no se duplicará el pedido)"
+                aria-label="Cancelar envío"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
+          {/* FASE 17-18: aviso visible cuando hay timeout */}
+          {sendTimedOut && (
+            <div role="alert" className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1 px-1">
+              <AlertTriangle className="h-3 w-3" />
+              El servidor tardó demasiado. Reintenta o cancela.
+            </div>
+          )}
         </div>
       )}
     </>

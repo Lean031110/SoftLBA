@@ -108,6 +108,11 @@ const CreateOrderSchema = z.object({
   discountPct: z.coerce.number().min(0).max(100).default(0),
   items: z.array(ItemSchema).min(1, 'Debes agregar al menos un producto'),
   sendToKitchen: z.boolean().default(true),
+  // FASE 17-18: idempotencyKey para prevenir duplicados por doble click
+  // o reintento de red. El frontend genera un UUID por intento y lo reenvía
+  // en reintentos. Si el backend ya recibió esa key, devuelve el Order
+  // existente sin crear uno nuevo.
+  idempotencyKey: z.string().min(8).max(120).optional(),
 })
 
 // Verificar permiso de descuento
@@ -136,6 +141,39 @@ export async function POST(req: NextRequest) {
       )
     }
     const d = parsed.data
+
+    // FASE 17-18: Idempotencia — si ya existe un Order con esta idempotencyKey,
+    // devolverlo sin crear uno nuevo. Esto protege contra doble click y reintentos.
+    if (d.idempotencyKey) {
+      const existing = await db.order.findUnique({
+        where: { idempotencyKey: d.idempotencyKey },
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          total: true,
+          areaId: true,
+          tableId: true,
+          userId: true,
+        },
+      })
+      if (existing) {
+        // Solo el mismo usuario puede reclamar su propio pedido idempotente.
+        if (existing.userId !== user.id) {
+          return NextResponse.json(
+            { ok: false, error: 'idempotencyKey en uso por otro usuario' },
+            { status: 409 },
+          )
+        }
+        logger.info('POST /api/mesero/orders — idempotency hit', { orderId: existing.id, idempotencyKey: d.idempotencyKey }, 'orders')
+        return NextResponse.json({
+          ok: true,
+          item: existing,
+          idempotent: true,
+          message: 'Pedido ya creado (idempotente)',
+        })
+      }
+    }
 
     // Verificar permiso de descuento (solo ADMIN puede aplicar descuentos > 0)
     if (!checkDiscountPermission(user.role, d.discountPct)) {
@@ -318,6 +356,8 @@ export async function POST(req: NextRequest) {
           notes: d.notes || null,
           paymentStatus: 'PENDIENTE',
           shiftId: openShift?.id || null,
+          // FASE 17-18: persistir idempotencyKey si llegó.
+          idempotencyKey: d.idempotencyKey || null,
           items: {
             create: itemLines.map((l) => ({
               productId: l.productId,
@@ -373,7 +413,11 @@ export async function POST(req: NextRequest) {
 
     // Recalcular estado del pedido (item 6): si todos los items son DIRECTO y están SERVIDO,
     // el pedido podría pasar a LISTO automáticamente.
-    const finalStatus = await recalculateOrderStatus(order.id).catch(() => order.status)
+    // FASE 17-18: silenciar el .catch() que ocultaba errores — solo loguear.
+    const finalStatus = await recalculateOrderStatus(order.id).catch((err) => {
+      logger.warn('recalculateOrderStatus falló tras crear pedido', { err: (err as Error)?.message, orderId: order.id }, 'orders')
+      return order.status
+    })
 
     await audit({
       userId: user.id,
@@ -391,30 +435,37 @@ export async function POST(req: NextRequest) {
         total,
         itemsCount: itemLines.length,
         shiftId: openShift?.id || null,
+        idempotencyKey: d.idempotencyKey || null,
       },
     })
 
     // v1.0.17: emitir order:new DESPUÉS del DB COMMIT, desde el servidor.
     // El frontend ya NO emite eventos de negocio.
     if (d.sendToKitchen) {
-      await emitOrderNew({
+      // FASE 17-18: emitir order:new fire-and-forget — no bloquea la respuesta.
+      emitOrderNew({
         orderId: order.id,
         orderNumber: order.number,
         areaId: order.areaId,
         userId: user.id,
         tableId: order.tableId || undefined,
         total,
+      }).catch((err) => {
+        logger.warn('emitOrderNew falló (fire-and-forget)', { err: (err as Error)?.message, orderId: order.id }, 'realtime')
       })
 
-      // v1.1.0-rc6: crear PrintJobs por área (impresión automática).
-      // DESPUÉS del DB COMMIT, no bloquea la creación del pedido.
-      try {
-        const printResult = await createPrintJobsForOrder(order.id)
-        logger.info(`PrintJobs creados`, { created: printResult.created, skipped: printResult.skipped, orderId: order.id }, 'orders')
-      } catch (printErr) {
-        // La impresión NO debe bloquear el pedido. Si falla, log y continuar.
-        logger.error('Error creando PrintJobs', { err: (printErr as Error)?.message, orderId: order.id }, 'orders')
-      }
+      // v1.1.0-rc6: crear PrintJobs por área.
+      // FASE 17-18: fire-and-forget — no bloquear la respuesta al cliente.
+      // El worker procesará la cola (FASE 14); si el worker no está activo,
+      // los PrintJobs quedan en PENDING hasta que se arranque el worker.
+      createPrintJobsForOrder(order.id)
+        .then((printResult) => {
+          logger.info('PrintJobs creados', { created: printResult.created, skipped: printResult.skipped, orderId: order.id }, 'orders')
+        })
+        .catch((printErr) => {
+          // La impresión NO debe bloquear el pedido. Si falla, log y continuar.
+          logger.error('Error creando PrintJobs', { err: (printErr as Error)?.message, orderId: order.id }, 'orders')
+        })
     }
 
     return NextResponse.json({
