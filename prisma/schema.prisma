@@ -170,6 +170,8 @@ model Area {
   productsForProduction Product[] @relation("ProductProductionArea")
   orderItems OrderItem[]
   workShifts  WorkShift[]
+  printers    Printer[]
+  printJobs   PrintJob[]
 }
 
 // ============================================================
@@ -387,6 +389,7 @@ model Order {
   shift         WorkShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   items         OrderItem[]
   payments      Payment[]
+  printJobs     PrintJob[]
 
   @@index([userId])
   @@index([areaId])
@@ -877,4 +880,55 @@ model WorkShift {
   @@index([userId])
   @@index([status])
   @@index([startTime])
+}
+
+// ============================================================
+// 10. IMPRESIÓN — Printers y PrintJobs (v1.1.0-rc1)
+// ============================================================
+// Cada área puede tener una impresora configurada.
+// Cuando se crea/envía un pedido, se generan PrintJobs por área.
+// La impresión es independiente de la transacción del pedido.
+
+model Printer {
+  id          String   @id @default(cuid())
+  name        String
+  areaId      String?
+  area        Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  ipAddress   String?
+  port        Int      @default(9100)
+  protocol    String   @default("ESCPOS") // ESCPOS, CUPS, RAW
+  paperWidth  Int      @default(80) // 58 o 80 mm
+  charsPerLine Int     @default(48) // 48 para 80mm, 32 para 58mm
+  header      String?
+  footer      String?
+  copies      Int      @default(1)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  printJobs   PrintJob[]
+
+  @@index([areaId])
+  @@index([isActive])
+}
+
+model PrintJob {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  areaId      String?
+  area        Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  printerId   String?
+  printer     Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
+  status      String   @default("PENDING") // PENDING, PRINTING, PRINTED, FAILED, CANCELLED
+  attempts    Int      @default(0)
+  content     String?  // JSON con el contenido del ticket
+  error       String?
+  createdAt   DateTime @default(now())
+  printedAt   DateTime?
+
+  @@index([orderId])
+  @@index([areaId])
+  @@index([status])
+  @@index([printerId])
 }

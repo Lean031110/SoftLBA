@@ -1,0 +1,67 @@
+name: 🐛 Bug Report
+description: Reportar un error o comportamiento inesperado
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐛 Reportar Bug
+        Gracias por tomarte el tiempo de reportar un problema.
+  - type: textarea
+    id: description
+    attributes:
+      label: Descripción del problema
+      description: Describe claramente qué pasó.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Pasos para reproducir
+      description: Pasos exactos para reproducir el problema.
+      placeholder: |
+        1. Ir a '...'
+        2. Hacer click en '...'
+        3. Ver error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamiento esperado
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área afectada
+      options:
+        - POS (Salón)
+        - Cocina / KDS
+        - Pizzería / KDS
+        - Administración
+        - Login / Auth
+        - Realtime / Notificaciones
+        - Impresión
+        - PWA / Offline
+        - Otro
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versión de SoftLBA
+      placeholder: "ej: 1.1.0-rc1"
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Dispositivo
+      options:
+        - Teléfono (Android)
+        - Tablet (Android)
+        - Desktop (Windows)
+        - Desktop (Linux)
+        - Desktop (Mac)
+        - Otro

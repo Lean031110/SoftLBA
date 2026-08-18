@@ -1,0 +1,40 @@
+# Dependabot Configuration
+version: 2
+updates:
+  # Dependencias de npm (package.json)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+    commit-message:
+      prefix: "deps"
+    reviewers:
+      - "Lean031110"
+
+  # Dependencias del realtime service
+  - package-ecosystem: "npm"
+    directory: "/mini-services/realtime-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+      - "realtime"
+    commit-message:
+      prefix: "deps(realtime)"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "github-actions"
+    commit-message:
+      prefix: "ci"

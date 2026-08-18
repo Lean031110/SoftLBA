@@ -327,13 +327,23 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
   // Health check
   if (req.url === '/health' && req.method === 'GET') {
+    // v1.1.0-rc2: health mejorado con memoria y estado de conexiones.
+    const memUsage = process.memoryUsage()
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({
       ok: true,
       service: 'realtime',
+      version: '1.1.0-rc1',
       port: PORT,
       clients: clients.size,
-      uptime: process.uptime(),
+      uptime: Math.floor(process.uptime()),
+      uptimeHuman: `${Math.floor(process.uptime() / 3600)}h ${Math.floor((process.uptime() % 3600) / 60)}m`,
+      memory: {
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+      },
+      origins: ALLOWED_ORIGINS.length,
     }))
     return
   }
@@ -357,8 +367,10 @@ const io = new SocketIOServer(httpServer, {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  // v1.1.0-rc2: ping timeout más largo para conexiones LAN inestables.
+  pingTimeout: 30000,
+  pingInterval: 10000,
+  connectTimeout: 45000,
 })
 
 // ============================================================
@@ -481,23 +493,41 @@ httpServer.listen(PORT, () => {
   console.log(`   Health check: GET http://localhost:${PORT}/health`)
 })
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('Cerrando servidor...')
+// v1.1.0-rc2: Graceful shutdown mejorado con timeout forzado.
+// Si el cierre graceful toma más de 10s, forzar exit.
+function gracefulShutdown(signal: string) {
+  console.log(`[${signal}] Cerrando servidor gracefully...`)
+  console.log(`   Clients conectados: ${clients.size}`)
+
+  // Notificar a todos los clients que el servidor se cierra
+  io.disconnectSockets(true)
+
+  const forceExit = setTimeout(() => {
+    console.error('[shutdown] Timeout — forzando exit')
+    process.exit(1)
+  }, 10000)
+
   io.close(() => {
     httpServer.close(() => {
+      clearTimeout(forceExit)
+      console.log('[shutdown] Servidor cerrado correctamente')
       process.exit(0)
     })
   })
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
+process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+
+// v1.1.0-rc2: capturar uncaught exceptions para no crashear silenciosamente
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err.message)
+  console.error(err.stack)
+  // No salir — intentar continuar. El supervisor (Docker/systemd) reiniciará si crashea.
 })
 
-process.on('SIGINT', () => {
-  console.log('Cerrando servidor...')
-  io.close(() => {
-    httpServer.close(() => {
-      process.exit(0)
-    })
-  })
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled rejection:', reason)
 })
 
 export { verifySessionToken, validateEventPayload, isValidRoom }

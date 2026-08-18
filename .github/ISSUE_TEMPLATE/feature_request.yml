@@ -1,0 +1,38 @@
+name: ✨ Feature Request
+description: Sugerir una nueva funcionalidad o mejora
+labels: ["enhancement", "triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: ¿Qué problema resuelve?
+      description: Explica el contexto o necesidad.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Solución propuesta
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Área
+      options:
+        - POS (Salón)
+        - Cocina / KDS
+        - Pizzería / KDS
+        - Administración
+        - Impresión
+        - Realtime
+        - PWA
+        - Backend / API
+        - Infraestructura / Docker
+        - Otro
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
