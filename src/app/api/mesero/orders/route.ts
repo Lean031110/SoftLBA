@@ -292,16 +292,35 @@ export async function POST(req: NextRequest) {
     })
 
     // Calcular subtotal y asignar área de elaboración a cada item.
-    // v1.0-RC1-bloque1-2 (item 3):
-    //   - DIRECTO: targetAreaId = área del pedido (SALON), porque se despacha
-    //     inmediatamente desde Salón.
-    //   - FINAL: targetAreaId = product.areaId (área de elaboración del producto).
-    // v1.0-RC1-bloque1-2 (item 1): DIRECTO nace como SERVIDO (despachado inmediato).
+    // FASE 19-20: usar ProductAreaResolver para respetar saleAreaId /
+    // productionAreaId si están seteados explícitamente en el producto.
+    // Backward compat: si no están seteados, fallback a product.areaId
+    // (comportamiento anterior).
     const itemLines = d.items.map((i) => {
       const p = products.find((pp) => pp.id === i.productId)!
       const lineTotal = p.price * i.quantity
       const isDirecto = p.type === 'DIRECTO'
-      const targetAreaId = isDirecto ? d.areaId : (p.areaId || d.areaId)
+
+      // FASE 19-20: priorizar productionAreaId (lo que el admin setea
+      // explícitamente) sobre areaId (legacy). Si no hay productionAreaId,
+      // fallback a areaId. Si tampoco hay, fallback al área del pedido.
+      let targetAreaId: string
+      if (isDirecto) {
+        // DIRECTO siempre al área de venta (donde se hace el pedido).
+        targetAreaId = d.areaId
+      } else {
+        // FINAL / SUBPRODUCTO: priorizar productionAreaId > saleAreaId > areaId > areaId del pedido.
+        targetAreaId = p.productionAreaId || p.saleAreaId || p.areaId || d.areaId
+        // Si el fallback llegó al área del pedido, loguear warning — el producto
+        // debería tener productionAreaId configurado.
+        if (!p.productionAreaId && !p.saleAreaId && !p.areaId) {
+          logger.warn(
+            'Producto FINAL sin productionAreaId configurado — usando área del pedido como fallback',
+            { productId: p.id, productCode: p.code, productName: p.name, fallbackAreaId: d.areaId },
+            'orders',
+          )
+        }
+      }
       return {
         productId: i.productId,
         quantity: i.quantity,
