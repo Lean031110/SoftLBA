@@ -22,8 +22,8 @@
 // NO acoplar a React ni a Socket.IO. Es puro backend.
 // ============================================================
 
-import { db } from '@/lib/db'
-import { logger } from '@/lib/logger'
+import { db } from '../db'
+import { logger } from '../logger'
 import * as net from 'net'
 
 // === TIPOS ===
