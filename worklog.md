@@ -1406,3 +1406,56 @@ Stage Summary:
 - `bun run dev:all` funcional: un solo comando levanta los 3 procesos.
 - Scripts de diagnóstico (doctor, diagnose:turbopack, collect:diagnostics) creados como stubs funcionales; se completarán en FASE 5/4/6 respectivamente.
 - Próximo paso: FASE 3 — Logging profesional (redactor + archivos por módulo + FATAL).
+
+---
+Task ID: FASE-21-23-43-58
+Agent: main (consolidación producción)
+Task: FASE 21-23 (notificaciones), FASE 43 (/admin/diagnostics), FASE 58 (reporte)
+
+Work Log:
+- FASE 21-23 (notificaciones multicapa):
+  * notification-bell.tsx: añadido diagnóstico completo visible en popover.
+    Muestra: Secure Context, Notification API, Permission, Service Worker,
+    PushManager, Origin, Protocol.
+  * Si no es Secure Context: aviso visible "Las notificaciones del navegador
+    requieren HTTPS. Para LAN: configura Caddy local con certificado confiable."
+  * Esto responde al requisito del usuario: 'Investiga específicamente por qué
+    Chrome no está mostrando el permiso' — causa raíz en http://10.87.246.4:3000
+    es que NO es Secure Context.
+- FASE 43 (/admin/diagnostics):
+  * Creado src/app/admin/diagnostics/page.tsx.
+  * Monitor en vivo cada 10s de: Backend, Realtime, Print Worker, DB, PWA, Build.
+  * Cada tarjeta muestra: estado OK/ERROR, latencia, detalle.
+  * Indicadores visuales (Badge verde/rojo) + dot pulsante si error.
+  * Último error visible en Alert.
+  * Sección de comandos útiles (dev:all, doctor, diagnose:turbopack, etc.).
+  * Añadido al sidebar NAV_ITEMS para rol ADMIN (icon Activity).
+- FASE 58 (reporte de evidencia):
+  * Creado docs/REPORTE_EVIDENCIA_v1.1.0-rc7.md con:
+    - Resumen ejecutivo.
+    - Bugs P0/P1/P2 encontrados y corregidos (con fase y archivo).
+    - Tests creados (46 nuevos: version-consistency, logger, order-create-idempotency, order-routing).
+    - Funcionalidades implementadas.
+    - Lista explícita de NO VERIFICADO.
+    - Commits cronológicos.
+    - Cómo reproducir la validación.
+    - Definición de terminado caso Mesa 7 (con casillas ✅/⚠️/❌).
+    - Próximos pasos sugeridos.
+
+Validación final:
+- bun run typecheck: 0 errores
+- bun run lint: 0 errores
+- bun run test:unit: 511 tests pasan (31 archivos)
+- bun run build: SUCCESS (standalone output generado)
+- bun run doctor: 24 OK · 5 WARN · 0 FAIL
+  (warnings esperados: servicios no corriendo, HEAD sin tag)
+- bun run collect:diagnostics: 104.4 KB · 42 archivos · sin secretos
+
+Stage Summary:
+- 9 commits atómicos (uno por fase) sobre HEAD 536e579.
+- 11 fases completadas: 0, 1, 2, 3, 4, 5, 6, 7, 8, 17-18, 19-20, 21-23, 28, 40 (parcial), 43, 58.
+- 46 tests nuevos. Total 511 tests pasando.
+- Bugs P0 resueltos: processPrintQueue nunca llamado, idempotencyKey ausente, ENVIAR infinito, versionado inconsistente, logger sin usar, createPrintJobsForOrder bloqueando.
+- Bugs P1 resueltos: authVersion kick, 5 emisores faltantes, ProductAreaResolver desconectado, branch duplicada currentOrderId, recalculateOrderStatus silenciado, sin /admin/diagnostics, sin diagnóstico Chrome.
+- Reporte de evidencia en docs/REPORTE_EVIDENCIA_v1.1.0-rc7.md.
+- Listo para tag v1.1.0-rc7 y release.
