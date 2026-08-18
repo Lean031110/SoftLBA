@@ -114,7 +114,7 @@ log('─────────────────────────
 
 const children = []
 
-function spawnService({ name, command, args, env, color }) {
+function spawnService({ name, command, args, env, color, turbopackLog }) {
   const child = spawn(command, args, {
     cwd: ROOT,
     env: { ...process.env, ...env, FORCE_COLOR: '1' },
@@ -122,7 +122,19 @@ function spawnService({ name, command, args, env, color }) {
   })
 
   child.stdout?.on('data', (d) => logChild(name, d))
-  child.stderr?.on('data', (d) => logChild(name, d))
+
+  // FASE 4: si el servicio es Next.js, además de dev-all.log enviamos su stderr
+  // a logs/turbopack.log para que `bun run diagnose:turbopack` pueda parsearlo.
+  child.stderr?.on('data', (d) => {
+    logChild(name, d)
+    if (turbopackLog) {
+      try {
+        appendFileSync(turbopackLog, d.toString())
+      } catch {
+        /* ignore */
+      }
+    }
+  })
 
   child.on('exit', (code, signal) => {
     if (shuttingDown) return
@@ -183,6 +195,7 @@ spawnService({
   command: process.platform === 'win32' ? 'npx.cmd' : 'npx',
   args: ['next', 'dev', '-p', '3000'],
   env: { PORT: '3000' },
+  turbopackLog: join(LOG_DIR, 'turbopack.log'),
 })
 
 spawnService({
