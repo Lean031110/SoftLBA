@@ -157,6 +157,11 @@ model Area {
   name        String
   description String?
   isActive    Boolean  @default(true)
+  // v1.1.0-rc6: configuración de salida por área.
+  outputMode  String   @default("DISPLAY") // DISPLAY, PRINTER, DISPLAY_AND_PRINTER, AUTO
+  targetPrepTime Int   @default(15) // minutos objetivo de preparación
+  kdsEnabled  Boolean  @default(true)
+  soundEnabled Boolean @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -903,6 +908,12 @@ model Printer {
   footer      String?
   copies      Int      @default(1)
   isActive    Boolean  @default(true)
+  // v1.1.0-rc6: campos profesionales.
+  model       String?  // Modelo de la impresora (ej: Epson TM-T20)
+  location    String?  // Ubicación física (ej: "Cocina - Estación 1")
+  fallbackPrinterId String? // Impresora de respaldo
+  fallbackPrinter Printer? @relation("PrinterFallback", fields: [fallbackPrinterId], references: [id], onDelete: SetNull)
+  primaryFor  Printer[] @relation("PrinterFallback")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -913,19 +924,23 @@ model Printer {
 }
 
 model PrintJob {
-  id          String   @id @default(cuid())
-  orderId     String
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  areaId      String?
-  area        Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
-  printerId   String?
-  printer     Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
-  status      String   @default("PENDING") // PENDING, PRINTING, PRINTED, FAILED, CANCELLED
-  attempts    Int      @default(0)
-  content     String?  // JSON con el contenido del ticket
-  error       String?
-  createdAt   DateTime @default(now())
-  printedAt   DateTime?
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  areaId          String?
+  area            Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  printerId       String?
+  printer         Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
+  status          String   @default("PENDING") // PENDING, PRINTING, PRINTED, FAILED, CANCELLED
+  attempts        Int      @default(0)
+  content         String?  // JSON con el contenido del ticket
+  error           String?
+  idempotencyKey  String?  @unique // Previene duplicados en reintentos
+  createdAt       DateTime @default(now())
+  // v1.1.0-rc6: timestamps granulares.
+  startedAt       DateTime? // Cuando empezó el intento actual
+  printedAt       DateTime? // Cuando se imprimió exitosamente
+  lastAttemptAt   DateTime? // Último intento (éxito o fallo)
 
   @@index([orderId])
   @@index([areaId])

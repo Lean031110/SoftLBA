@@ -8,6 +8,7 @@ import { decrementDirectoStock } from '@/lib/directo-stock'
 import { recalculateOrderStatus } from '@/lib/order-state-machine'
 import { sumConvertedToCup } from '@/lib/currency'
 import { emitOrderNew } from '@/lib/realtime-emitter'
+import { createPrintJobsForOrder } from '@/lib/print/print-service'
 import { z } from 'zod'
 
 // Estados considerados "activos" en el dashboard del mesero
@@ -402,6 +403,16 @@ export async function POST(req: NextRequest) {
         tableId: order.tableId || undefined,
         total,
       })
+
+      // v1.1.0-rc6: crear PrintJobs por área (impresión automática).
+      // DESPUÉS del DB COMMIT, no bloquea la creación del pedido.
+      try {
+        const printResult = await createPrintJobsForOrder(order.id)
+        console.log(`[orders] PrintJobs creados: ${printResult.created}, skipped: ${printResult.skipped}`)
+      } catch (printErr) {
+        // La impresión NO debe bloquear el pedido. Si falla, log y continuar.
+        console.error('[orders] Error creando PrintJobs:', printErr)
+      }
     }
 
     return NextResponse.json({

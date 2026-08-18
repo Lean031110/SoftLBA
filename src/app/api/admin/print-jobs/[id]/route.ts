@@ -1,7 +1,7 @@
-// PATCH /api/admin/print-jobs/[id] - Reintentar o cancelar un print job
+// PATCH /api/admin/print-jobs/[id] - Reintentar o cancelar usando PrintService
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/lib/db'
 import { getCurrentUser } from '@/lib/auth'
+import { retryPrintJob, cancelPrintJob } from '@/lib/print/print-service'
 
 export async function PATCH(
   req: NextRequest,
@@ -15,22 +15,13 @@ export async function PATCH(
   const body = await req.json().catch(() => ({}))
   const action = body.action // 'retry' | 'cancel'
 
-  const job = await db.printJob.findUnique({ where: { id } })
-  if (!job) return NextResponse.json({ ok: false, error: 'No encontrado' }, { status: 404 })
-
   if (action === 'retry') {
-    const updated = await db.printJob.update({
-      where: { id },
-      data: { status: 'PENDING', attempts: job.attempts + 1, error: null },
-    })
-    return NextResponse.json({ ok: true, item: updated })
+    const result = await retryPrintJob(id)
+    return NextResponse.json(result, { status: result.ok ? 200 : 400 })
   }
   if (action === 'cancel') {
-    const updated = await db.printJob.update({
-      where: { id },
-      data: { status: 'CANCELLED' },
-    })
-    return NextResponse.json({ ok: true, item: updated })
+    await cancelPrintJob(id)
+    return NextResponse.json({ ok: true })
   }
   return NextResponse.json({ ok: false, error: 'Acción inválida' }, { status: 400 })
 }
