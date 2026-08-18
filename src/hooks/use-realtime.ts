@@ -167,6 +167,33 @@ export function useRealtime(opts: {
       }, 2000)
     })
 
+    // FASE 8: auth:kick — el servidor nos desconecta por cambio de
+    // contraseña/rol/permisos. Limpiar token cacheado y reconectar
+    // con un token nuevo (que tendrá el authVersion actualizado).
+    socket.on('auth:kick', (data: any) => {
+      console.warn('[realtime] auth:kick recibido:', data?.reason)
+      tokenCache = null
+      setConnected(false)
+      setConnectionState('auth_failed')
+      // Reintentar tras 3s para obtener un token nuevo con authVersion correcto.
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = setTimeout(() => {
+        console.log('[realtime] Reintentando conexión tras auth:kick...')
+        connectRef.current()
+      }, 3000)
+    })
+
+    // FASE 8: auth:expired — token expirado por tiempo. Reconectar.
+    socket.on('auth:expired', (data: any) => {
+      console.warn('[realtime] auth:expired:', data?.reason)
+      tokenCache = null
+      socket.disconnect()
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = setTimeout(() => {
+        connectRef.current()
+      }, 1500)
+    })
+
     // Eventos de negocio (SOLO ESCUCHA — el servidor emite)
     socket.on('notification', (data: NotificationData) => {
       handlersRef.current.onNotification?.(data)

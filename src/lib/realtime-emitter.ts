@@ -95,7 +95,16 @@ export async function emitOrderStatus(params: {
   areaId: string
   status: string
 }): Promise<void> {
+  // FASE 8: emitir al mesero Y al área afectada (no solo al usuario).
   await emitToUser(params.userId, 'order:status', {
+    orderId: params.orderId,
+    orderNumber: params.orderNumber,
+    userId: params.userId,
+    areaId: params.areaId,
+    status: params.status,
+  })
+  // También notificar al área (para que cocina/pizzería sepa el cambio global).
+  await emitToArea(params.areaId, 'order:status', {
     orderId: params.orderId,
     orderNumber: params.orderNumber,
     userId: params.userId,
@@ -104,22 +113,135 @@ export async function emitOrderStatus(params: {
   })
 }
 
+// FASE 8: emitOrderReady — emite al mesero cuando una área marca LISTO.
+// Permite que el mesero sepa que puede pasar a recoger el pedido.
+export async function emitOrderReady(params: {
+  orderId: string
+  orderNumber: number
+  userId: string
+  areaId: string
+  areaName?: string
+}): Promise<void> {
+  await emitToUser(params.userId, 'order:ready', {
+    orderId: params.orderId,
+    orderNumber: params.orderNumber,
+    userId: params.userId,
+    areaId: params.areaId,
+    areaName: params.areaName,
+    readyAt: new Date().toISOString(),
+  })
+}
+
+// FASE 8: emitStockLow — emite alerta de stock bajo.
+export async function emitStockLow(params: {
+  productId: string
+  productName: string
+  areaId: string
+  currentStock: number
+  minStock: number
+  unit: string
+}): Promise<void> {
+  const payload = {
+    productId: params.productId,
+    productName: params.productName,
+    areaId: params.areaId,
+    currentStock: params.currentStock,
+    minStock: params.minStock,
+    unit: params.unit,
+    alertedAt: new Date().toISOString(),
+  }
+  await emitToRole('ADMIN', 'stock:low', payload)
+  // También al área afectada para que cocina/pizzería sepa.
+  await emitToArea(params.areaId, 'stock:low', payload)
+}
+
+// FASE 8: emitDailyClose — emite cuando se cierra un día.
+export async function emitDailyClose(params: {
+  dailyCloseId: string
+  date: string
+  totalSales: number
+  totalOrders: number
+}): Promise<void> {
+  const payload = {
+    dailyCloseId: params.dailyCloseId,
+    date: params.date,
+    totalSales: params.totalSales,
+    totalOrders: params.totalOrders,
+    closedAt: new Date().toISOString(),
+  }
+  await emitToRole('ADMIN', 'daily-close', payload)
+  await emitToRole('CAJERO', 'daily-close', payload)
+}
+
+// FASE 8: emitNotification — emite notificación a un usuario o rol.
+export async function emitNotification(params: {
+  userId?: string
+  role?: string
+  notificationId: string
+  type: string
+  title: string
+  message: string
+  data?: Record<string, unknown>
+}): Promise<void> {
+  const payload = {
+    notificationId: params.notificationId,
+    type: params.type,
+    title: params.title,
+    message: params.message,
+    data: params.data,
+    createdAt: new Date().toISOString(),
+  }
+  if (params.userId) {
+    await emitToUser(params.userId, 'notification', payload)
+  } else if (params.role) {
+    await emitToRole(params.role, 'notification', payload)
+  } else {
+    await broadcast('notification', payload)
+  }
+}
+
+// FASE 8: kickUser — pide al servicio realtime que desconecte todos los
+// sockets de un usuario. Útil cuando cambia contraseña/rol/permisos.
+// No espera respuesta (fire-and-forget); el mini-servicio aplica el kick.
+export async function kickUser(userId: string, reason: string): Promise<void> {
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 2000)
+    // Reutilizamos el mismo endpoint /emit pero con room especial "kick:user:<id>".
+    await fetch(INTERNAL_EMIT_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Internal-Secret': INTERNAL_SECRET,
+      },
+      body: JSON.stringify({
+        room: `kick:user:${userId}`,
+        event: 'auth:kick',
+        data: { userId, reason, kickedAt: new Date().toISOString() },
+      }),
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+    clearTimeout(timeout)
+  } catch (e) {
+    logger.warn('kickUser falló (fire-and-forget)', { err: (e as Error)?.message, userId }, 'realtime')
+  }
+}
+
 export async function emitPaymentDone(params: {
   orderId: string
   orderNumber: number
   amount: number
   userId: string
 }): Promise<void> {
-  await emitToRole('ADMIN', 'payment:done', {
+  // FASE 8: también emitir al mesero que creó el pedido.
+  const payload = {
     orderId: params.orderId,
     orderNumber: params.orderNumber,
     amount: params.amount,
     userId: params.userId,
-  })
-  await emitToRole('CAJERO', 'payment:done', {
-    orderId: params.orderId,
-    orderNumber: params.orderNumber,
-    amount: params.amount,
-    userId: params.userId,
-  })
+  }
+  await emitToRole('ADMIN', 'payment:done', payload)
+  await emitToRole('CAJERO', 'payment:done', payload)
+  await emitToUser(params.userId, 'payment:done', payload)
 }

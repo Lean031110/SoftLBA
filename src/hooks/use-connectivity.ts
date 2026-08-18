@@ -37,6 +37,8 @@ export interface ConnectivityInfo {
   serverReachable: boolean
   /** true si el navegador cree que hay Internet (navigator.onLine). */
   browserOnline: boolean
+  /** Latencia del último check exitoso en ms. null si nunca. */
+  latencyMs: number | null
   /** Timestamp del último check exitoso. 0 si nunca. */
   lastSuccessAt: number
   /** Timestamp del último check fallido. 0 si nunca. */
@@ -72,6 +74,7 @@ export function useConnectivity(opts: { intervalMs?: number; enabled?: boolean }
 
   const [state, setState] = useState<ConnectivityState>('INITIALIZING')
   const [browserOnline, setBrowserOnline] = useState(true)
+  const [latencyMs, setLatencyMs] = useState<number | null>(null)
   const [lastSuccessAt, setLastSuccessAt] = useState(0)
   const [lastFailureAt, setLastFailureAt] = useState(0)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -115,6 +118,7 @@ export function useConnectivity(opts: { intervalMs?: number; enabled?: boolean }
       abortRef.current = controller
 
       try {
+        const t0 = Date.now()
         const res = await fetch(HEALTH_PATH, {
           method: 'GET',
           signal: controller.signal,
@@ -126,6 +130,8 @@ export function useConnectivity(opts: { intervalMs?: number; enabled?: boolean }
         if (res.status === 200) {
           const data = await res.json().catch(() => null)
           if (data?.ok === true) {
+            const latency = Date.now() - t0
+            setLatencyMs(latency)
             setLastSuccessAt(Date.now())
             wasReachableRef.current = true
             setState('LOCAL_SERVER_AVAILABLE')
@@ -138,6 +144,7 @@ export function useConnectivity(opts: { intervalMs?: number; enabled?: boolean }
       } catch (err: unknown) {
         if (cancelled) return
         if (err instanceof DOMException && err.name === 'AbortError') return
+        setLatencyMs(null)
         setLastFailureAt(Date.now())
         const wasReachable = wasReachableRef.current
         wasReachableRef.current = false
@@ -170,6 +177,7 @@ export function useConnectivity(opts: { intervalMs?: number; enabled?: boolean }
     state,
     serverReachable: state === 'LOCAL_SERVER_AVAILABLE',
     browserOnline,
+    latencyMs,
     lastSuccessAt,
     lastFailureAt,
     message: describe(state),

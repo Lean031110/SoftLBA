@@ -8,6 +8,7 @@ import { db } from '@/lib/db'
 import { getCurrentUser, hashPassword, verifyPassword } from '@/lib/auth'
 import { audit } from '@/lib/audit'
 import { logger } from '@/lib/logger'
+import { kickUser } from '@/lib/realtime-emitter'
 
 const BodySchema = z.object({
   currentPassword: z.string().min(1).max(100),
@@ -62,13 +63,20 @@ export async function POST(req: NextRequest) {
 
     // Hashear y actualizar
     const newHash = await hashPassword(newPassword)
-    await db.user.update({
+    // FASE 8: incrementar authVersion para invalidar tokens/sessions existentes.
+    const updated = await db.user.update({
       where: { id: user.id },
       data: {
         passwordHash: newHash,
         mustChangePass: false,
+        authVersion: { increment: 1 },
       },
     })
+
+    // FASE 8: kick inmediato de sockets existentes (no esperar expiración).
+    // Fire-and-forget: si el realtime está caído, el cambio de authVersion
+    // igual invalidará en el próximo handshake.
+    kickUser(user.id, `password_changed (authVersion=${updated.authVersion})`).catch(() => {})
 
     await audit({
       userId: user.id,
@@ -76,7 +84,7 @@ export async function POST(req: NextRequest) {
       entity: 'user',
       entityId: user.id,
       before: { mustChangePass: fullUser.mustChangePass },
-      after: { mustChangePass: false },
+      after: { mustChangePass: false, authVersion: updated.authVersion },
       result: 'SUCCESS',
     })
 

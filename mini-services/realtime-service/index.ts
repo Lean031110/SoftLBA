@@ -199,6 +199,10 @@ function isValidRoom(room: string): boolean {
   if (room.startsWith('area:')) {
     return room.slice(5).length > 0
   }
+  // FASE 8: room especial para kick de usuarios (no es un room real, es una acción).
+  if (room.startsWith('kick:user:')) {
+    return room.slice(11).length > 0
+  }
   return false
 }
 
@@ -322,13 +326,39 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
     const validation = validateEventPayload(event, data)
     if (!validation.ok) {
-      res.writeHead(400, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: false, error: `Payload inválido: ${validation.error}` }))
+      // FASE 8: auth:kick es un evento de control, no de negocio.
+      if (event === 'auth:kick' && room.startsWith('kick:user:')) {
+        // OK: es un kick, no necesita validación de payload de negocio.
+      } else {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: `Payload inválido: ${validation.error}` }))
+        return
+      }
+    }
+
+    // FASE 8: kick:user:<id> — desconectar sockets de un usuario.
+    if (room.startsWith('kick:user:') && event === 'auth:kick') {
+      const targetUserId = room.slice('kick:user:'.length)
+      let kicked = 0
+      for (const [sid, info] of clients.entries()) {
+        if (info.userId === targetUserId) {
+          const sock = io.sockets.sockets.get(sid)
+          if (sock) {
+            sock.emit('auth:kick', { reason: data?.reason || 'kicked', kickedAt: new Date().toISOString() })
+            sock.disconnect(true)
+            kicked++
+          }
+          clients.delete(sid)
+        }
+      }
+      console.log(`[kick] user=${targetUserId} kicked=${kicked} reason=${data?.reason || 'unspecified'}`)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, kicked, userId: targetUserId }))
       return
     }
 
     const result = emitToRoom(room, event, data)
-    console.log(`[emit] room=${room} event=${event} delivered=${result.delivered}`)
+    console.log(`[emit] room=${room} event=${event} delivered=${result.delivered}${clientOperationId ? ` op=${clientOperationId}` : ''}`)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ ok: true, delivered: result.delivered }))
     return
@@ -527,6 +557,32 @@ function gracefulShutdown(signal: string) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'))
 process.on('SIGINT', () => gracefulShutdown('SIGINT'))
+
+// FASE 8: barrido periódico de stale sockets cada 60s.
+// Si un socket tiene expiresAt < now, se desconecta.
+// Esto complementa el kick explícito (auth:kick) para tokens expirados
+// por paso del tiempo sin actividad de red.
+const STALE_SOCKET_SWEEP_MS = 60_000
+const staleSweepInterval = setInterval(() => {
+  const now = Date.now()
+  let swept = 0
+  for (const [sid, info] of clients.entries()) {
+    if (info.expiresAt < now) {
+      const sock = io.sockets.sockets.get(sid)
+      if (sock) {
+        sock.emit('auth:expired', { reason: 'token_expired', expiredAt: new Date(info.expiresAt).toISOString() })
+        sock.disconnect(true)
+        swept++
+      }
+      clients.delete(sid)
+    }
+  }
+  if (swept > 0) {
+    console.log(`[sweep] ${swept} socket(s) stale desconectados`)
+  }
+}, STALE_SOCKET_SWEEP_MS)
+// No mantener el proceso vivo solo por el interval.
+staleSweepInterval.unref?.()
 
 // v1.1.0-rc2: capturar uncaught exceptions para no crashear silenciosamente
 process.on('uncaughtException', (err) => {

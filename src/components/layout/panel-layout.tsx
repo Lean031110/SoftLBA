@@ -58,6 +58,7 @@ import { appVersionDisplay } from '@/lib/app-version'
 import { useMounted } from '@/lib/use-mounted'
 import { NotificationBell } from '@/components/layout/notification-bell'
 import { ConnectivityBanner } from '@/components/layout/connectivity-banner'
+import { ConnectionIndicator } from '@/components/layout/connection-indicator'
 
 type NavItem = {
   href: string
@@ -383,6 +384,7 @@ export function PanelLayout({ children }: { children: React.ReactNode }) {
             </h1>
           </div>
           <div className="flex items-center gap-1">
+            <ConnectionIndicator />
             <NotificationBell userId={user?.id} role={user?.role} />
             <ThemeToggle />
             <UserMenu user={user} />
