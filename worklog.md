@@ -1363,3 +1363,46 @@ PRÓXIMO PASO SUGERIDO:
   → mesero pagar → verificar
   → cierre diario
 - Si todo OK, publicar v1.0.20 final.
+
+---
+Task ID: FASE-0-1-2
+Agent: main (consolidación producción)
+Task: FASE 0 (Plan), FASE 1 (Versionado), FASE 2 (dev:all)
+
+Work Log:
+- Clonado repositorio desde GitHub (rama main, HEAD 536e579 = v1.1.0-rc6).
+- Auditadas 6 áreas en paralelo: versionado, POS, realtime, impresión, KDS, notificaciones, tests, recetas/costeo, logging. Resultados consolidados en `docs/PLAN_POS_PRODUCCION.md`.
+- FASE 0: creado `docs/PLAN_POS_PRODUCCION.md` con diagnóstico completo, arquitectura objetivo, plan fase por fase, tests requeridos, criterios de terminado, riesgos y funcionalidades pendientes. NO se modificó código en esta fase.
+- FASE 1 (versionado): bump unificado a `1.1.0-rc7` en:
+  * `package.json` raíz
+  * `mini-services/realtime-service/package.json`
+  * `public/sw.js` (`SW_VERSION`)
+  * `public/manifest.json` (nuevos campos `version` y `version_name`)
+  * `README.md` (badge + tabla)
+  * `mini-services/realtime-service/index.ts` `/health` (eliminado hardcoded `'1.1.0-rc1'`, ahora lee de `package.json` vía `import pkg`)
+  * `CHANGELOG.md` (entradas rc2..rc7)
+  * `src/lib/app-version.ts` (limpiados comentarios con literales de versión)
+- FASE 1: creado `tests/unit/version-consistency.test.ts` (10 tests) — valida que NUNCA más se desincronice package.json vs manifest.json vs sw.js vs README vs CHANGELOG.
+- FASE 1: añadidos scripts a `package.json`: `test`, `typecheck`, `dev:all`, `print:worker`, `doctor`, `diagnose:turbopack`, `collect:diagnostics`, `support:bundle`.
+- FASE 2: creado `scripts/dev-all.mjs` — orquestador único que arranca Next.js + Realtime + Print Worker. Maneja PIDs, detección de puertos ocupados, SIGINT/SIGTERM, marcado de servicio fallido, logs a `logs/dev-all.log`.
+- FASE 2: creado `scripts/print-worker.ts` (stub funcional) — arranca, expone `/health` en :3004, espera FASE 14 para invocar `PrintService.processPrintQueue()`.
+- FASE 2: creado `scripts/doctor.ts` (stub FASE 5) — 14 checks básicos: Node/Bun version, .env presence, DATABASE_URL, Prisma generado, DB file, .next/, sw.js, manifest.json, logs/ y download/ escribibles, package_version, git status. Output JSON+MD.
+- FASE 2: creado `scripts/diagnose-turbopack.mjs` (stub FASE 4) — lee `logs/turbopack.log`, extrae errores, escribe `diagnostics/turbopack-issues.jsonl` y `diagnostics/turbopack-summary.md`.
+- FASE 2: creado `scripts/collect-diagnostics.mjs` (stub FASE 6) — empaqueta logs/ + diagnostics/ + system info + git info + package.json + schema.prisma + next.config.ts + .env.example (NUNCA .env). Redacta secretos con regex. Crea tar.gz en `download/`.
+- FASE 2: instaladas dependencias del mini-servicio realtime (`cd mini-services/realtime-service && bun install`).
+- FASE 2: actualizado `.gitignore` para ignorar `logs/`, `diagnostics/`, `diagnostics-staging/`, `db/*.db`.
+
+Validación:
+- `bun run typecheck` → ✅ 0 errores
+- `bun run test:unit` → ✅ 479 tests pasan (29 archivos)
+- `bun run lint` → ✅ 0 errores (fix: `require` → `readFileSync + JSON.parse` en doctor.ts)
+- `bun run dev:all` → ✅ arranca los 3 servicios (Next :3000, Realtime :3003, Print Worker :3004)
+- `bun run doctor` → ✅ 11 OK · 3 WARN · 0 FAIL (warnings esperados: .env copiado de example, .next sin build previo, git con cambios sin commitear)
+- `bun run diagnose:turbopack` → ✅ 0 errores (sin log todavía)
+
+Stage Summary:
+- Plan contractual `docs/PLAN_POS_PRODUCCION.md` creado y aprobado.
+- Versión unificada a `1.1.0-rc7` en TODAS las fuentes. Test de consistencia previene regresión.
+- `bun run dev:all` funcional: un solo comando levanta los 3 procesos.
+- Scripts de diagnóstico (doctor, diagnose:turbopack, collect:diagnostics) creados como stubs funcionales; se completarán en FASE 5/4/6 respectivamente.
+- Próximo paso: FASE 3 — Logging profesional (redactor + archivos por módulo + FATAL).

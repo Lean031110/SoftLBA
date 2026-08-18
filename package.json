@@ -1,6 +1,6 @@
 {
   "name": "softlba",
-  "version": "1.1.0-rc1",
+  "version": "1.1.0-rc7",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
@@ -21,7 +21,15 @@
     "test:integration:server": "npx next dev -p 3099",
     "test:integration:run": "INTEGRATION_BASE_URL=http://127.0.0.1:3099 npx vitest run tests/integration/",
     "test:e2e": "npx playwright test --config=tests/e2e/playwright.config.ts",
-    "test:e2e:install": "npx playwright install chromium"
+    "test:e2e:install": "npx playwright install chromium",
+    "test": "vitest run tests/unit/",
+    "typecheck": "tsc --noEmit",
+    "dev:all": "node scripts/dev-all.mjs",
+    "print:worker": "bun run scripts/print-worker.ts",
+    "doctor": "bun run scripts/doctor.ts",
+    "diagnose:turbopack": "node scripts/diagnose-turbopack.mjs",
+    "collect:diagnostics": "node scripts/collect-diagnostics.mjs",
+    "support:bundle": "node scripts/collect-diagnostics.mjs --support"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.1.1",

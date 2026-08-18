@@ -7,6 +7,36 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/lang/es/).
 
 ---
 
+## [1.1.0-rc7] — 2026-08-19
+
+### FASE 0-1 — Plan de producción + Unificación de versión
+
+#### Plan contractual
+- Creado `docs/PLAN_POS_PRODUCCION.md` con diagnóstico completo, arquitectura objetivo, plan fase por fase, tests requeridos, criterios de terminado y riesgos.
+- 6 áreas auditadas en paralelo: versionado, POS, realtime, impresión, KDS, notificaciones, tests, recetas/costeo, logging.
+
+#### Unificación de APP_VERSION (FASE 1)
+- **Problema heredado**: git estaba en `v1.1.0-rc6` pero `package.json` y 5 fuentes más reportaban `rc1`. El realtime-service estaba en `1.0.19.2`.
+- **Fix**: bump unificado a `1.1.0-rc7` en:
+  - `package.json` raíz.
+  - `mini-services/realtime-service/package.json`.
+  - `public/sw.js` (`SW_VERSION`).
+  - `public/manifest.json` (nuevos campos `version` y `version_name`).
+  - `README.md` (badge + tabla).
+  - `mini-services/realtime-service/index.ts` `/health` (eliminado string hardcoded, ahora lee de `package.json`).
+- **Test de consistencia**: creado `tests/unit/version-consistency.test.ts` que compara `package.json` vs `manifest.json` vs `sw.js` y falla si divergen. Previene que el patrón se repita.
+- **Scripts nuevos en `package.json`**: `test`, `typecheck`, `dev:all`, `print:worker`, `doctor`, `diagnose:turbopack`, `collect:diagnostics`, `support:bundle`. (Los archivos se implementan en sus fases respectivas.)
+
+#### Resumen rc2-rc6 (no reflejadas en CHANGELOG previo)
+Las versiones rc2 a rc6 se publicaron en GitHub pero el CHANGELOG no se actualizó:
+- **rc2** (realtime): health mejorado con memoria y estado de conexiones. pingTimeout/pingInterval ajustados para LAN inestable.
+- **rc3** (frontend): fix setLoading(false) faltante en KDS pizzería (skeletons eternos).
+- **rc4** (admin): StatusBadge unificado en admin + cierre-diario.
+- **rc5** (impresión + GitHub standards): GitHub Standards compliance, WebSocket audit completo.
+- **rc6** (PrintService real + routing + ESC/POS): `PrintService` con `createPrintJobsForOrder`, `processPrintQueue`, fallback, ESC/POS. (NOTA: `processPrintQueue` aún no se invoca desde ningún worker — pendiente FASE 14.)
+
+---
+
 ## [1.1.0-rc1] — 2026-08-16
 
 ### Inicio de reconstrucción del POS de Salón

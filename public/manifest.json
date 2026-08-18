@@ -3,6 +3,8 @@
   "name": "SoftLBA - Sistema de Restaurante",
   "short_name": "SoftLBA",
   "description": "Sistema integral de gestión para restaurante en red local. Pedidos, cocina, inventario, cobros y reportes en tiempo real.",
+  "version": "1.1.0-rc7",
+  "version_name": "1.1.0-rc7",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "fullscreen",

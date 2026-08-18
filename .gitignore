@@ -28,6 +28,15 @@ next-env.d.ts
 # Environment variables — NUNCA subir secretos
 .env
 .env.*
+
+# Logs y diagnósticos (FASE 2/3 — generados por runtime)
+/logs/
+/diagnostics/
+/diagnostics-staging/
+
+# DB SQLite (no commitear la base de datos)
+/db/*.db
+/db/*.db-journal
 !.env.example
 !.env.docker.example
 

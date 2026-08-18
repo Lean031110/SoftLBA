@@ -3,6 +3,10 @@
 // ============================================================
 // Puerto: 3003 (configurado en Caddyfile para proxy)
 //
+// v1.1.0-rc7 (FASE 1 — Unificación de versión):
+//   - Versión leída de package.json (fuente única).
+//   - Eliminado string hardcoded en /health.
+//
 // v1.0.19.2 (FASE 22-23 del roadmap):
 //   - Token unificado a 5 partes: userId.role.expiresAt.authVersion.signature
 //   - Compatibilidad con tokens legacy de 4 partes (authVersion=0)
@@ -19,6 +23,11 @@
 import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { Server as SocketIOServer, Socket } from 'socket.io'
 // v1.0.20-rc-final: networkInterfaces removido — ya no se auto-descubren IPs locales.
+
+// FASE 1: Fuente única de versión — package.json del mini-servicio.
+// Bun soporta `import pkg from './package.json'` nativamente.
+import pkg from './package.json' with { type: 'json' }
+const SERVICE_VERSION: string = pkg.version
 
 const PORT = parseInt(process.env.REALTIME_PORT || '3003', 10)
 
@@ -327,13 +336,13 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 
   // Health check
   if (req.url === '/health' && req.method === 'GET') {
-    // v1.1.0-rc2: health mejorado con memoria y estado de conexiones.
+    // v1.1.0-rc7: versión leída de package.json (SERVICE_VERSION, FASE 1).
     const memUsage = process.memoryUsage()
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({
       ok: true,
       service: 'realtime',
-      version: '1.1.0-rc1',
+      version: SERVICE_VERSION,
       port: PORT,
       clients: clients.size,
       uptime: Math.floor(process.uptime()),

@@ -1,10 +1,9 @@
 // src/lib/app-version.ts
-// v1.0.20-FRONTEND-01 (FE-002): Fuente única de versión.
+// Fuente única de versión para el frontend.
 //
-// Problema que resuelve:
-// - El frontend tenía 5 strings de versión distintos (v0.6.0, v0.15.0,
-//   v0.17.0, v1.0.19.5, softlba-v1.0.19.5) → operador no podía saber qué
-//   versión estaba corriendo + causaba hydration mismatch.
+// Problema que resuelve (histórico):
+// - El frontend tenía varios strings de versión distintos → operador no podía
+//   saber qué versión estaba corriendo + causaba hydration mismatch.
 // - El plan exige: "Crear una única fuente de verdad de versión".
 //
 // Solución:
@@ -15,11 +14,12 @@
 //
 // NOTA: El Service Worker NO puede importar este módulo (corre en contexto
 // distinto). El SW usa una constante `SW_VERSION` que se bump manualmente
-// en cada release (ver `public/sw.js`).
+// en cada release (ver `public/sw.js`). FASE 1: validada por
+// `tests/unit/version-consistency.test.ts` para evitar desincronización.
 //
 // Uso:
 //   import { appVersion, appVersionDisplay } from '@/lib/app-version'
-//   <span>v{appVersionDisplay}</span>
+//   <span>{appVersionDisplay}</span>
 
 export const APP_NAME: string = process.env.NEXT_PUBLIC_APP_NAME || 'softlba'
 
@@ -30,8 +30,8 @@ export const APP_VERSION: string = process.env.NEXT_PUBLIC_APP_VERSION || 'dev'
 export const appVersion: string = APP_VERSION
 
 // Display con prefijo 'v' si no lo tiene ya.
-// '1.0.20-rc13' → 'v1.0.20-rc13'
-// 'v1.0.20-rc13' → 'v1.0.20-rc13'
+// '<semver>' → 'v<semver>'
+// 'v<semver>' → 'v<semver>'
 // 'dev' → 'dev' (placeholder, sin prefijo)
 export const appVersionDisplay: string =
   APP_VERSION === 'dev' || APP_VERSION.startsWith('v')
@@ -39,5 +39,5 @@ export const appVersionDisplay: string =
     : `v${APP_VERSION}`
 
 // String completo para logs y diálogos "About":
-//   "softlba v1.0.20-rc13"
+//   "softlba v<semver>"
 export const appFullName: string = `${APP_NAME} ${appVersionDisplay}`
