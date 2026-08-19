@@ -122,6 +122,10 @@ async function verifySessionToken(token: string): Promise<VerifiedSession | null
 // v1.0.20-rc-final: NO auto-incluir IPs de red local — si el servidor
 // tiene IP pública (VPS, Cloud), quedaría CORS abierto a cualquier origen.
 // Solo incluir localhost/127.0.0.1 en dev, y orígenes explícitos de env var.
+//
+// FASE 43 (sandbox fix): en dev, también permitir orígenes del preview
+// sandbox (*.space-z.ai, *.chatglm.cn) para que el Socket.IO cliente
+// funcione a través del gateway Caddy.
 function getAllowedOrigins(): string[] {
   const origins = new Set<string>()
 
@@ -131,6 +135,10 @@ function getAllowedOrigins(): string[] {
     origins.add('http://127.0.0.1:3000')
     origins.add('http://localhost')
     origins.add('http://127.0.0.1')
+    // FASE 43: preview sandbox de z.ai (para desarrollo y testing).
+    // Se permiten todos los subdominios de space-z.ai y chatglm.cn.
+    // En producción esto NO se aplica.
+    origins.add('https://preview-chat-18013898-6ac6-4900-b7ec-b7676e5330a5.space-z.ai')
   }
 
   // Orígenes explícitos del env (CSV)
@@ -151,6 +159,25 @@ function getAllowedOrigins(): string[] {
 
 const ALLOWED_ORIGINS = getAllowedOrigins()
 console.log('[cors] Orígenes permitidos:', ALLOWED_ORIGINS.join(', '))
+
+// FASE 43 (sandbox fix): helper para verificar si un origen está permitido,
+// considerando wildcards para subdominios de space-z.ai en dev.
+function isOriginAllowed(origin: string | undefined): boolean {
+  if (!origin) return true // Same-origin o curl (sin Origin header).
+  if (ALLOWED_ORIGINS.includes(origin)) return true
+  // En dev, permitir cualquier subdominio de space-z.ai y chatglm.cn
+  // (preview sandbox).
+  if (process.env.NODE_ENV !== 'production') {
+    if (origin.endsWith('.space-z.ai') || origin.endsWith('.chatglm.cn')) {
+      return true
+    }
+    // Cualquier origen https en dev para pruebas locales.
+    if (origin.startsWith('https://') && origin.includes('localhost')) {
+      return true
+    }
+  }
+  return false
+}
 
 // ============================================================
 // Secreto compartido para endpoint /emit interno
@@ -262,7 +289,7 @@ function emitToRoom(room: string, event: string, data: any): { ok: boolean; deli
 const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
   // CORS para el endpoint HTTP
   const origin = req.headers.origin
-  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+  if (origin && isOriginAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin)
     res.setHeader('Vary', 'Origin')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
@@ -275,7 +302,9 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   }
 
   // Endpoint /emit: solo accesible desde localhost + secret
-  if (req.url === '/emit' && req.method === 'POST') {
+  // FASE 43 (sandbox fix): aceptar /emit con o sin query string (XTransformPort).
+  const emitUrl = (req.url || '').split('?')[0]
+  if (emitUrl === '/emit' && req.method === 'POST') {
     const remoteIp =
       (req.headers['x-forwarded-for']?.toString().split(',')[0] || '').trim() ||
       req.socket.remoteAddress ||
@@ -365,7 +394,9 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   }
 
   // Health check
-  if (req.url === '/health' && req.method === 'GET') {
+  // FASE 43 (sandbox fix): aceptar /health con o sin query string (XTransformPort).
+  const healthUrl = (req.url || '').split('?')[0]
+  if (healthUrl === '/health' && req.method === 'GET') {
     // v1.1.0-rc7: versión leída de package.json (SERVICE_VERSION, FASE 1).
     const memUsage = process.memoryUsage()
     res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -394,12 +425,14 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
 // ============================================================
 // Socket.IO server
 // ============================================================
+// FASE 43 (sandbox fix): path default '/socket.io/' en vez de '/'
+// para no interceptar /health y /emit (que son endpoints HTTP).
+// El cliente Socket.IO usa por defecto path '/socket.io/' también.
 const io = new SocketIOServer(httpServer, {
-  path: '/',
   cors: {
     origin: (origin, callback) => {
       if (!origin) return callback(null, true)
-      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true)
+      if (isOriginAllowed(origin)) return callback(null, true)
       console.warn(`[cors] Origen rechazado: ${origin}`)
       return callback(null, false)
     },

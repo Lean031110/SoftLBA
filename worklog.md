@@ -1459,3 +1459,62 @@ Stage Summary:
 - Bugs P1 resueltos: authVersion kick, 5 emisores faltantes, ProductAreaResolver desconectado, branch duplicada currentOrderId, recalculateOrderStatus silenciado, sin /admin/diagnostics, sin diagnóstico Chrome.
 - Reporte de evidencia en docs/REPORTE_EVIDENCIA_v1.1.0-rc7.md.
 - Listo para tag v1.1.0-rc7 y release.
+
+---
+Task ID: FASE-SANDBOX-FIX
+Agent: main (sandbox preview fix)
+Task: Hacer que SoftLBA funcione en el preview del sandbox fullstack-dev
+
+Work Log:
+- Inicializado entorno fullstack-dev con `curl https://z-cdn.chatglm.cn/fullstack/init-fullstack.sh`.
+- El init sobreescribió /home/z/my-project/ con el boilerplate Next.js del skill.
+- Re-clonado SoftLBA desde GitHub (rama main, HEAD 6a08c69 con fix v2 del print-worker).
+- Copiado todo el código de SoftLBA al workspace del skill, preservando:
+  * Caddyfile (gateway con XTransformPort)
+  * .zscripts/ (scripts del skill: dev.sh, mini-services-start.sh, etc.)
+  * skills/, examples/ (recursos del skill)
+- Instaladas deps con `bun install` (945 paquetes) + deps del realtime-service.
+- Aplicado schema Prisma con `bun run db:push` y seed con `bun run db:seed`.
+
+Problemas encontrados y resueltos:
+1. **Cross-origin warning en Turbopack**: añadido `allowedDevOrigins` en next.config.ts para permitir el dominio del preview (*.space-z.ai).
+
+2. **Realtime rechazaba tokens**: el mini-servicio no cargaba .env. Fix: añadido `--env-file=../../.env` al script `dev` del realtime-service en su package.json.
+
+3. **Realtime rechazaba orígenes del preview**: añadido helper `isOriginAllowed()` que en dev permite *.space-z.ai y *.chatglm.cn. Reemplazados los 2 usos de `ALLOWED_ORIGINS.includes(origin)` por `isOriginAllowed(origin)`.
+
+4. **Socket.IO interceptaba /health**: el path estaba configurado como '/' lo que causaba que /health devolviera "Transport unknown". Fix: removido `path: '/'` para usar el default `/socket.io/`, dejando /health y /emit libres para el httpServer.
+
+5. **Print Worker y Realtime no arrancaban con dev:all del skill**: el skill solo inicia Next.js + realtime-service, no print-worker. Creado /home/z/my-project/.zscripts/start-extras.sh que arranca ambos con `setsid` (sobrevive al cierre del comando bash).
+
+6. **Procesos morían entre comandos bash**: probado nohup, disown, setsid. El ganador fue `setsid bash -c 'exec bun ...' &` con el script start-extras.sh — los procesos quedan con parent PID 1 (init) y sobreviven.
+
+7. **Endpoints HTTP no aceptaban query string**: cuando el navegador hace fetch `/health?XTransformPort=3003`, el query string viaja con la URL. Fix: cambiadas todas las comparaciones `req.url === '/health'` por `(req.url || '').split('?')[0] === '/health'` en print-worker.ts y realtime-service/index.ts.
+
+8. **Diagnostics page hacía fetch a http://127.0.0.1:3003 directo**: el navegador del usuario no puede alcanzar puertos internos. Fix: cambiados los fetches a `/health?XTransformPort=3003` y `/health?XTransformPort=3004` (vía gateway Caddy).
+
+9. **Cliente Socket.IO usaba URL directa**: cambiada la URL por defecto de '' a '/?XTransformPort=3003' (vía gateway Caddy).
+
+10. **Stock insuficiente en AreaInventory**: la seed solo crea stock en InventoryItem (general), no en AreaInventory. Agregado stock inicial de 100 und para 5 productos DIRECTO en área SALON vía script temporal.
+
+Validación end-to-end con Agent Browser:
+- ✅ Login admin → /admin (dashboard carga con todas las secciones del sidebar).
+- ✅ /admin/diagnostics: Backend OK (148ms) · Realtime OK (clients=1) · Print Worker OK (iter=26) · DB OK · PWA OK · Build OK.
+- ✅ Login mesero → /mesero/salon (Mesas 1-10 visibles, productos con badges Directo/Prep.).
+- ✅ Selección Mesa 7 + Agua×2 + Pizza Margarita + Hamburguesa + Ropa Vieja → carrito con 5 items.
+- ✅ Click ENVIAR con idempotencyKey → POST /api/mesero/orders 200 OK → Pedido #1005 creado.
+- ✅ Routing verificado:
+  * Cocina recibe SOLO Hamburguesa + Ropa Vieja (2 items, status=PENDIENTE).
+  * Pizzería recibe SOLO Pizza Margarita (1 item, status=PENDIENTE).
+  * Agua (DIRECTO) NO aparece en Cocina ni Pizzería (nace SERVIDO).
+- ✅ Estado del pedido: EN_PREPARACION (recalculado automáticamente).
+- ✅ Indicador de conexión: "Servidor: 129ms, Realtime: conectado".
+
+Stage Summary:
+- Entorno fullstack-dev inicializado y SoftLBA corriendo en el preview.
+- 10 bugs de sandbox resueltos (CORS, gateway routing, env loading, path conflicts).
+- Flujo POS Mesa 7 verificado end-to-end con Agent Browser.
+- Routing por área confirmado: Cocina y Pizzería reciben solo lo suyo.
+- Print Worker estable: 26+ iteraciones, 0 errores.
+- Realtime conectado: 1 cliente (browser), 0 rechazos.
+- Próximo paso: commitear fixes del sandbox y continuar con FASE 11 (POS UI simplificación) o FASE 13 (KDS modo teléfono).

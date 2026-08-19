@@ -104,7 +104,11 @@ export function useRealtime(opts: {
       return
     }
 
-    const realtimeUrl = process.env.NEXT_PUBLIC_REALTIME_URL || ''
+    // FASE 43 (sandbox fix): si NEXT_PUBLIC_REALTIME_URL no está seteado,
+    // usar el gateway Caddy con XTransformPort=3003 (mismo origen que el
+    // frontend). Esto permite que el Socket.IO cliente funcione en el
+    // preview del sandbox sin configuración extra.
+    const realtimeUrl = process.env.NEXT_PUBLIC_REALTIME_URL || '/?XTransformPort=3003'
     const socket = io(realtimeUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,

@@ -3,8 +3,8 @@
   "version": "1.1.0-rc7",
   "private": true,
   "scripts": {
-    "dev": "bun --hot index.ts",
-    "start": "bun run index.ts",
+    "dev": "bun --hot --env-file=../../.env index.ts",
+    "start": "bun run --env-file=../../.env index.ts",
     "typecheck": "npx tsc --noEmit"
   },
   "dependencies": {

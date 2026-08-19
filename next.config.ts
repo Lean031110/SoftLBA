@@ -28,6 +28,14 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_APP_VERSION: pkg.version,
     NEXT_PUBLIC_APP_NAME: pkg.name,
   },
+  // Permitir orígenes del preview (sandbox z.ai) para HMR/WebSocket de dev.
+  allowedDevOrigins: [
+    "preview-chat-18013898-6ac6-4900-b7ec-b7676e5330a5.space-z.ai",
+    "*.space-z.ai",
+    "*.chatglm.cn",
+    "localhost",
+    "127.0.0.1",
+  ],
 };
 
 export default nextConfig;
