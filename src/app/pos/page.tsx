@@ -112,7 +112,13 @@ export default function POSPage() {
       ])
       setAreas(areasData.items || areasData)
       setTables(tablesData.items || tablesData)
-      setProducts(productsData.items || productsData)
+      // FASE 3: la API no devuelve isAvailable (lo filtra en el WHERE).
+      // Lo añadimos explícitamente para que ProductCard no lo marque como disabled.
+      const products = (productsData.items || productsData).map((p: any) => ({
+        ...p,
+        isAvailable: p.isAvailable !== undefined ? p.isAvailable : true,
+      }))
+      setProducts(products)
     } catch (e: any) {
       setError(e?.message || 'Error de conexión')
     } finally {
