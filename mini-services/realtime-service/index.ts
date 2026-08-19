@@ -24,25 +24,21 @@ import { createServer, IncomingMessage, ServerResponse } from 'http'
 import { Server as SocketIOServer, Socket } from 'socket.io'
 // v1.0.20-rc-final: networkInterfaces removido — ya no se auto-descubren IPs locales.
 
+// FASE 3 (config centralizada): usar config.ts en vez de process.env directo.
+import { config, getSecrets, isOriginAllowed } from './config'
+
 // FASE 1: Fuente única de versión — package.json del mini-servicio.
 // Bun soporta `import pkg from './package.json'` nativamente.
 import pkg from './package.json' with { type: 'json' }
 const SERVICE_VERSION: string = pkg.version
 
-const PORT = parseInt(process.env.REALTIME_PORT || '3003', 10)
+const PORT = config.services.realtimePort
 
 // ============================================================
 // Secreto de firma
 // ============================================================
 function getSecret(): string {
-  const envSecret = process.env.NEXTAUTH_SECRET
-  if (envSecret && envSecret.length >= 16) return envSecret
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'NEXTAUTH_SECRET no configurado. En producción es obligatorio definir NEXTAUTH_SECRET (>= 16 chars).',
-    )
-  }
-  return 'cuba-restaurante-secret-key-change-in-prod'
+  return getSecrets().nextauthSecret
 }
 
 const SECRET = getSecret()
@@ -117,72 +113,17 @@ async function verifySessionToken(token: string): Promise<VerifiedSession | null
 }
 
 // ============================================================
-// CORS
+// CORS — Orígenes permitidos
 // ============================================================
-// v1.0.20-rc-final: NO auto-incluir IPs de red local — si el servidor
-// tiene IP pública (VPS, Cloud), quedaría CORS abierto a cualquier origen.
-// Solo incluir localhost/127.0.0.1 en dev, y orígenes explícitos de env var.
-//
-// FASE 43 (sandbox fix): en dev, también permitir orígenes del preview
-// sandbox (*.space-z.ai, *.chatglm.cn) para que el Socket.IO cliente
-// funcione a través del gateway Caddy.
-function getAllowedOrigins(): string[] {
-  const origins = new Set<string>()
-
-  // En dev, permitir localhost
-  if (process.env.NODE_ENV !== 'production') {
-    origins.add('http://localhost:3000')
-    origins.add('http://127.0.0.1:3000')
-    origins.add('http://localhost')
-    origins.add('http://127.0.0.1')
-    // FASE 43: preview sandbox de z.ai (para desarrollo y testing).
-    // Se permiten todos los subdominios de space-z.ai y chatglm.cn.
-    // En producción esto NO se aplica.
-    origins.add('https://preview-chat-18013898-6ac6-4900-b7ec-b7676e5330a5.space-z.ai')
-  }
-
-  // Orígenes explícitos del env (CSV)
-  const envOrigins = process.env.ALLOWED_ORIGINS
-  if (envOrigins) {
-    for (const o of envOrigins.split(',').map((s) => s.trim()).filter(Boolean)) {
-      origins.add(o)
-    }
-  } else if (process.env.NODE_ENV === 'production') {
-    console.warn(
-      '[cors] ALLOWED_ORIGINS no configurado en producción. ' +
-        'El realtime service rechazará conexiones desde orígenes no listados.',
-    )
-  }
-
-  return Array.from(origins)
-}
-
-const ALLOWED_ORIGINS = getAllowedOrigins()
+// FASE 3 (config centralizada): ALLOWED_ORIGINS viene de config.ts.
+const ALLOWED_ORIGINS = config.cors.allowedOrigins
 console.log('[cors] Orígenes permitidos:', ALLOWED_ORIGINS.join(', '))
-
-// FASE 43 (sandbox fix): helper para verificar si un origen está permitido,
-// considerando wildcards para subdominios de space-z.ai en dev.
-function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin) return true // Same-origin o curl (sin Origin header).
-  if (ALLOWED_ORIGINS.includes(origin)) return true
-  // En dev, permitir cualquier subdominio de space-z.ai y chatglm.cn
-  // (preview sandbox).
-  if (process.env.NODE_ENV !== 'production') {
-    if (origin.endsWith('.space-z.ai') || origin.endsWith('.chatglm.cn')) {
-      return true
-    }
-    // Cualquier origen https en dev para pruebas locales.
-    if (origin.startsWith('https://') && origin.includes('localhost')) {
-      return true
-    }
-  }
-  return false
-}
+// isOriginAllowed() viene de config.ts.
 
 // ============================================================
 // Secreto compartido para endpoint /emit interno
 // ============================================================
-const INTERNAL_SECRET = process.env.REALTIME_SECRET || 'dev-internal-secret-change-in-prod'
+const INTERNAL_SECRET = getSecrets().realtimeSecret
 
 // ============================================================
 // Mapa rol → áreas permitidas

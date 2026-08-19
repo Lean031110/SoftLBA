@@ -15,9 +15,12 @@
 import { createServer } from 'http'
 import { appendFileSync, mkdirSync } from 'fs'
 import { join, resolve } from 'path'
+import { getConfig } from '../src/lib/config'
 
+// FASE 3 (config centralizada): leer config del módulo central.
+const _cfg = getConfig()
 const ROOT = resolve(__dirname, '..')
-const LOG_DIR = join(ROOT, 'logs')
+const LOG_DIR = _cfg.logging.logDir
 const LOG_FILE = join(LOG_DIR, 'printer.log')
 
 mkdirSync(LOG_DIR, { recursive: true })
@@ -46,8 +49,8 @@ function log(level: 'INFO' | 'WARN' | 'ERROR' | 'FATAL', msg: string, data?: any
 import { db } from '../src/lib/db'
 import { processPrintQueue } from '../src/lib/print/print-service'
 
-const PORT = parseInt(process.env.PRINT_WORKER_PORT || '3004', 10)
-const INTERVAL_MS = parseInt(process.env.PRINT_WORKER_INTERVAL_MS || '5000', 10)
+const PORT = _cfg.services.printWorkerPort
+const INTERVAL_MS = _cfg.printWorker.intervalMs
 
 // === Diagnóstico en arranque =================================
 // Esto nos dice inmediatamente si db se cargó bien.

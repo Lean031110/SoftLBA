@@ -1,0 +1,53 @@
+{
+  "_comment": "Copia este archivo como config.json (sin secretos). config.json NO se commitea.",
+  "_doc": "Configuración NO sensible, versionable. Para cambiar entre entornos sin tocar código.",
+
+  "services": {
+    "_comment_backendUrl": "URL base del backend Next.js para server→server (default: http://localhost:3000).",
+    "backendUrl": "http://localhost:3000",
+    "backendPort": 3000,
+
+    "_comment_realtimeInternalUrl": "URL interna del Realtime para server→server (default: http://localhost:3003).",
+    "realtimeInternalUrl": "http://localhost:3003",
+    "realtimePort": 3003,
+
+    "_comment_realtimePublicUrl": "URL pública del Realtime para el browser. Vacía = usa NEXT_PUBLIC_REALTIME_URL de .env. Para sandbox gateway: '/?XTransformPort=3003'. Para LAN: 'http://10.0.0.5:3003'. Para HTTPS: 'wss://midominio.com/socket.io'.",
+    "realtimePublicUrl": "",
+
+    "_comment_printWorkerUrl": "URL interna del Print Worker (default: http://localhost:3004).",
+    "printWorkerUrl": "http://localhost:3004",
+    "printWorkerPort": 3004
+  },
+
+  "client": {
+    "_comment_publicBackendUrl": "URL pública del backend para el browser. Vacía = mismo origen (recomendado).",
+    "publicBackendUrl": "",
+
+    "_comment_publicPrintWorkerUrl": "URL pública del Print Worker para el browser (health checks desde /admin/diagnostics). Vacía = usa XTransformPort gateway. Para LAN: 'http://10.0.0.5:3004'.",
+    "publicPrintWorkerUrl": ""
+  },
+
+  "cors": {
+    "_comment_allowedOrigins": "Orígenes permitidos para Socket.IO y API. CSV en .env ALLOWED_ORIGINS o array aquí. Ej: ['http://localhost:3000', 'http://10.0.0.5:3000'].",
+    "allowedOrigins": ["http://localhost:3000"]
+  },
+
+  "logging": {
+    "_comment_consoleLevel": "Nivel mínimo para consola. DEBUG/INFO/WARN/ERROR/FATAL. Default dev=DEBUG, prod=INFO.",
+    "consoleLevel": "DEBUG",
+    "_comment_fileLevel": "Nivel mínimo para archivos de log. Default DEBUG (guarda todo).",
+    "fileLevel": "DEBUG",
+    "_comment_logDir": "Directorio de logs. Default: ./logs.",
+    "logDir": "./logs"
+  },
+
+  "auth": {
+    "_comment_sessionTtlSeconds": "Duración de sesión en segundos. Default: 43200 (12h).",
+    "sessionTtlSeconds": 43200
+  },
+
+  "printWorker": {
+    "_comment_intervalMs": "Intervalo de procesamiento de cola en ms. Default: 5000.",
+    "intervalMs": 5000
+  }
+}

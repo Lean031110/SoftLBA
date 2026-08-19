@@ -16,13 +16,14 @@
 // ============================================================
 
 import { logger } from '@/lib/logger'
+import { getConfig, getSecrets } from '@/lib/config'
 
-const INTERNAL_EMIT_URL =
-  process.env.REALTIME_INTERNAL_URL ||
-  'http://localhost:3000/api/internal/emit'
+// FASE 3 (config centralizada): usar getConfig() en vez de process.env directo.
+const cfg = getConfig()
+const secrets = getSecrets()
 
-// v1.0.17: secreto compartido para autenticar llamadas internas.
-const INTERNAL_SECRET = process.env.REALTIME_SECRET || 'dev-internal-secret-change-in-prod'
+const INTERNAL_EMIT_URL = cfg.services.realtimeEmitUrl
+const INTERNAL_SECRET = secrets.realtimeSecret
 
 async function postEmit(room: string, event: string, data: any): Promise<void> {
   try {

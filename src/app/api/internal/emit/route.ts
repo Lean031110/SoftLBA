@@ -1,28 +1,22 @@
 // ============================================================
 // POST /api/internal/emit — puente servidor → socket.io (seguro)
 // ============================================================
-// v1.0.17 (CONSOLIDACIÓN): doble factor de autenticación:
+// FASE 3 (config centralizada): URLs y secretos vienen de getConfig().
+// Doble factor de autenticación:
 //   1. La petición debe venir de localhost (127.0.0.1/::1).
 //   2. La petición debe incluir header `X-Internal-Secret` con el valor
-//      de REALTIME_SECRET (env var).
-//
-// Esto evita el bypass por header spoofing: aunque un atacante consiga
-// hacer pasar su petición por "localhost", necesita conocer el secreto.
+//      de REALTIME_SECRET.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { getConfig, getSecrets } from '@/lib/config'
 
-const REALTIME_SERVICE_URL = process.env.REALTIME_SERVICE_URL || 'http://localhost:3003/emit'
-const PORT = process.env.PORT || '3000'
+const cfg = getConfig()
+const secrets = getSecrets()
 
-function getInternalSecret(): string | null {
-  const secret = process.env.REALTIME_SECRET
-  if (secret && secret.length >= 16) return secret
-  if (process.env.NODE_ENV === 'production') return null
-  return 'dev-internal-secret-change-in-prod'
-}
-
-const INTERNAL_SECRET = getInternalSecret()
+const REALTIME_SERVICE_URL = cfg.services.realtimeEmitUrl
+const PORT = cfg.services.backendPort.toString()
+const INTERNAL_SECRET = secrets.realtimeSecret
 
 function isLocalRequest(req: NextRequest): boolean {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()

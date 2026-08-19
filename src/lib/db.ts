@@ -1,12 +1,13 @@
 import { PrismaClient } from '@prisma/client'
+import { getConfig } from '@/lib/config'
 
-// FASE 3: Ruido de Prisma reducido.
-// - En DEV: solo WARN+ERROR a consola. queries a logs/prisma.log si LOG_LEVEL=DEBUG.
+// FASE 3 (config centralizada): usar getConfig() en vez de process.env directo.
+// - En DEV: solo WARN+ERROR a consola. queries a logs/prisma.log si LOG_LEVEL_FILE=DEBUG.
 // - En PROD: solo WARN+ERROR a consola. Sin queries.
 // Antes: log: ['query'] siempre → ruido masivo en prod.
 
-const isDev = process.env.NODE_ENV !== 'production'
-const enableQueryLog = isDev && process.env.LOG_LEVEL_FILE === 'DEBUG'
+const cfg = getConfig()
+const enableQueryLog = cfg.isDev && cfg.logging.fileLevel === 'DEBUG'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -29,4 +30,4 @@ function createPrismaClient() {
 
 export const db = globalForPrisma.prisma ?? createPrismaClient()
 
-if (isDev) globalForPrisma.prisma = db
+if (cfg.isDev) globalForPrisma.prisma = db

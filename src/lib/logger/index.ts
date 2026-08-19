@@ -26,7 +26,13 @@
 // ============================================================
 
 import { appendFileSync, existsSync, mkdirSync } from 'fs'
-import { join, resolve } from 'path'
+import { join } from 'path'
+import { getConfig } from '@/lib/config'
+
+// FASE 3 (config centralizada): leer niveles y logDir de getConfig().
+const _cfg = getConfig()
+const CONSOLE_MIN_LEVEL = _cfg.logging.consoleLevel
+const FILE_MIN_LEVEL = _cfg.logging.fileLevel
 
 // ============================================================
 // Niveles
@@ -51,10 +57,7 @@ function parseMinLevel(env?: string): LogLevel {
   return 'INFO'
 }
 
-// Nivel mínimo para CONSOLA. En dev DEBUG (ver todo), en prod INFO.
-const CONSOLE_MIN_LEVEL = parseMinLevel(process.env.LOG_LEVEL_CONSOLE || process.env.LOG_LEVEL)
-// Nivel mínimo para ARCHIVOS. Por defecto DEBUG (guardar todo).
-const FILE_MIN_LEVEL = parseMinLevel(process.env.LOG_LEVEL_FILE || 'DEBUG')
+// (CONSOLE_MIN_LEVEL y FILE_MIN_LEVEL se definen arriba desde getConfig().)
 
 // ============================================================
 // Redacción de secretos
@@ -155,11 +158,15 @@ function redactValue(value: unknown, depth = 0): unknown {
 // ============================================================
 
 function getLogDir(): string {
-  // En runtime server (Next.js API routes) process.cwd() es la raíz del repo.
-  // En el mini-servicio realtime y en el print worker también (cwd heredado).
-  // Se lee en cada llamada (no se cachea) para que los tests puedan aislar LOG_DIR.
-  const base = process.env.LOG_DIR || process.cwd()
-  return join(base, 'logs')
+  // FASE 3 (config centralizada): LOG_DIR de getConfig(), pero permitir
+  // override via process.env.LOG_DIR en runtime (para tests).
+  // getConfig() ya resuelve el path final (con /logs añadido si no lo tenía).
+  if (process.env.LOG_DIR) {
+    // Compatibilidad tests: si LOG_DIR no termina en /logs, añadirlo.
+    const d = process.env.LOG_DIR
+    return d.endsWith('/logs') || d.endsWith('\\logs') || d.endsWith('/logs/') ? d : join(d, 'logs')
+  }
+  return getConfig().logging.logDir
 }
 
 function ensureLogDir(logDir: string) {

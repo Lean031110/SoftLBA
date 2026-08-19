@@ -18,6 +18,8 @@ beforeEach(() => {
   logsDir = join(tmpDir, 'logs')
   process.env.LOG_LEVEL_CONSOLE = 'DEBUG'
   process.env.LOG_LEVEL_FILE = 'DEBUG'
+  // FASE 3: resetear caché de getConfig() para que lea nuevos env vars.
+  vi.resetModules()
   vi.spyOn(console, 'debug').mockImplementation(() => {})
   vi.spyOn(console, 'info').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})

@@ -16,20 +16,18 @@ import { db } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { UserRole } from '@/lib/permissions'
 import { verifySessionToken as verifyTokenEdge } from './token'
+import { getConfig, getSecrets } from '@/lib/config'
+
+// FASE 3 (config centralizada): secretos y TTL desde getConfig()/getSecrets().
+const cfg = getConfig()
+const secrets = getSecrets()
 
 const SESSION_COOKIE = 'rc_session'
-const SESSION_TTL_HOURS = 12
+// Duración de sesión desde config (default 12h).
+const SESSION_TTL_MS = cfg.auth.sessionTtlSeconds * 1000
 
 function getSecret(): string {
-  const envSecret = process.env.NEXTAUTH_SECRET
-  if (envSecret && envSecret.length >= 16) return envSecret
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'NEXTAUTH_SECRET no configurado. En producción es obligatorio definir NEXTAUTH_SECRET (>= 16 chars).',
-    )
-  }
-  // Solo en development: fallback para tests locales.
-  return 'cuba-restaurante-secret-key-change-in-prod'
+  return secrets.nextauthSecret
 }
 
 const SECRET = getSecret()
@@ -43,7 +41,7 @@ function sign(payload: string): string {
 }
 
 export function createSessionToken(userId: string, role: UserRole, authVersion: number = 1): string {
-  const expiresAt = Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000
+  const expiresAt = Date.now() + SESSION_TTL_MS
   // v1.0.13 (issue #46): incluir authVersion en el payload firmado.
   // Si authVersion cambia en la DB, este token se invalida.
   const payload = `${userId}.${role}.${expiresAt}.${authVersion}`
@@ -157,10 +155,10 @@ export async function login(username: string, password: string, ipAddress?: stri
   // FASE 1: incluir authVersion del usuario al crear el token.
   const token = createSessionToken(user.id, user.role, user.authVersion)
   const cookieStore = await cookies()
-  const expiresAt = Date.now() + SESSION_TTL_HOURS * 60 * 60 * 1000
+  const expiresAt = Date.now() + SESSION_TTL_MS
   cookieStore.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: cfg.auth.cookieSecure,
     sameSite: 'lax',
     path: '/',
     expires: new Date(expiresAt),

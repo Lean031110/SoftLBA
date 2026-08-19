@@ -29,6 +29,10 @@
 // ============================================================
 
 function getSecret(): string {
+  // FASE 3 (config centralizada): los secretos viven en env vars (NO en config.json).
+  // Aquí leemos NEXTAUTH_SECRET directamente porque este módulo debe ser
+  // compatible con Edge runtime y con vitest (que no resuelve alias en runtime).
+  // La validación de "obligatorio en prod" la hace getSecrets() en src/lib/config.
   const envSecret = process.env.NEXTAUTH_SECRET
   if (envSecret && envSecret.length >= 16) return envSecret
   if (process.env.NODE_ENV === 'production') {
