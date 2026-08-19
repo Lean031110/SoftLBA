@@ -1,0 +1,499 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { Bell, Check, X, BellOff, Loader2, Trash2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { useRealtimeContext } from '@/components/realtime/realtime-provider'
+import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
+
+type Notification = {
+  id: string
+  type: string
+  title: string
+  message: string
+  isRead: boolean
+  createdAt: string
+  data?: string | null
+}
+
+const TYPE_COLORS: Record<string, string> = {
+  INFO: 'bg-blue-500',
+  WARNING: 'bg-amber-500',
+  URGENT: 'bg-red-500',
+  SUCCESS: 'bg-emerald-500',
+  ORDER: 'bg-purple-500',
+  STOCK: 'bg-orange-500',
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  INFO: 'Info',
+  WARNING: 'Aviso',
+  URGENT: 'Urgente',
+  SUCCESS: 'OK',
+  ORDER: 'Pedido',
+  STOCK: 'Stock',
+}
+
+function timeAgo(date: string): string {
+  const diff = Date.now() - new Date(date).getTime()
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return 'hace un momento'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `hace ${minutes} min`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `hace ${hours} h`
+  const days = Math.floor(hours / 24)
+  return `hace ${days} d`
+}
+
+export function NotificationBell({ userId, role }: { userId?: string; role?: string }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unread, setUnread] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notifications?limit=30')
+      const data = await res.json()
+      if (data.ok) {
+        setNotifications(data.notifications || [])
+        setUnread(data.unreadCount || 0)
+      }
+    } catch (e) {
+      console.error('notification load error', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (userId) load()
+    const interval = setInterval(load, 30000)
+    return () => clearInterval(interval)
+  }, [userId, load])
+
+  // Solicitar permiso de notificaciones nativas del navegador
+  // FASE 22: diagnóstico completo de contexto seguro + PushManager.
+  const [notifDiag, setNotifDiag] = useState<{
+    isSecureContext: boolean
+    notificationSupported: boolean
+    permission: string
+    serviceWorkerReady: boolean
+    pushSupported: boolean
+    origin: string
+    protocol: string
+  } | null>(null)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const run = async () => {
+      const isSecureContext = window.isSecureContext === true
+      const notificationSupported = 'Notification' in window
+      const permission = notificationSupported ? Notification.permission : 'unsupported'
+      let swReady = false
+      let pushSupported = false
+      try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.getRegistration()
+          swReady = !!reg
+        }
+        if ('PushManager' in window) {
+          pushSupported = true
+        }
+      } catch {
+        /* ignore */
+      }
+      setNotifDiag({
+        isSecureContext,
+        notificationSupported,
+        permission,
+        serviceWorkerReady: swReady,
+        pushSupported,
+        origin: window.location.origin,
+        protocol: window.location.protocol,
+      })
+      if (notificationSupported && Notification.permission === 'granted') {
+        setPushEnabled(true)
+      }
+    }
+    run()
+  }, [])
+
+  // Función para mostrar notificación nativa (funciona aunque la web no esté en primer plano)
+  const showNativeNotification = useCallback((title: string, body: string, data?: any) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        const notif = new Notification(title, {
+          body,
+          icon: '/softlba-logo.png',
+          badge: '/softlba-favicon.png',
+          tag: data?.tag || 'softlba',
+          data: data || {},
+        } as NotificationOptions)
+        notif.onclick = () => {
+          window.focus()
+          if (data?.url) {
+            router.push(data.url)
+          }
+          notif.close()
+        }
+        // Auto-cerrar después de 10 segundos
+        setTimeout(() => notif.close(), 10000)
+      } catch (e) {
+        console.error('Native notification error:', e)
+      }
+    }
+  }, [router])
+
+  // Función para reproducir sonido
+  const playSound = useCallback((frequency: number, duration: number, repeat: number = 1) => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+      for (let i = 0; i < repeat; i++) {
+        setTimeout(() => {
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.connect(gain)
+          gain.connect(ctx.destination)
+          osc.frequency.value = frequency
+          gain.gain.value = 0.3
+          osc.start()
+          osc.stop(ctx.currentTime + duration)
+        }, i * (duration * 1000 + 100))
+      }
+      if ('vibrate' in navigator) navigator.vibrate(repeat > 1 ? [200, 100, 200, 100, 200] : 200)
+    } catch {}
+  }, [])
+
+  // Sonido y toast cuando llega una nueva notificación por WebSocket
+  // v1.0.20-rc-final: usar el socket singleton del RealtimeProvider
+  // en vez de crear uno nuevo por componente.
+  const realtimeCtx = useRealtimeContext()
+  const connected = realtimeCtx?.connected ?? false
+  // FE-039: estado de conexión con 5 valores para indicador visual.
+  const connectionState = realtimeCtx?.connectionState ?? 'connecting'
+
+  // v1.1.0-rc1 (POS_RECONSTRUCTION): NO auto-solicitar permiso de notificaciones.
+  // Chrome ≥ 84 bloquea requestPermission() sin gesto del usuario.
+  // Si el permiso ya está 'denied', mostrar mensaje claro en vez de
+  // "Permiso denegado" sin explicación.
+
+  // Solicitar permiso de notificaciones (solo al hacer click del usuario)
+  async function requestPushPermission() {
+    if (!('Notification' in window)) {
+      toast.error('Tu navegador no soporta notificaciones push.')
+      return
+    }
+    // Si ya está denegado, el navegador NO muestra el diálogo de nuevo.
+    // Hay que guiar al usuario a cambiarlo manualmente.
+    if (Notification.permission === 'denied') {
+      toast.error(
+        'Notificaciones bloqueadas por el navegador',
+        {
+          description: 'Ve a la configuración del sitio (ícono de candado en la barra de direcciones) → Permisos → Notificaciones → Permitir.',
+          duration: 8000,
+          action: {
+            label: 'Entendido',
+            onClick: () => {},
+          },
+        },
+      )
+      return
+    }
+    const permission = await Notification.requestPermission()
+    if (permission === 'granted') {
+      setPushEnabled(true)
+      toast.success('Notificaciones activadas. Te avisaremos de pedidos nuevos.')
+      try {
+        new Notification('SoftLBA - Notificaciones activadas', {
+          body: 'Recibirás alertas de pedidos y estados en tiempo real.',
+          icon: '/softlba-logo.png',
+          badge: '/softlba-favicon.png',
+          tag: 'softlba-welcome',
+        })
+      } catch {}
+    } else if (permission === 'denied') {
+      toast.error(
+        'Permiso de notificaciones denegado',
+        {
+          description: 'Si quieres activarlas después, ve al ícono de candado en la barra de direcciones.',
+          duration: 6000,
+        },
+      )
+    }
+  }
+
+  async function markAllRead() {
+    setLoading(true)
+    try {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ all: true }),
+      })
+      await load()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function markOne(id: string) {
+    try {
+      await fetch('/api/notifications/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      await load()
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  // v1.1.0-rc1: eliminar notificación del historial.
+  async function deleteOne(id: string) {
+    try {
+      await fetch(`/api/notifications/${id}`, { method: 'DELETE' })
+      await load()
+      toast.success('Notificación eliminada')
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al eliminar')
+    }
+  }
+
+  // v1.1.0-rc1: eliminar todas las notificaciones leídas.
+  async function deleteAllRead() {
+    setLoading(true)
+    try {
+      const readNotifs = notifications.filter((n) => n.isRead)
+      await Promise.all(
+        readNotifs.map((n) =>
+          fetch(`/api/notifications/${n.id}`, { method: 'DELETE' }),
+        ),
+      )
+      await load()
+      toast.success(`${readNotifs.length} notificación(es) eliminada(s)`)
+    } catch (e) {
+      console.error(e)
+      toast.error('Error al eliminar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        {/* FRONTEND-04 (FE-020): h-10 (40px) en mobile, size-9 (36px) en
+            desktop. WCAG 2.5.5 recomienda 44px mínimo. */}
+        <Button variant="ghost" size="icon" className="relative h-10 w-10 md:h-9 md:w-9" aria-label="Notificaciones">
+          <Bell className="h-4 w-4" />
+          {unread > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
+          {/* FE-039: indicador de conexión con 3 estados visuales.
+              Verde = conectado, Amber pulsante = reconectando, Rojo = desconectado/auth_fail.
+              Plan sección 20: "● Conectado" / "↻ Reconectando…" */}
+          {connectionState === 'connected' && (
+            <span
+              className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white"
+              title="Tiempo real conectado"
+              aria-label="Tiempo real conectado"
+            />
+          )}
+          {connectionState === 'reconnecting' && (
+            <span
+              className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-amber-500 ring-1 ring-white animate-pulse"
+              title="Reconectando tiempo real..."
+              aria-label="Reconectando tiempo real"
+            />
+          )}
+          {(connectionState === 'disconnected' || connectionState === 'auth_failed') && (
+            <span
+              className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-red-500 ring-1 ring-white"
+              title="Tiempo real desconectado"
+              aria-label="Tiempo real desconectado"
+            />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 sm:w-96 p-0">
+        <div className="flex items-center justify-between p-3 border-b">
+          <div className="flex items-center gap-2">
+            <Bell className="h-4 w-4" />
+            <span className="font-medium text-sm">Notificaciones</span>
+            {unread > 0 && (
+              <Badge variant="destructive" className="text-[10px] h-5 px-1.5">
+                {unread} sin leer
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            {!pushEnabled && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={requestPushPermission}>
+                Activar
+              </Button>
+            )}
+            {unread > 0 && (
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={markAllRead} disabled={loading}>
+                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 mr-1" />}
+                Leídas
+              </Button>
+            )}
+            {/* v1.1.0-rc1: botón eliminar todas las leídas */}
+            {notifications.some((n) => n.isRead) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs text-red-600 hover:text-red-700"
+                onClick={deleteAllRead}
+                disabled={loading}
+                aria-label="Eliminar notificaciones leídas"
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                Limpiar
+              </Button>
+            )}
+          </div>
+
+          {/* FASE 22: diagnóstico de Web Notifications (visible siempre) */}
+          {notifDiag && (
+            <div className="border-t pt-2 px-1 text-[10px] text-muted-foreground space-y-0.5 font-mono">
+              <div className="flex justify-between">
+                <span>Secure Context:</span>
+                <span className={notifDiag.isSecureContext ? 'text-emerald-600' : 'text-red-600'}>
+                  {notifDiag.isSecureContext ? '✓ sí' : '✗ NO'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Notification API:</span>
+                <span className={notifDiag.notificationSupported ? 'text-emerald-600' : 'text-red-600'}>
+                  {notifDiag.notificationSupported ? '✓ soportada' : '✗ no'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Permission:</span>
+                <span className={
+                  notifDiag.permission === 'granted' ? 'text-emerald-600' :
+                  notifDiag.permission === 'denied' ? 'text-red-600' : 'text-amber-600'
+                }>
+                  {notifDiag.permission}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Service Worker:</span>
+                <span className={notifDiag.serviceWorkerReady ? 'text-emerald-600' : 'text-amber-600'}>
+                  {notifDiag.serviceWorkerReady ? '✓ activo' : '✗ no registrado'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>PushManager:</span>
+                <span className={notifDiag.pushSupported ? 'text-emerald-600' : 'text-red-600'}>
+                  {notifDiag.pushSupported ? '✓ soportado' : '✗ no'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Origin:</span>
+                <span className="truncate ml-2">{notifDiag.origin}</span>
+              </div>
+              {!notifDiag.isSecureContext && (
+                <div className="mt-1 p-1 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 rounded text-[10px]">
+                  ⚠️ Las notificaciones del navegador requieren HTTPS.
+                  Para LAN: configura Caddy local con certificado confiable.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <ScrollArea className="max-h-80">
+          {notifications.length === 0 ? (
+            <div className="p-6 text-center text-sm text-stone-500">
+              <BellOff className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              No tienes notificaciones
+            </div>
+          ) : (
+            <div className="divide-y">
+              {notifications.map((n) => (
+                <div
+                  key={n.id}
+                  className={cn(
+                    'p-3 hover:bg-stone-50 dark:hover:bg-stone-800/50 cursor-pointer transition-colors',
+                    !n.isRead && 'bg-blue-50/50 dark:bg-blue-950/30'
+                  )}
+                  onClick={() => {
+                    if (!n.isRead) markOne(n.id)
+                    // Si tiene orderId, ir al pedido
+                    try {
+                      const data = n.data ? JSON.parse(n.data) : {}
+                      if (data.orderId) {
+                        router.push(`/mesero/pedidos/${data.orderId}`)
+                      }
+                    } catch {}
+                    setOpen(false)
+                  }}
+                >
+                  <div className="flex items-start gap-2">
+                    <span className={cn('h-2 w-2 rounded-full mt-1.5 shrink-0', TYPE_COLORS[n.type] || 'bg-stone-400')} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-stone-500 uppercase">
+                          {TYPE_LABELS[n.type] || n.type}
+                        </span>
+                        <span className="text-[10px] text-stone-400">
+                          {timeAgo(n.createdAt)}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium truncate">{n.title}</p>
+                      <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2">{n.message}</p>
+                    </div>
+                    {!n.isRead && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          markOne(n.id)
+                        }}
+                        aria-label="Marcar como leída"
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                    )}
+                    {/* v1.1.0-rc1: botón eliminar individual */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 shrink-0 text-red-500 hover:text-red-700"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteOne(n.id)
+                      }}
+                      aria-label="Eliminar notificación"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  )
+}

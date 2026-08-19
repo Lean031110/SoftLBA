@@ -1,2 +1,94 @@
-skills/
+# ============================================================
+# SoftLBA — .gitignore
+# ============================================================
+
+# Dependencies
 node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Testing
+/coverage
+*.lcov
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+
+# Production
+/build/
+/dist/
+
+# Environment variables — NUNCA subir secretos
+.env
+.env.*
+
+# Logs y diagnósticos (FASE 2/3 — generados por runtime)
+/logs/
+/diagnostics/
+/diagnostics-staging/
+
+# DB SQLite (no commitear la base de datos)
+/db/*.db
+/db/*.db-journal
+!.env.example
+!.env.docker.example
+
+# Database
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+/db/custom.db*
+
+# Logs
+*.log
+dev.log
+server.log
+
+# Backups
+/backups/
+/backups/snapshots/
+
+# Download/Upload — artefactos de trabajo
+/download/
+/upload/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.tar.gz
+*.zip
+
+# Agent context (temporal)
+/agent-ctx/
+/tool-results/
+/.zscripts/
+
+# Skills (internas del entorno de desarrollo)
+/skills/
+
+# Examples (no parte del core)
+/examples/
+tsconfig.tsbuildinfo
+mini-services/realtime-service/bun.lock
+mini-services/realtime-service/bun.lock
+
+# Visual regression screenshots (generadas por Playwright)
+tests/e2e/screenshots/*.png
+!tests/e2e/screenshots/README.md

@@ -1,0 +1,953 @@
+// ============================================================
+// Schema Prisma - Sistema de Restaurante Cuba
+// ============================================================
+// Base de datos: SQLite (migrable a PostgreSQL/MySQL)
+// Última actualización: v0.1.0
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 1. USUARIOS, ROLES Y AUTENTICACIÓN
+// ============================================================
+
+model User {
+  id                String    @id @default(cuid())
+  username          String    @unique
+  email             String?   @unique
+  passwordHash     String
+  role              UserRole  @default(MESERO)
+  isActive          Boolean   @default(true)
+  mustChangePass   Boolean   @default(true)
+  failedAttempts    Int       @default(0)
+  lockedUntil       DateTime?
+
+  // authVersion para invalidar sesiones existentes (FASE 1 consolidación).
+  // El token de sesión guarda authVersion al crearse. Si el usuario cambia
+  // su contraseña, su rol, o es desactivado, se incrementa authVersion.
+  // El middleware compara authVersion del token con el de la DB; si no
+  // coinciden, la sesión se invalida inmediatamente.
+  authVersion       Int       @default(1)
+
+  // Perfil
+  firstName        String?
+  lastName         String?
+  phone            String?
+  mobile           String?
+  address          String?
+  idNumber         String?
+  bio              String?
+  avatarUrl        String?
+
+  // Auditoría
+  lastLoginAt      DateTime?
+  lastLoginIp      String?
+  createdAt        DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relaciones
+  profile          UserProfile?
+  orders           Order[]
+  payments         Payment[]
+  auditLogs        AuditLog[]
+  stockMovements   StockMovement[]
+  physicalStocks   PhysicalStock[]
+  financeEntries   FinanceEntry[]
+  annulledFinanceEntries FinanceEntry[] @relation("FinanceAnnulledBy")
+  dailyCloses      DailyClose[]
+  workShifts       WorkShift[]
+  notifications    Notification[]
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model UserProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emergencyContact String?
+  hireDate        DateTime?
+  salary          Float    @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ============================================================
+// NOTA (FIX 12):
+// El modelo `Session` fue eliminado. La autenticación se basa en
+// cookies firmadas con HMAC (src/lib/auth/token.ts), no en una
+// tabla de sesiones en la base de datos. Mantener una tabla Session
+// sin usar añadía peso a las consultas y confusión en el schema.
+// ============================================================
+
+// ============================================================
+// 2. CONFIGURACIÓN DEL RESTAURANTE Y NOTICIAS
+// ============================================================
+
+model RestaurantConfig {
+  id              String   @id @default(cuid())
+  name            String   @default("Mi Restaurante")
+  legalName       String?
+  logo            String?
+  address         String?
+  phone           String?
+  email           String?
+  website         String?
+  facebook        String?
+  instagram       String?
+  telegram        String?
+  whatsapp        String?
+  hours           String?
+  slogan          String?
+  welcomeText     String?
+  currency        String   @default("CUP")
+  currencySymbol  String   @default("$")
+  receiptHeader   String?
+  receiptFooter   String?
+  taxRate         Float    @default(0)
+  showDemoUsers   Boolean  @default(true)
+  // Impresora térmica
+  printerEnabled  Boolean  @default(false)
+  printerName     String?
+  printerIp       String?
+  printerPort     Int?
+  printerWidth    Int      @default(80)  // 80mm o 58mm
+  printerAutoPrint Boolean @default(false) // Auto-imprimir al cobrar
+  // Tasa de cambio
+  usdToCup        Float    @default(320)  // 1 USD = X CUP
+  lastRateUpdate  DateTime?
+  rateReminderEnabled Boolean @default(true)
+  // Página offline personalizable
+  offlineTitle       String   @default("Sin conexión al servidor")
+  offlineMessage     String   @default("Para usar SoftLBA necesitas estar conectado a la red WiFi del restaurante (red local). Verifica que estás en la misma red que el servidor.")
+  offlineWifiName    String?
+  offlineInstructions String?
+  // Control de stock negativo en ventas DIRECTAS (FIX 4 / v1.0-RC1-bloque1)
+  // Por defecto TRUE: no se permite vender productos DIRECTO sin stock suficiente.
+  blockNegativeStock Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+}
+
+model News {
+  id           String     @id @default(cuid())
+  title        String
+  content      String
+  type         NewsType   @default(INFO)
+  isPublic     Boolean    @default(true)
+  isActive     Boolean    @default(true)
+  priority     Int        @default(0)
+  publishedAt  DateTime   @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model Area {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  // v1.1.0-rc6: configuración de salida por área.
+  outputMode  String   @default("DISPLAY") // DISPLAY, PRINTER, DISPLAY_AND_PRINTER, AUTO
+  targetPrepTime Int   @default(15) // minutos objetivo de preparación
+  kdsEnabled  Boolean  @default(true)
+  soundEnabled Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  inventories AreaInventory[]
+  orders      Order[]
+  dailyCloses DailyCloseArea[]
+  stockMovements StockMovement[]
+  physicalStocks PhysicalStock[]
+  products   Product[]
+  productsForSale       Product[] @relation("ProductSaleArea")
+  productsForProduction Product[] @relation("ProductProductionArea")
+  orderItems OrderItem[]
+  workShifts  WorkShift[]
+  printers    Printer[]
+  printJobs   PrintJob[]
+}
+
+// ============================================================
+// 3. PRODUCTOS, RECETAS E INVENTARIO
+// ============================================================
+
+model Product {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  description   String?
+  type          ProductType  @default(FINAL)
+  category      String?
+  unit          String       @default("unidad")
+  cost          Float        @default(0)
+  price         Float        @default(0)
+  minStock      Float        @default(0)
+  isActive      Boolean      @default(true)
+  isAvailable   Boolean      @default(true)
+  imageUrl      String?
+  notes         String?
+  areaId        String?      // Área a la que pertenece (null = todos los áreas pueden venderlo)
+  // v1.0.18: campos para resolución de áreas (ProductAreaResolver).
+  saleAreaId      String?
+  productionAreaId String?
+  dispatchMode    String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  // Relaciones
+  area          Area?       @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  saleArea      Area?       @relation("ProductSaleArea", fields: [saleAreaId], references: [id], onDelete: SetNull)
+  productionArea Area?      @relation("ProductProductionArea", fields: [productionAreaId], references: [id], onDelete: SetNull)
+  recipe        Recipe?
+  recipeItems   RecipeIngredient[]
+  orderItems    OrderItem[]
+  inventory     InventoryItem?
+  areaStocks    AreaInventory[]
+  stockMovements StockMovement[]
+  physicalStocks PhysicalStock[]
+  subproducts   ProductSubproduct[] @relation("FinalProduct")
+  parents       ProductSubproduct[] @relation("Subproduct")
+
+  @@index([type])
+  @@index([isActive])
+  @@index([isAvailable])
+}
+
+// Relación entre producto final y subproducto
+model ProductSubproduct {
+  id              String  @id @default(cuid())
+  finalProductId  String
+  subproductId    String
+  quantity        Float   @default(1)
+  finalProduct    Product @relation("FinalProduct", fields: [finalProductId], references: [id], onDelete: Cascade)
+  subproduct      Product @relation("Subproduct", fields: [subproductId], references: [id], onDelete: Cascade)
+
+  @@index([finalProductId])
+  @@index([subproductId])
+}
+
+model Recipe {
+  id            String   @id @default(cuid())
+  productId     String   @unique
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  yield         Float    @default(1)
+  preparationTime Int     @default(0)
+  instructions  String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ingredients   RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id          String   @id @default(cuid())
+  recipeId    String
+  productId   String
+  quantity    Float
+  unit        String
+  notes       String?
+  recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+  @@index([productId])
+}
+
+// Inventario general (gestión central)
+model InventoryItem {
+  id            String   @id @default(cuid())
+  productId     String   @unique
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stock         Float    @default(0)
+  reserved      Float    @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+// Inventario por área
+model AreaInventory {
+  id          String   @id @default(cuid())
+  areaId      String
+  productId   String
+  stock       Float    @default(0)
+  reserved    Float    @default(0)
+  minStock    Float    @default(0)
+  updatedAt   DateTime @updatedAt
+
+  area        Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([areaId, productId])
+  @@index([areaId])
+  @@index([productId])
+}
+
+// Movimientos de stock (entradas, salidas, traslados, ajustes)
+model StockMovement {
+  id            String         @id @default(cuid())
+  type          StockMovementType
+  productId     String
+  areaId        String?
+  quantity      Float
+  unit          String
+  reason        String?
+  reference     String?
+  userId        String
+  createdAt     DateTime       @default(now())
+
+  product       Product        @relation(fields: [productId], references: [id])
+  area          Area?          @relation(fields: [areaId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([areaId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Stock físico (conteo real del área)
+model PhysicalStock {
+  id          String   @id @default(cuid())
+  productId   String
+  areaId      String
+  countedQty  Float
+  observedQty Float?
+  observation String?
+  userId      String
+  createdAt   DateTime @default(now())
+
+  product     Product  @relation(fields: [productId], references: [id])
+  area        Area     @relation(fields: [areaId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([productId])
+  @@index([areaId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// 4. MESAS Y PEDIDOS
+// ============================================================
+
+model Table {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  areaId      String?
+  capacity    Int      @default(4)
+  // FIX 17 — Estado visual de la mesa:
+  //   LIBRE, OCUPADA, RESERVADA, ESPERANDO_CUENTA, LIMPIEZA
+  status      String   @default("LIBRE")
+  isActive    Boolean  @default(true)
+  // v1.0.18: pedido actualmente activo en la mesa (TableService ownership).
+  currentOrderId String? @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+  currentOrder Order? @relation("TableCurrentOrder", fields: [currentOrderId], references: [id], onDelete: SetNull)
+}
+
+model Order {
+  id            String     @id @default(cuid())
+  number        Int        @unique
+  userId        String
+  areaId        String
+  tableId       String?
+  customerName  String?
+  status        OrderStatus @default(CREADO)
+  subtotal      Float      @default(0)
+  discountPct   Float      @default(0)
+  discountAmount Float     @default(0)
+  total         Float      @default(0)
+  notes         String?
+  paymentStatus PaymentStatus @default(PENDIENTE)
+  // FASE 17-18: idempotencyKey para prevenir duplicados por doble click o
+  // reintento de red. Si se envía la misma key en un POST /orders, el backend
+  // devuelve el Order ya creado en vez de crear uno nuevo.
+  idempotencyKey String?   @unique
+  // FIX 18 — División de cuenta:
+  //   Si este pedido fue dividido desde otro, parentOrderId apunta al
+  //   pedido original. El original tiene childOrders = [this].
+  parentOrderId String?
+  // v1.0-RC1-bloque1-2 (item 14) — Turno de trabajo opcional asociado al pedido.
+  // Se rellena automáticamente al crear el pedido si el usuario tiene un turno OPEN.
+  shiftId       String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  closedAt      DateTime?
+
+  user          User       @relation(fields: [userId], references: [id])
+  area          Area       @relation(fields: [areaId], references: [id])
+  table         Table?     @relation(fields: [tableId], references: [id])
+  tableAsCurrent Table?   @relation("TableCurrentOrder")
+  parentOrder   Order?    @relation("OrderParent", fields: [parentOrderId], references: [id], onDelete: SetNull)
+  childOrders   Order[]   @relation("OrderParent")
+  shift         WorkShift? @relation(fields: [shiftId], references: [id], onDelete: SetNull)
+  items         OrderItem[]
+  payments      Payment[]
+  printJobs     PrintJob[]
+
+  @@index([userId])
+  @@index([areaId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([parentOrderId])
+  @@index([shiftId])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  productId   String
+  quantity    Float
+  unitPrice   Float
+  discount    Float    @default(0)
+  notes       String?
+  status      OrderItemStatus @default(PENDIENTE)
+  // Área a la que se envía para elaboración (derivado del área del producto)
+  targetAreaId String?
+  // Para productos directos: "now" (servir inmediatamente) o "with_order" (con el pedido)
+  serveMode   String?  @default("now")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product  @relation(fields: [productId], references: [id])
+  targetArea  Area?    @relation(fields: [targetAreaId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([status])
+}
+
+// Secuencia atómica para generación de números de pedido (FIX 5)
+// Singleton con id=1; el campo nextNumber se incrementa de forma atómica
+// mediante `db.orderSequence.upsert({ update: { nextNumber: { increment: 1 } } })`.
+model OrderSequence {
+  id         Int  @id @default(1)
+  nextNumber Int  @default(1001)
+}
+
+// ============================================================
+// 5. PAGOS Y FINANZAS
+// ============================================================
+
+model Payment {
+  id          String       @id @default(cuid())
+  orderId     String
+  userId      String
+  method      PaymentMethod
+  currency    String       @default("CUP")
+  amount      Float
+  reference   String?
+  notes       String?
+  // v1.0-RC1-bloque2-3 (items 18-20) — Conversión monetaria CUP/USD:
+  //   - exchangeRate: snapshot de RestaurantConfig.usdToCup al momento del pago.
+  //     Permite reconstruir históricamente el valor en CUP aunque la tasa cambie.
+  //   - convertedAmount: monto convertido a la moneda base (CUP) usando exchangeRate.
+  //     Si currency='CUP' → convertedAmount === amount.
+  //     Si currency='USD' → convertedAmount = amount * exchangeRate.
+  //   - baseCurrency: moneda en la que se expresa convertedAmount (siempre 'CUP').
+  exchangeRate    Float?
+  convertedAmount Float?
+  baseCurrency    String    @default("CUP")
+  // v1.0.17: idempotencia de pagos. Si el cliente reenvía con el mismo
+  // idempotencyKey, se retorna el resultado anterior sin crear duplicados.
+  idempotencyKey  String?   @unique
+  createdAt   DateTime     @default(now())
+
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([orderId])
+  @@index([userId])
+  @@index([method])
+  @@index([createdAt])
+}
+
+model FinanceEntry {
+  id          String        @id @default(cuid())
+  type        FinanceType
+  category    String
+  description String
+  amount      Float
+  currency    String        @default("CUP")
+  // v1.0-RC1-bloque2-3 (items 21-22) — Conversión a moneda base (CUP):
+  //   - exchangeRate: snapshot de la tasa usada al crear la entrada.
+  //   - convertedAmount: monto convertido a CUP (baseCurrency) usando exchangeRate.
+  //   - baseCurrency: moneda base en la que se expresa convertedAmount ('CUP').
+  // Para VENTA generada en cierre diario: convertedAmount viene de sumar
+  // Payment.convertedAmount del mismo método. Para entradas manuales
+  // (INGRESO/EGRESO/GASTO/SALARIO) se calcula al crear usando la tasa actual.
+  exchangeRate    Float?
+  convertedAmount Float?
+  baseCurrency    String    @default("CUP")
+  reference   String?
+  userId      String
+  orderId     String?
+  dailyCloseId String?
+  // FIX 21-22 — Anulación financiera:
+  //   ACTIVE: entrada válida y contabilizada.
+  //   ANNULLED: entrada anulada; una entrada compensatoria EGRESO
+  //   con la misma magnitud fue creada y se enlaza vía `annulCompensationEntryId`.
+  status      String        @default("ACTIVE")
+  annulledById String?
+  annulledAt  DateTime?
+  annulReason String?
+  // Si esta entrada fue creada como compensación de otra anulada,
+  // apunta a la entrada original. La original mantiene `annulledBy`.
+  // @unique: garantiza relación 1-a-1 (una entrada es compensada por
+  // a lo sumo otra entrada).
+  annulCompensationEntryId String? @unique
+  createdAt   DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id])
+  dailyClose  DailyClose?   @relation(fields: [dailyCloseId], references: [id])
+  annulledBy  User?         @relation("FinanceAnnulledBy", fields: [annulledById], references: [id], onDelete: SetNull)
+  annulCompensationEntry   FinanceEntry? @relation("FinanceAnnulCompensation", fields: [annulCompensationEntryId], references: [id], onDelete: SetNull)
+  compensatedBy            FinanceEntry? @relation("FinanceAnnulCompensation")
+
+  @@index([type])
+  @@index([category])
+  @@index([createdAt])
+  @@index([status])
+}
+
+// ============================================================
+// 6. CIERRE DIARIO
+// ============================================================
+
+model DailyClose {
+  id            String   @id @default(cuid())
+  date          DateTime @unique
+  userId        String
+  status        DailyCloseStatus @default(ABIERTO)
+  totalSales    Float    @default(0)
+  totalCash     Float    @default(0)
+  totalTransfer Float    @default(0)
+  totalOther    Float    @default(0)
+  totalDiscount Float    @default(0)
+  totalWaste    Float    @default(0)
+  totalExpected Float    @default(0)
+  totalReal     Float    @default(0)
+  difference    Float    @default(0)
+  observations  String?
+  openedAt      DateTime @default(now())
+  closedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user          User     @relation(fields: [userId], references: [id])
+  denominations DailyCloseDenomination[]
+  financeEntries FinanceEntry[]
+  areas         DailyCloseArea[]
+
+  @@index([date])
+  @@index([status])
+}
+
+model DailyCloseDenomination {
+  id           String   @id @default(cuid())
+  dailyCloseId String
+  currency     String
+  denomination Float
+  count        Int      @default(0)
+  total        Float    @default(0)
+
+  dailyClose   DailyClose @relation(fields: [dailyCloseId], references: [id], onDelete: Cascade)
+
+  @@index([dailyCloseId])
+}
+
+model DailyCloseArea {
+  id           String   @id @default(cuid())
+  dailyCloseId String
+  areaId       String
+  total        Float    @default(0)
+  ordersCount  Int      @default(0)
+
+  dailyClose   DailyClose @relation(fields: [dailyCloseId], references: [id], onDelete: Cascade)
+  area         Area       @relation(fields: [areaId], references: [id])
+
+  @@unique([dailyCloseId, areaId])
+  @@index([dailyCloseId])
+}
+
+// ============================================================
+// 7. CLIENTES Y PROMOCIONES
+// ============================================================
+
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String?
+  email       String?
+  address     String?
+  notes       String?
+  preferences String?
+  isActive    Boolean  @default(true)
+  totalOrders Int      @default(0)
+  totalSpent  Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([phone])
+  @@index([isActive])
+}
+
+model Promotion {
+  id           String    @id @default(cuid())
+  name         String
+  description  String?
+  type         PromotionType @default(GENERAL)
+  discountPct  Float     @default(0)
+  discountAmount Float   @default(0)
+  startDate    DateTime
+  endDate      DateTime?
+  isActive     Boolean   @default(true)
+  customerId   String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([isActive])
+  @@index([type])
+  @@index([customerId])
+}
+
+// ============================================================
+// 8. AUDITORÍA, NOTIFICACIONES Y AYUDA
+// ============================================================
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  entity      String
+  entityId    String?
+  before      String?
+  after       String?
+  ipAddress   String?
+  userAgent   String?
+  result      String   @default("SUCCESS")
+  createdAt   DateTime @default(now())
+
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entity])
+  @@index([createdAt])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String?
+  type        String
+  title       String
+  message     String
+  data        String?
+  isRead      Boolean  @default(false)
+  isDelivered Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  readAt      DateTime?
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+model HelpArticle {
+  id          String   @id @default(cuid())
+  module      String
+  title       String
+  content     String
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([module])
+  @@index([isActive])
+}
+
+model Backup {
+  id          String   @id @default(cuid())
+  filename    String
+  size        Int
+  type        String   @default("manual")
+  status      String  @default("COMPLETED")
+  // FIX 23-25 — Checksum SHA-256 del archivo .db:
+  //   Al crear, se calcula el hash del archivo copiado y se guarda aquí.
+  //   Al restaurar, se recalcula y se compara. Si no coincide, se rechaza.
+  checksum    String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// Comprobantes generados (para historial)
+model Receipt {
+  id          String   @id @default(cuid())
+  orderId     String
+  orderNumber Int
+  filename    String   // Nombre del archivo de imagen
+  filePath    String   // Ruta en el servidor
+  total       Float
+  paymentMethod String?
+  printed     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+// Histórico diario (resumen guardado al cerrar el día)
+model DailyHistory {
+  id          String   @id @default(cuid())
+  date        DateTime @unique
+  totalSales  Float    @default(0)
+  totalOrders Int      @default(0)
+  totalCash   Float    @default(0)
+  totalTransfer Float  @default(0)
+  totalDiscount Float  @default(0)
+  totalWaste  Float    @default(0)
+  totalMermas Float    @default(0)
+  // Top productos vendidos (JSON)
+  topProducts String?
+  // Top dependientes (JSON)
+  topWaiters  String?
+  observations String?
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+}
+
+// Estadísticas agregadas (para consultas rápidas)
+model Stats {
+  id          String   @id @default(cuid())
+  type        String   // "daily", "weekly", "monthly", "yearly"
+  period      String   // "2026-08-09", "2026-W32", "2026-08", "2026"
+  totalSales  Float    @default(0)
+  totalOrders Int      @default(0)
+  totalCash   Float    @default(0)
+  totalTransfer Float  @default(0)
+  totalDiscount Float  @default(0)
+  totalWaste  Float    @default(0)
+  // Productos más vendidos (JSON array)
+  topProducts String?
+  // Dependientes destacados (JSON array)
+  topWaiters  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([type, period])
+  @@index([type])
+  @@index([period])
+}
+
+// ============================================================
+// ENUMS (en SQLite se guardan como String)
+// ============================================================
+
+enum UserRole {
+  ADMIN
+  MESERO
+  MESERO_PRO
+  COCINA
+  PIZZERIA
+  CAJERO
+}
+
+enum NewsType {
+  INFO
+  WARNING
+  PROMO
+  URGENT
+}
+
+enum ProductType {
+  DIRECTO
+  FINAL
+  SUBPRODUCTO
+}
+
+enum StockMovementType {
+  ENTRADA
+  SALIDA
+  TRASLADO
+  AJUSTE
+  MERMA
+  COMPRA
+}
+
+enum OrderStatus {
+  CREADO
+  ENVIADO
+  EN_PREPARACION
+  LISTO
+  SERVIDO
+  COBRADO
+  ARCHIVADO
+  CANCELADO
+}
+
+enum OrderItemStatus {
+  PENDIENTE
+  EN_PREPARACION
+  LISTO
+  // v1.0-RC1-bloque1-2 (item 2): DESPACHADO para productos DIRECTO.
+  // Flujo DIRECTO: PENDIENTE → DESPACHADO → SERVIDO
+  // Flujo FINAL:  PENDIENTE → EN_PREPARACION → LISTO → SERVIDO
+  DESPACHADO
+  SERVIDO
+  CANCELADO
+}
+
+enum PaymentStatus {
+  PENDIENTE
+  PARCIAL
+  PAGADO
+}
+
+enum PaymentMethod {
+  EFECTIVO_CUP
+  EFECTIVO_USD
+  TRANSFERENCIA_CUP
+  TRANSFERENCIA_USD
+  ZELLE
+  BANCARIA_USD
+  COMBINADO
+}
+
+enum FinanceType {
+  INGRESO
+  EGRESO
+  VENTA
+  COMPRA
+  SALARIO
+  GASTO
+  MERMA
+  AJUSTE
+}
+
+enum DailyCloseStatus {
+  ABIERTO
+  EN_PROCESO
+  CERRADO
+  BLOQUEADO
+}
+
+enum PromotionType {
+  GENERAL
+  CLIENTE
+  PRODUCTO
+}
+
+// ============================================================
+// 9. TURNOS DE TRABAJO Y CAJA POR TURNO (FIX 15-16)
+// ============================================================
+// Cada usuario (mesero/cajero) abre un turno al iniciar su jornada:
+//   - Registra el fondo inicial (openingCash).
+//   - Al cerrar, registra el efectivo contado (closingCash) y observaciones.
+//   - Solo puede haber un turno OPEN por usuario a la vez.
+// El cierre diario puede consultar los turnos cerrados del día para
+// conciliar caja por turno.
+model WorkShift {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  areaId       String?
+  area         Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  startTime    DateTime @default(now())
+  endTime      DateTime?
+  status       String   @default("OPEN") // OPEN, CLOSED
+  openingCash  Float    @default(0) // Fondo inicial
+  closingCash  Float?   // Efectivo contado al cerrar
+  observations String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // v1.0-RC1-bloque1-2 (item 14): pedidos asociados a este turno.
+  orders       Order[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([startTime])
+}
+
+// ============================================================
+// 10. IMPRESIÓN — Printers y PrintJobs (v1.1.0-rc1)
+// ============================================================
+// Cada área puede tener una impresora configurada.
+// Cuando se crea/envía un pedido, se generan PrintJobs por área.
+// La impresión es independiente de la transacción del pedido.
+
+model Printer {
+  id          String   @id @default(cuid())
+  name        String
+  areaId      String?
+  area        Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  ipAddress   String?
+  port        Int      @default(9100)
+  protocol    String   @default("ESCPOS") // ESCPOS, CUPS, RAW
+  paperWidth  Int      @default(80) // 58 o 80 mm
+  charsPerLine Int     @default(48) // 48 para 80mm, 32 para 58mm
+  header      String?
+  footer      String?
+  copies      Int      @default(1)
+  isActive    Boolean  @default(true)
+  // v1.1.0-rc6: campos profesionales.
+  model       String?  // Modelo de la impresora (ej: Epson TM-T20)
+  location    String?  // Ubicación física (ej: "Cocina - Estación 1")
+  fallbackPrinterId String? // Impresora de respaldo
+  fallbackPrinter Printer? @relation("PrinterFallback", fields: [fallbackPrinterId], references: [id], onDelete: SetNull)
+  primaryFor  Printer[] @relation("PrinterFallback")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  printJobs   PrintJob[]
+
+  @@index([areaId])
+  @@index([isActive])
+}
+
+model PrintJob {
+  id              String   @id @default(cuid())
+  orderId         String
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  areaId          String?
+  area            Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  printerId       String?
+  printer         Printer? @relation(fields: [printerId], references: [id], onDelete: SetNull)
+  status          String   @default("PENDING") // PENDING, PRINTING, PRINTED, FAILED, CANCELLED
+  attempts        Int      @default(0)
+  content         String?  // JSON con el contenido del ticket
+  error           String?
+  idempotencyKey  String?  @unique // Previene duplicados en reintentos
+  createdAt       DateTime @default(now())
+  // v1.1.0-rc6: timestamps granulares.
+  startedAt       DateTime? // Cuando empezó el intento actual
+  printedAt       DateTime? // Cuando se imprimió exitosamente
+  lastAttemptAt   DateTime? // Último intento (éxito o fallo)
+
+  @@index([orderId])
+  @@index([areaId])
+  @@index([status])
+  @@index([printerId])
+}
