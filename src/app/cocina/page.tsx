@@ -1,7 +1,10 @@
+// src/app/cocina/page.tsx
+// FASE 6 — KDS de Cocina (reconstruido).
+
 'use client'
 
-import { KitchenDashboard } from '@/components/kitchen/kitchen-dashboard'
+import { KDSDashboard } from '@/components/production/kds-dashboard'
 
 export default function CocinaPage() {
-  return <KitchenDashboard apiBase="/api/cocina" areaName="Cocina" />
+  return <KDSDashboard apiBase="/api/cocina" areaName="Cocina" accentColor="blue" />
 }

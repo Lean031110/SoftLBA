@@ -1,7 +1,10 @@
+// src/app/pizzeria/page.tsx
+// FASE 6 — KDS de Pizzería (reconstruido).
+
 'use client'
 
-import { KitchenDashboard } from '@/components/kitchen/kitchen-dashboard'
+import { KDSDashboard } from '@/components/production/kds-dashboard'
 
 export default function PizzeriaPage() {
-  return <KitchenDashboard apiBase="/api/pizzeria" areaName="Pizzería" />
+  return <KDSDashboard apiBase="/api/pizzeria" areaName="Pizzería" accentColor="orange" />
 }
