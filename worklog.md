@@ -1518,3 +1518,18 @@ Stage Summary:
 - Print Worker estable: 26+ iteraciones, 0 errores.
 - Realtime conectado: 1 cliente (browser), 0 rechazos.
 - Próximo paso: commitear fixes del sandbox y continuar con FASE 11 (POS UI simplificación) o FASE 13 (KDS modo teléfono).
+## 2026-08-26 — P0 seguridad e infraestructura
+
+- Se auditó el commit `f25c356`: `XTransformPort` fue introducido para el
+  preview sandbox y quedó indebidamente activo en el Caddy de producción.
+- Se reemplazó por el proxy fijo `/socket.io/* → softlba:3003` y rutas fijas
+  de health; ningún query parameter selecciona puertos internos.
+- Se añadieron `src/lib/environment.ts` y `src/lib/public-environment.ts`,
+  variables documentadas y tests de validación de configuración.
+- Se retiraron fallbacks de secretos embebidos y se aisló preview mediante
+  `DEV_ALLOWED_ORIGINS`, sólo para `SOFTLBA_ENV=development`.
+- La validación completa permanece bloqueada: el proxy inyectado
+  `http://proxy:8080` responde `403` a CONNECT para ambos registries npm;
+  `bun install --frozen-lockfile --dry-run` sí valida el lockfile. La causa,
+  reproducción y pasos Ubuntu se documentaron en
+  `docs/SECURITY_INFRASTRUCTURE_AUDIT.md`.

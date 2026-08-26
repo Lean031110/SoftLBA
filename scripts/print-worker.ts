@@ -98,7 +98,6 @@ const metrics = {
 
 // === Health endpoint ===
 const server = createServer((req, res) => {
-  // FASE 43 (sandbox fix): aceptar /health con o sin query string (XTransformPort).
   const url = (req.url || '').split('?')[0]
   if (url === '/health' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' })

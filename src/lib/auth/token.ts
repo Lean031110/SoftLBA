@@ -22,22 +22,13 @@
 //   Al expirar (12h máximo), el usuario debe re-loguearse y obtendrá
 //   un token de 5 partes.
 //
-// Seguridad (FIX 9):
-//   - En production: NEXTAUTH_SECRET debe estar definido (>= 16 chars).
-//     Si falta, se lanza un error al importar este módulo.
-//   - En development: fallback a un valor por defecto para tests locales.
+// Seguridad: NEXTAUTH_SECRET siempre procede del entorno (>= 16 caracteres).
 // ============================================================
 
 function getSecret(): string {
   const envSecret = process.env.NEXTAUTH_SECRET
   if (envSecret && envSecret.length >= 16) return envSecret
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'NEXTAUTH_SECRET no configurado. En producción es obligatorio definir NEXTAUTH_SECRET (>= 16 chars).',
-    )
-  }
-  // Solo en development: fallback para tests locales.
-  return 'cuba-restaurante-secret-key-change-in-prod'
+  throw new Error('NEXTAUTH_SECRET no configurado. Debe definirse en el entorno (>= 16 caracteres).')
 }
 
 const SECRET = getSecret()

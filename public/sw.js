@@ -232,11 +232,10 @@ self.addEventListener('fetch', (event) => {
   // No interceptar API requests (siempre al servidor)
   if (url.pathname.startsWith('/api/')) return
 
-  // No interceptar WebSocket ni requests al realtime service
+  // No interceptar WebSocket requests.
   if (
     url.protocol === 'ws:' ||
-    url.protocol === 'wss:' ||
-    url.searchParams.has('XTransformPort')
+    url.protocol === 'wss:'
   ) {
     return
   }

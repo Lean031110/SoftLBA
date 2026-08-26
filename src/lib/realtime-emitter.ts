@@ -16,23 +16,21 @@
 // ============================================================
 
 import { logger } from '@/lib/logger'
+import { requireRuntimeSecret, requireRuntimeUrl } from '@/lib/environment'
 
-const INTERNAL_EMIT_URL =
-  process.env.REALTIME_INTERNAL_URL ||
-  'http://localhost:3000/api/internal/emit'
-
-// v1.0.17: secreto compartido para autenticar llamadas internas.
-const INTERNAL_SECRET = process.env.REALTIME_SECRET || 'dev-internal-secret-change-in-prod'
+function internalEmitUrl(): string {
+  return requireRuntimeUrl('REALTIME_INTERNAL_URL')
+}
 
 async function postEmit(room: string, event: string, data: any): Promise<void> {
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 2000)
-    await fetch(INTERNAL_EMIT_URL, {
+    await fetch(internalEmitUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Internal-Secret': INTERNAL_SECRET,
+        'X-Internal-Secret': requireRuntimeSecret('REALTIME_SECRET'),
       },
       body: JSON.stringify({ room, event, data }),
       signal: controller.signal,
@@ -208,11 +206,11 @@ export async function kickUser(userId: string, reason: string): Promise<void> {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 2000)
     // Reutilizamos el mismo endpoint /emit pero con room especial "kick:user:<id>".
-    await fetch(INTERNAL_EMIT_URL, {
+    await fetch(internalEmitUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Internal-Secret': INTERNAL_SECRET,
+        'X-Internal-Secret': requireRuntimeSecret('REALTIME_SECRET'),
       },
       body: JSON.stringify({
         room: `kick:user:${userId}`,

@@ -14,14 +14,12 @@
 # ============================================================
 
 :80 {
-	# Soporte para XTransformPort (gateway del preview sandbox).
-	# Permite proxy a puertos arbitrarios via ?XTransformPort=NNNN.
-	@transform_port_query {
-		query XTransformPort=*
-	}
-
-	handle @transform_port_query {
-		reverse_proxy softlba:{query.XTransformPort} {
+	# Realtime is the only service exposed separately from Next.js.  The
+	# destination is deliberately configured from the environment: request parameters must never select an
+	# internal port (that would turn Caddy into an SSRF/open-proxy primitive).
+	@realtime path /socket.io/*
+	handle @realtime {
+		reverse_proxy softlba:{env.REALTIME_PORT} {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
@@ -29,9 +27,19 @@
 		}
 	}
 
-	# Proxy por defecto al servidor Next.js (puerto 3000).
+	# Fixed, read-only diagnostics. Request parameters never select an upstream.
+	@realtimeHealth path /realtime-health
+	handle @realtimeHealth {
+		reverse_proxy softlba:{env.REALTIME_PORT}
+	}
+	@printWorkerHealth path /print-worker-health
+	handle @printWorkerHealth {
+		reverse_proxy softlba:{env.PRINT_WORKER_PORT}
+	}
+
+	# Proxy por defecto al servidor Next.js.
 	handle {
-		reverse_proxy softlba:3000 {
+		reverse_proxy softlba:{env.WEB_PORT} {
 			header_up Host {host}
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}

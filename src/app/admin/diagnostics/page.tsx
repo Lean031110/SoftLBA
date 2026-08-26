@@ -70,10 +70,7 @@ export default function DiagnosticsPage() {
     let realtime: ServiceStatus = { ok: false, status: 'unknown' }
     try {
       const t0 = Date.now()
-      // FASE 43 (sandbox fix): usar el gateway Caddy con XTransformPort=3003
-      // en vez de http://127.0.0.1:3003 directo (que no es alcanzable desde
-      // el navegador del usuario en el preview).
-      const res = await fetch('/health?XTransformPort=3003', { cache: 'no-store' })
+      const res = await fetch('/realtime-health', { cache: 'no-store' })
       const data = await res.json()
       realtime = {
         ok: data.ok === true,
@@ -88,8 +85,7 @@ export default function DiagnosticsPage() {
     let printWorker: ServiceStatus = { ok: false, status: 'unknown' }
     try {
       const t0 = Date.now()
-      // FASE 43 (sandbox fix): idem con XTransformPort=3004 para Print Worker.
-      const res = await fetch('/health?XTransformPort=3004', { cache: 'no-store' })
+      const res = await fetch('/print-worker-health', { cache: 'no-store' })
       const data = await res.json()
       printWorker = {
         ok: data.ok === true,

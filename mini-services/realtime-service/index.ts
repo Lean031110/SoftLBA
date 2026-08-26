@@ -29,7 +29,10 @@ import { Server as SocketIOServer, Socket } from 'socket.io'
 import pkg from './package.json' with { type: 'json' }
 const SERVICE_VERSION: string = pkg.version
 
-const PORT = parseInt(process.env.REALTIME_PORT || '3003', 10)
+const PORT = parseInt(process.env.REALTIME_PORT || '', 10)
+if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+  throw new Error('REALTIME_PORT debe configurarse con un puerto válido (1-65535).')
+}
 
 // ============================================================
 // Secreto de firma
@@ -37,12 +40,7 @@ const PORT = parseInt(process.env.REALTIME_PORT || '3003', 10)
 function getSecret(): string {
   const envSecret = process.env.NEXTAUTH_SECRET
   if (envSecret && envSecret.length >= 16) return envSecret
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'NEXTAUTH_SECRET no configurado. En producción es obligatorio definir NEXTAUTH_SECRET (>= 16 chars).',
-    )
-  }
-  return 'cuba-restaurante-secret-key-change-in-prod'
+  throw new Error('NEXTAUTH_SECRET no configurado. Debe definirse en el entorno (>= 16 caracteres).')
 }
 
 const SECRET = getSecret()
@@ -119,27 +117,10 @@ async function verifySessionToken(token: string): Promise<VerifiedSession | null
 // ============================================================
 // CORS
 // ============================================================
-// v1.0.20-rc-final: NO auto-incluir IPs de red local — si el servidor
-// tiene IP pública (VPS, Cloud), quedaría CORS abierto a cualquier origen.
-// Solo incluir localhost/127.0.0.1 en dev, y orígenes explícitos de env var.
-//
-// FASE 43 (sandbox fix): en dev, también permitir orígenes del preview
-// sandbox (*.space-z.ai, *.chatglm.cn) para que el Socket.IO cliente
-// funcione a través del gateway Caddy.
+// Origins are configured explicitly in every environment. This avoids both
+// accidental public-LAN exposure and preview wildcard allowlists.
 function getAllowedOrigins(): string[] {
   const origins = new Set<string>()
-
-  // En dev, permitir localhost
-  if (process.env.NODE_ENV !== 'production') {
-    origins.add('http://localhost:3000')
-    origins.add('http://127.0.0.1:3000')
-    origins.add('http://localhost')
-    origins.add('http://127.0.0.1')
-    // FASE 43: preview sandbox de z.ai (para desarrollo y testing).
-    // Se permiten todos los subdominios de space-z.ai y chatglm.cn.
-    // En producción esto NO se aplica.
-    origins.add('https://preview-chat-18013898-6ac6-4900-b7ec-b7676e5330a5.space-z.ai')
-  }
 
   // Orígenes explícitos del env (CSV)
   const envOrigins = process.env.ALLOWED_ORIGINS
@@ -147,10 +128,10 @@ function getAllowedOrigins(): string[] {
     for (const o of envOrigins.split(',').map((s) => s.trim()).filter(Boolean)) {
       origins.add(o)
     }
-  } else if (process.env.NODE_ENV === 'production') {
+  } else {
     console.warn(
-      '[cors] ALLOWED_ORIGINS no configurado en producción. ' +
-        'El realtime service rechazará conexiones desde orígenes no listados.',
+      '[cors] ALLOWED_ORIGINS no configurado; ' +
+      'El realtime service rechazará conexiones desde orígenes no listados.',
     )
   }
 
@@ -160,29 +141,19 @@ function getAllowedOrigins(): string[] {
 const ALLOWED_ORIGINS = getAllowedOrigins()
 console.log('[cors] Orígenes permitidos:', ALLOWED_ORIGINS.join(', '))
 
-// FASE 43 (sandbox fix): helper para verificar si un origen está permitido,
-// considerando wildcards para subdominios de space-z.ai en dev.
+// No wildcard suffixes: a preview origin must be declared in ALLOWED_ORIGINS.
 function isOriginAllowed(origin: string | undefined): boolean {
   if (!origin) return true // Same-origin o curl (sin Origin header).
-  if (ALLOWED_ORIGINS.includes(origin)) return true
-  // En dev, permitir cualquier subdominio de space-z.ai y chatglm.cn
-  // (preview sandbox).
-  if (process.env.NODE_ENV !== 'production') {
-    if (origin.endsWith('.space-z.ai') || origin.endsWith('.chatglm.cn')) {
-      return true
-    }
-    // Cualquier origen https en dev para pruebas locales.
-    if (origin.startsWith('https://') && origin.includes('localhost')) {
-      return true
-    }
-  }
-  return false
+  return ALLOWED_ORIGINS.includes(origin)
 }
 
 // ============================================================
 // Secreto compartido para endpoint /emit interno
 // ============================================================
-const INTERNAL_SECRET = process.env.REALTIME_SECRET || 'dev-internal-secret-change-in-prod'
+const INTERNAL_SECRET = process.env.REALTIME_SECRET
+if (!INTERNAL_SECRET || INTERNAL_SECRET.length < 16) {
+  throw new Error('REALTIME_SECRET debe configurarse en el entorno (mínimo 16 caracteres).')
+}
 
 // ============================================================
 // Mapa rol → áreas permitidas
@@ -301,8 +272,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
     return
   }
 
-  // Endpoint /emit: solo accesible desde localhost + secret
-  // FASE 43 (sandbox fix): aceptar /emit con o sin query string (XTransformPort).
+  // Endpoint /emit: solo accesible desde localhost + secret.
   const emitUrl = (req.url || '').split('?')[0]
   if (emitUrl === '/emit' && req.method === 'POST') {
     const remoteIp =
@@ -394,7 +364,6 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   }
 
   // Health check
-  // FASE 43 (sandbox fix): aceptar /health con o sin query string (XTransformPort).
   const healthUrl = (req.url || '').split('?')[0]
   if (healthUrl === '/health' && req.method === 'GET') {
     // v1.1.0-rc7: versión leída de package.json (SERVICE_VERSION, FASE 1).
