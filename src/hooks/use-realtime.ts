@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
+import { getPublicRealtimeConfig } from '@/lib/public-environment'
 
 // ============================================================
 // Hook useRealtime — Conexión Socket.IO segura
@@ -104,12 +105,12 @@ export function useRealtime(opts: {
       return
     }
 
-    // FASE 43 (sandbox fix): si NEXT_PUBLIC_REALTIME_URL no está seteado,
-    // usar el gateway Caddy con XTransformPort=3003 (mismo origen que el
-    // frontend). Esto permite que el Socket.IO cliente funcione en el
-    // preview del sandbox sin configuración extra.
-    const realtimeUrl = process.env.NEXT_PUBLIC_REALTIME_URL || '/?XTransformPort=3003'
+    // Production/LAN uses Caddy's explicit /socket.io proxy. Preview may set
+    // NEXT_PUBLIC_REALTIME_URL at build time, but clients never choose ports.
+    const realtime = getPublicRealtimeConfig()
+    const realtimeUrl = realtime.url || window.location.origin
     const socket = io(realtimeUrl, {
+      path: realtime.path,
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,

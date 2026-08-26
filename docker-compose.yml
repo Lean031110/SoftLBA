@@ -25,27 +25,36 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL}
+        NEXT_PUBLIC_REALTIME_URL: ${NEXT_PUBLIC_REALTIME_URL}
+        NEXT_PUBLIC_REALTIME_PATH: ${NEXT_PUBLIC_REALTIME_PATH:-/socket.io}
     container_name: softlba
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-3000}:3000"
-      - "${REALTIME_PORT:-3003}:3003"
+      - "${WEB_PORT:-3000}:${WEB_PORT:-3000}"
+      - "${REALTIME_PORT:-3003}:${REALTIME_PORT:-3003}"
     env_file:
       - .env
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=${WEB_PORT:-3000}
+      - WEB_PORT=${WEB_PORT:-3000}
       - HOSTNAME=0.0.0.0
       - DATABASE_URL=file:/app/db/custom.db
       - INIT_DB=${INIT_DB:-true}
       - SKIP_SEED=${SKIP_SEED:-false}
       - DEMO_USERS=${DEMO_USERS:-true}
+      - APP_INTERNAL_URL=${APP_INTERNAL_URL:-http://localhost:3000}
+      - REALTIME_INTERNAL_URL=${REALTIME_INTERNAL_URL:-http://localhost:3000/api/internal/emit}
+      - REALTIME_SERVICE_URL=${REALTIME_SERVICE_URL:-http://localhost:3003/emit}
+      - PRINT_WORKER_URL=${PRINT_WORKER_URL:-http://localhost:3004}
     volumes:
       - softlba-db:/app/db
       - softlba-backups:/app/backups
       - softlba-download:/app/download
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:${WEB_PORT:-3000}/api/health"]
       interval: 30s
       timeout: 5s
       start_period: 30s
@@ -59,6 +68,10 @@ services:
     restart: unless-stopped
     ports:
       - "${CADDY_PORT:-81}:80"
+    environment:
+      - WEB_PORT=${WEB_PORT:-3000}
+      - REALTIME_PORT=${REALTIME_PORT:-3003}
+      - PRINT_WORKER_PORT=${PRINT_WORKER_PORT:-3004}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data

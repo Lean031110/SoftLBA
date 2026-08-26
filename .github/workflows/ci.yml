@@ -9,6 +9,9 @@ on:
 env:
   NEXTAUTH_SECRET: ci-test-secret-minimum-16-chars-long
   REALTIME_SECRET: ci-realtime-secret-minimum-16-chars
+  REALTIME_INTERNAL_URL: http://localhost:3000/api/internal/emit
+  REALTIME_SERVICE_URL: http://localhost:3003/emit
+  PRINT_WORKER_URL: http://localhost:3004
   DEMO_USERS: 'true'
   COOKIE_SECURE: 'false'
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0-rc7] — Seguridad e infraestructura P0
+
+- **P0-1:** eliminado el proxy dinámico `XTransformPort`; Caddy usa rutas
+  fijas para Socket.IO y health checks, sin puertos seleccionables por cliente.
+- **P0-2:** añadida configuración validada de runtime/pública y documentación
+  para development, testing, LAN y production.
+- Los secretos de sesión y realtime ya no tienen fallbacks embebidos en código.
+
 Todos los cambios notables de SoftLBA se documentan en este archivo.
 
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-1.1.0/),
